@@ -1,0 +1,36 @@
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: petcare-mssql-dev
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${DB_PASSWORD:-PetCareDev@2026!}"
+      MSSQL_PID: "Express"
+    ports:
+      - "${DB_PORT:-1433}:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"${DB_PASSWORD:-PetCareDev@2026!}\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  migrate:
+    image: node:22-alpine
+    container_name: petcare-migrate-dev
+    working_dir: /app/backend
+    volumes:
+      - ./:/app
+    environment:
+      DB_SERVER: mssql
+      DB_NAME: ${DB_NAME:-PetCareAIHub}
+      DB_USER: sa
+      DB_PASSWORD: "${DB_PASSWORD:-PetCareDev@2026!}"
+      DB_PORT: 1433
+      DB_ENCRYPT: "false"
+      DB_TRUST_SERVER_CERT: "true"
+      NODE_ENV: development
+    depends_on:
+      mssql:
+        condition: service_healthy
+    command: sh -c "npm install && node scripts/migrate.js --seed"

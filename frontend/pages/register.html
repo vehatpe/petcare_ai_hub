@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="../js/components/motion-boot.js"></script>
+  <title>Đăng ký - PetCare AI Hub</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/pages.css">
+  <link rel="stylesheet" href="../css/auth.css">
+  <script src="../js/components/motion.js" defer></script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="../index.html" class="brand-logo">
+        <div class="logo-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 2a4 4 0 0 0-4 4c0 1.6 1 3 2.5 3.7A5 5 0 0 0 6 14v1a5 5 0 0 0 5 5h2a5 5 0 0 0 5-5v-1a5 5 0 0 0-4.5-4.3C15 9 16 7.6 16 6a4 4 0 0 0-4-4Z"></path></svg>
+        </div>
+        <span>PetCare AI Hub</span>
+      </a>
+      <div class="header-actions">
+        <a href="../index.html" class="btn btn-ghost btn-sm">&larr; Về trang chủ</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="auth-shell">
+    <aside class="auth-aside" aria-label="Giới thiệu">
+      <div>
+        <h2>Bắt đầu với <em>một hồ sơ</em> cho bé.</h2>
+        <p class="auth-aside-lead">Tạo tài khoản mất chưa tới một phút. Sau đó bạn khai báo thông tin cơ bản của thú cưng.</p>
+      </div>
+
+      <ol class="ledger">
+        <li><div><strong>Tạo tài khoản</strong><span>Họ tên, email, số điện thoại và mật khẩu.</span></div></li>
+        <li><div><strong>Khai báo thú cưng</strong><span>Tên, loài, giống, ngày sinh và cân nặng.</span></div></li>
+        <li><div><strong>Đặt lịch và hỏi AI</strong><span>Mọi thao tác gắn với đúng hồ sơ của bé.</span></div></li>
+      </ol>
+
+      <p class="auth-aside-foot">AI chỉ hỗ trợ sàng lọc ban đầu, không thay thế chẩn đoán của bác sĩ thú y.</p>
+
+      <svg class="auth-aside-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M12 2a4 4 0 0 0-4 4c0 1.6 1 3 2.5 3.7A5 5 0 0 0 6 14v1a5 5 0 0 0 5 5h2a5 5 0 0 0 5-5v-1a5 5 0 0 0-4.5-4.3C15 9 16 7.6 16 6a4 4 0 0 0-4-4Z"></path><circle cx="5" cy="8" r="2"></circle><circle cx="19" cy="8" r="2"></circle></svg>
+    </aside>
+
+    <section class="auth-main">
+      <div class="auth-form-wrap" id="registerWrap">
+        <h1>Tạo tài khoản</h1>
+        <p class="auth-sub">Miễn phí. Chủ nuôi dùng được ngay sau khi đăng ký.</p>
+
+        <div class="form-alert form-alert-error" id="formAlert" role="alert" tabindex="-1" hidden></div>
+
+        <form id="registerForm" novalidate>
+          <fieldset class="field-set form-group">
+            <legend>Bạn đăng ký với tư cách</legend>
+            <div class="segmented">
+              <label><input type="radio" name="role" value="customer" checked><span>Chủ nuôi</span></label>
+              <label><input type="radio" name="role" value="provider"><span>Đối tác dịch vụ</span></label>
+            </div>
+          </fieldset>
+
+          <div class="partner-fields" id="partnerFields" hidden>
+            <div class="form-alert form-alert-info">Tài khoản đối tác cần quản trị viên phê duyệt trước khi sử dụng.</div>
+            <div class="form-group">
+              <label class="form-label" for="orgName">Tên cơ sở</label>
+              <input class="form-control" id="orgName" name="orgName" type="text" autocomplete="organization" aria-describedby="orgName-error">
+              <p class="field-error" id="orgName-error" hidden></p>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="orgType">Loại hình</label>
+              <select class="form-control" id="orgType" name="orgType" aria-describedby="orgType-error">
+                <option value="">Chọn loại hình</option>
+                <option value="clinic">Phòng khám / bệnh viện thú y</option>
+                <option value="spa">Spa & cắt tỉa</option>
+                <option value="hotel">Khách sạn lưu trú</option>
+                <option value="emergency">Cấp cứu 24/7</option>
+              </select>
+              <p class="field-error" id="orgType-error" hidden></p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="fullName">Họ và tên</label>
+            <input class="form-control" id="fullName" name="fullName" type="text" autocomplete="name" aria-describedby="fullName-error" required>
+            <p class="field-error" id="fullName-error" hidden></p>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="email">Email</label>
+              <input class="form-control" id="email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" aria-describedby="email-error" required>
+              <p class="field-error" id="email-error" hidden></p>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="phone">Số điện thoại</label>
+              <input class="form-control" id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" aria-describedby="phone-error" required>
+              <p class="field-error" id="phone-error" hidden></p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="password">Mật khẩu</label>
+            <div class="input-with-action">
+              <input class="form-control" id="password" name="password" type="password" autocomplete="new-password" aria-describedby="password-checks password-error" required>
+              <button type="button" class="input-action" data-toggle-password="password" aria-controls="password" aria-pressed="false">Hiện</button>
+            </div>
+            <ul class="pw-checks" id="password-checks" aria-live="polite">
+              <li data-check="length"><span aria-hidden="true">○</span> Ít nhất 8 ký tự</li>
+              <li data-check="mix"><span aria-hidden="true">○</span> Gồm cả chữ và số</li>
+            </ul>
+            <p class="field-error" id="password-error" hidden></p>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg btn-block" id="submitBtn">Tạo tài khoản</button>
+        </form>
+
+        <p class="auth-switch">Đã có tài khoản? <a href="login.html" data-keep-next>Đăng nhập</a></p>
+        <p class="auth-note">Bản thử nghiệm: tài khoản và dữ liệu được lưu trong trình duyệt này, chưa đồng bộ lên máy chủ.</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="../js/utils/format.js"></script>
+  <script src="../js/components/toast.js"></script>
+  <script src="../js/components/panel.js"></script>
+  <script src="../js/config/api.config.js"></script>
+  <script src="../js/services/auth.service.js"></script>
+  <script src="../js/pages/auth.js"></script>
+</body>
+</html>

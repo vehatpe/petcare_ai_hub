@@ -1,0 +1,1106 @@
+/* ==========================================================================
+   PetCare AI Hub - Landing Page Dedicated Stylesheet (landing.css)
+   Pure CSS for all 9 Landing Page Sections
+   Strictly separated from HTML. No inline styles.
+   ========================================================================== */
+
+/* ==========================================================================
+   Section 1: Hero Section & Search Bar
+   ========================================================================== */
+
+.hero-content-wrapper {
+  text-align: center;
+  max-width: 900px;
+  margin: 0 auto 44px auto;
+}
+
+.hero-slogan-title {
+  margin-bottom: 22px;
+  font-size: clamp(2.15rem, 4.2vw, 3.5rem);
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+}
+
+.hero-highlight-pill {
+  position: relative;
+  isolation: isolate;
+  color: var(--color-dark-forest);
+  padding: 4px 18px;
+  border-radius: var(--radius-pill);
+  display: inline-block;
+}
+
+/* The lime marker is a pseudo-element so it can sweep in with transform only */
+.hero-highlight-pill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-hero-lime);
+  box-shadow: 0 4px 14px rgba(159, 232, 112, 0.4);
+  transform-origin: left center;
+  animation: markerSweep 600ms var(--ease-out-expo) 350ms backwards;
+}
+
+.hero-subtext {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  max-width: 760px;
+  margin: 0 auto 36px auto;
+  line-height: 1.65;
+}
+
+/* Hero Search Bar Pill */
+.hero-search-pill {
+  background-color: var(--color-surface-white);
+  border-radius: var(--radius-pill);
+  border: var(--border-hairline);
+  padding: 8px 10px 8px 24px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 16px 36px rgba(22, 51, 0, 0.08);
+  gap: 16px;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.hero-search-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  text-align: left;
+}
+
+.hero-search-field label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.hero-search-field input,
+.hero-search-field select {
+  border: none;
+  outline: none;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: transparent;
+  padding: 2px 0;
+  font-size: 0.9375rem;
+}
+
+.search-divider {
+  width: 1px;
+  height: 38px;
+  background-color: rgba(16, 16, 8, 0.1);
+}
+
+/* Hero Visual Showcase */
+.hero-visual-card {
+  position: relative;
+  border-radius: var(--radius-bento);
+  overflow: hidden;
+  border: var(--border-hairline);
+  box-shadow: var(--shadow-lg);
+  background-color: var(--color-surface-white);
+  margin-top: 10px;
+}
+
+.hero-img {
+  width: 100%;
+  height: 490px;
+  object-fit: cover;
+  object-position: center 30%;
+}
+
+.hero-floating-stat {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: 16px 22px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 12px 32px rgba(22, 51, 0, 0.12);
+}
+
+.hero-floating-stat-badge {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background-color: var(--color-hero-lime);
+  color: var(--color-dark-forest);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hero-stat-value {
+  font-family: var(--font-family-display);
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--color-dark-forest);
+  line-height: 1.2;
+}
+
+.hero-stat-desc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Section 2: Feature Bento Grid (Wise Style Refinement)
+   ========================================================================== */
+
+.bento-icon-wrapper {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background-color: var(--color-hero-lime-soft);
+  color: var(--color-dark-forest);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  border: 1px solid rgba(159, 232, 112, 0.4);
+}
+
+.bento-icon-mint {
+  background-color: var(--color-surface-soft-mint);
+  border-color: rgba(29, 139, 97, 0.15);
+}
+
+.bento-icon-cream {
+  background-color: var(--color-surface-warm-cream);
+  border-color: rgba(217, 119, 6, 0.2);
+}
+
+.bento-icon-dark {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: var(--color-hero-lime);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.bento-card-title {
+  font-size: 1.45rem;
+  margin-bottom: 12px;
+  color: var(--color-dark-forest);
+  line-height: 1.3;
+}
+
+.bento-card-text {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+/* UI Mockup Snippet within Bento Cards */
+.bento-ui-mockup {
+  margin-top: auto;
+  background-color: #F8FAF6;
+  border-radius: var(--radius-control);
+  padding: 18px;
+  border: 1px solid rgba(16, 16, 8, 0.06);
+}
+
+.mockup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(16, 16, 8, 0.05);
+  font-size: 0.8125rem;
+}
+
+.mockup-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.mockup-item-label {
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mockup-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-success);
+}
+
+.mockup-status-dot.warning {
+  background-color: var(--color-warning);
+}
+
+.bento-role-links {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+/* ==========================================================================
+   Section 3: Marketplace Featured Services (Expanded 8 Cards)
+   ========================================================================== */
+
+.marketplace-section-wrapper {
+  background-color: var(--color-surface-white);
+}
+
+.service-filter-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 40px;
+}
+
+.service-tab-btn {
+  padding: 10px 22px;
+  border-radius: var(--radius-pill);
+  font-size: 0.875rem;
+  font-weight: 600;
+  background-color: var(--color-surface-muted);
+  color: var(--text-secondary);
+  border: var(--border-hairline);
+  transition: var(--transition-interactive);
+  cursor: pointer;
+}
+
+.service-tab-btn.active,
+.service-tab-btn:hover {
+  background-color: var(--color-dark-forest);
+  color: var(--color-hero-lime);
+  border-color: var(--color-dark-forest);
+}
+
+.marketplace-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+.marketplace-more-action {
+  text-align: center;
+  margin-top: 48px;
+}
+
+/* ==========================================================================
+   Section 4: Digital Pet Health Record (EHR Showcase)
+   ========================================================================== */
+
+.ehr-showcase-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.ehr-preview-card {
+  background: var(--color-surface-white);
+  border-radius: var(--radius-bento);
+  border: var(--border-hairline);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.05);
+  padding: 32px;
+}
+
+.ehr-pet-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(16, 16, 8, 0.07);
+  margin-bottom: 24px;
+}
+
+.ehr-pet-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--color-hero-lime);
+}
+
+.ehr-pet-title {
+  font-family: var(--font-family-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-dark-forest);
+}
+
+.ehr-pet-specs {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.ehr-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.ehr-timeline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.timeline-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.timeline-content {
+  flex: 1;
+}
+
+.timeline-title {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.timeline-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Weight Chart SVG Simulation */
+.ehr-chart-container {
+  background: #F8FAF6;
+  border-radius: var(--radius-control);
+  padding: 16px;
+  border: 1px solid rgba(16, 16, 8, 0.06);
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ==========================================================================
+   Section 5: AI Medical Assistant (RAG Chatbot Preview)
+   ========================================================================== */
+
+.ai-showcase-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.ai-chat-preview-box {
+  background: var(--color-surface-white);
+  border-radius: var(--radius-bento);
+  border: var(--border-hairline);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-chat-preview-header {
+  background-color: var(--color-dark-forest);
+  color: var(--text-inverse);
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ai-chat-preview-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background-color: #FAFCF8;
+}
+
+.ai-preview-bubble-user {
+  align-self: flex-end;
+  background-color: var(--color-dark-forest);
+  color: var(--text-inverse);
+  padding: 12px 18px;
+  border-radius: 18px;
+  border-bottom-right-radius: 4px;
+  font-size: 0.875rem;
+  max-width: 85%;
+}
+
+.ai-preview-bubble-bot {
+  align-self: flex-start;
+  background-color: var(--color-surface-white);
+  border: var(--border-hairline);
+  padding: 16px 20px;
+  border-radius: 18px;
+  border-bottom-left-radius: 4px;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+  max-width: 90%;
+  line-height: 1.55;
+}
+
+.ai-chat-preview-footer {
+  padding: 14px 24px;
+  background-color: var(--color-surface-white);
+  border-top: var(--border-hairline);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ==========================================================================
+   Section 6: Sequential 4-Step Booking Workflow
+   ========================================================================== */
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+.step-card {
+  background: var(--color-surface-white);
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: 32px 24px;
+  position: relative;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.step-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05);
+}
+
+.step-number {
+  font-family: var(--font-family-display);
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--color-hero-lime);
+  line-height: 1;
+  margin-bottom: 16px;
+}
+
+.step-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-dark-forest);
+  margin-bottom: 8px;
+}
+
+.step-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+/* ==========================================================================
+   Section 7: Partner Clinics & Veterinary Network
+   ========================================================================== */
+
+.partners-section-wrapper {
+  background-color: var(--color-surface-white);
+}
+
+.partners-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+.partner-card {
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-card);
+  border: var(--border-hairline);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.partner-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  background-color: var(--color-surface-white);
+}
+
+.partner-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 16px;
+  border: 2px solid var(--color-hero-lime);
+}
+
+.partner-name {
+  font-family: var(--font-family-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-dark-forest);
+  margin-bottom: 4px;
+}
+
+.partner-type {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.partner-meta {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ==========================================================================
+   Section 8: Testimonials from Verified Pet Parents
+   ========================================================================== */
+
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.testimonial-card {
+  background: var(--color-surface-white);
+  border-radius: var(--radius-bento);
+  border: var(--border-hairline);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.03);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--transition-fast);
+}
+
+.testimonial-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgba(22, 51, 0, 0.07);
+}
+
+.testimonial-stars {
+  color: #F59E0B;
+  font-size: 1rem;
+  margin-bottom: 16px;
+  letter-spacing: 2px;
+}
+
+.testimonial-quote {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 24px;
+  flex: 1;
+}
+
+.testimonial-author {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(16, 16, 8, 0.06);
+}
+
+.testimonial-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.testimonial-name {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.testimonial-pet {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Section 9: Final Call-to-Action Banner (Meadow-glass Dark)
+   ========================================================================== */
+
+.cta-banner-wrapper {
+  margin: 30px auto;
+}
+
+.cta-banner-card {
+  background-color: var(--color-dark-forest);
+  border-radius: var(--radius-bento);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 68px 36px;
+  text-align: center;
+  box-shadow: 0 20px 48px rgba(22, 51, 0, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.cta-banner-title {
+  color: var(--text-inverse);
+  font-size: clamp(1.9rem, 3.5vw, 2.8rem);
+  margin-bottom: 16px;
+  line-height: 1.25;
+}
+
+.cta-banner-subtext {
+  color: var(--text-inverse-muted);
+  font-size: 1.05rem;
+  max-width: 640px;
+  margin: 0 auto 36px auto;
+  line-height: 1.65;
+}
+
+.cta-banner-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   Responsive Rules for Landing Page
+   ========================================================================== */
+
+@media (max-width: 1100px) {
+  .marketplace-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .partners-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .steps-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .testimonials-grid {
+    grid-template-columns: 1fr;
+  }
+  .ehr-showcase-grid,
+  .ai-showcase-grid {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-search-pill {
+    flex-direction: column;
+    border-radius: var(--radius-card);
+    padding: 18px;
+    gap: 14px;
+  }
+  .search-divider {
+    display: none;
+  }
+  .hero-search-pill .btn {
+    width: 100%;
+  }
+  .hero-img {
+    height: 320px;
+  }
+  .hero-floating-stat {
+    position: static;
+    margin: 16px;
+  }
+  .marketplace-grid {
+    grid-template-columns: 1fr;
+  }
+  .partners-grid {
+    grid-template-columns: 1fr;
+  }
+  .steps-grid {
+    grid-template-columns: 1fr;
+  }
+  .cta-banner-card {
+    padding: 44px 20px;
+  }
+}
+
+/* ==========================================================================
+   Semantic Utility Classes for Strict HTML/CSS Separation (Zero Inline Styles)
+   ========================================================================== */
+
+.badge-fit-mb {
+  width: fit-content;
+  margin-bottom: 14px;
+}
+
+.btn-align-start {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+.bento-ui-mockup-white {
+  background-color: var(--color-surface-white);
+  margin-bottom: 28px;
+}
+
+.timeline-marker-warning {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.stat-delta-success {
+  color: var(--color-success);
+}
+
+.section-surface-white {
+  background-color: var(--color-surface-white);
+}
+
+.disclaimer-box-cream {
+  background: var(--color-surface-warm-cream);
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  color: #8C5300;
+  margin-bottom: 28px;
+}
+
+.ai-preview-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-avatar-sm {
+  width: 34px;
+  height: 34px;
+}
+
+.ai-title-bold {
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.ai-sub-lime {
+  font-size: 0.75rem;
+  color: var(--color-hero-lime);
+}
+
+.ai-bubble-list {
+  margin-top: 6px;
+}
+
+.ai-note-box {
+  margin-top: 10px;
+  font-size: 0.75rem;
+  color: #8C5300;
+  background: #FFF9F0;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.form-control-sm-readonly {
+  font-size: 0.85rem;
+}
+
+.section-action-center {
+  text-align: center;
+  margin-top: 40px;
+}
+
+.section-action-center-sm {
+  text-align: center;
+  margin-top: 36px;
+}
+
+.badge-mb-20 {
+  margin-bottom: 20px;
+}
+
+.brand-logo-inverse {
+  color: var(--text-inverse);
+}
+
+.logo-icon-lime {
+  background-color: var(--color-hero-lime);
+  color: var(--color-dark-forest);
+}
+
+.footer-hotline-text {
+  font-size: 0.8125rem;
+  color: var(--text-inverse-muted);
+}
+
+/* EHR preview additions */
+.ehr-preview-card > .sample-tag {
+  margin-bottom: 16px;
+}
+
+.ehr-preview-card .pet-avatar {
+  width: 56px;
+  height: 56px;
+}
+
+.ehr-preview-card > .btn {
+  margin-top: 20px;
+}
+
+.ehr-empty {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Keeps the hero frame intact when the remote photo is slow or blocked */
+.hero-visual-card {
+  background-color: var(--color-surface-soft-mint);
+}
+
+/* ==========================================================================
+   Services ledger & provider rows (data-driven, no imagery)
+   ========================================================================== */
+
+.ledger {
+  border-top: var(--border-hairline);
+}
+
+.ledger-row {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) auto auto;
+  gap: 8px 24px;
+  align-items: start;
+  padding: 20px 4px;
+  border-bottom: var(--border-hairline);
+}
+
+.ledger-cat-label {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-soft-mint);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-dark-forest);
+}
+
+.ledger-title {
+  font-family: var(--font-family-display);
+  font-size: 1.0625rem;
+  color: var(--color-dark-forest);
+}
+
+.ledger-desc,
+.ledger-provider {
+  margin-top: 4px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.ledger-provider {
+  color: var(--text-muted);
+}
+
+.ledger-warn {
+  margin-top: 8px;
+  font-size: 0.8125rem;
+  color: var(--color-warning-text);
+}
+
+.ledger-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ledger-price strong {
+  font-family: var(--font-family-display);
+  color: var(--color-dark-forest);
+}
+
+.ledger-price span {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+@media (max-width: 760px) {
+  .ledger-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .ledger-cat { grid-column: 1 / -1; }
+  .ledger-action { grid-column: 1 / -1; }
+  .ledger-action .btn { width: 100%; }
+}
+
+.provider-ledger {
+  display: grid;
+  gap: 16px;
+}
+
+.provider-row {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-white);
+}
+
+.provider-row-name {
+  font-family: var(--font-family-display);
+  font-size: 1.25rem;
+  color: var(--color-dark-forest);
+}
+
+.provider-row-meta,
+.provider-row-empty {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.provider-services {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: var(--border-hairline);
+}
+
+.provider-services li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: var(--border-hairline);
+  font-size: 0.9375rem;
+}
+
+.provider-services-price {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.provider-row .btn {
+  justify-self: start;
+}
+
+
+/* ==========================================================================
+   Hero A (left-aligned) + profile card, 12-column bento
+   ========================================================================== */
+
+.hero2 { padding: var(--space-8) 0 var(--space-7); }
+
+.hero2-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--space-7);
+  align-items: center;
+}
+
+.hero2-title {
+  font-family: var(--font-family-display);
+  font-size: clamp(2.25rem, 4.6vw, 3.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--color-dark-forest);
+}
+
+.hero2-sub {
+  margin-top: var(--space-4);
+  max-width: 52ch;
+  font-size: 1.0625rem;
+  color: var(--text-secondary);
+}
+
+.hero2-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: var(--space-5); }
+
+.pcard {
+  display: grid;
+  gap: var(--space-4);
+  padding: 28px;
+  border: var(--border-hairline);
+  border-radius: var(--radius-bento);
+  background: var(--color-surface-soft-mint);
+}
+
+.pcard-tag { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.pcard-head { display: flex; align-items: center; gap: 16px; }
+.pcard-name { font-family: var(--font-family-display); font-size: 1.375rem; color: var(--color-dark-forest); }
+.pcard-specs { font-size: 0.875rem; color: var(--text-secondary); }
+.pcard-facts { display: grid; margin: 0; border-top: var(--border-hairline); }
+.pcard-facts > div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: var(--border-hairline); font-size: 0.9375rem; }
+.pcard-facts dt { color: var(--text-secondary); }
+.pcard-facts dd { margin: 0; text-align: right; font-weight: 600; color: var(--color-dark-forest); }
+.pcard .btn { justify-self: start; }
+
+.bento2 {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.bento2-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 32px;
+  border: var(--border-hairline);
+  border-radius: var(--radius-bento);
+  background: var(--color-surface-white);
+}
+
+.bento2-card h3 { font-family: var(--font-family-display); font-size: 1.375rem; color: var(--color-dark-forest); }
+.bento2-card p { color: var(--text-secondary); }
+.bento2-card .btn { margin-top: auto; }
+.bento2-health { grid-column: span 7; background: var(--color-surface-soft-mint); }
+.bento2-ai { grid-column: span 5; background: var(--color-hero-lime-soft); }
+.bento2-booking { grid-column: span 12; }
+.bento2-points { margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.9375rem; }
+.bento2-disclaimer { font-size: 0.875rem; }
+
+.bento2-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: s;
+}
+.bento2-steps li { display: grid; gap: 2px; padding-top: 12px; border-top: 2px solid var(--color-dark-forest); counter-increment: s; }
+.bento2-steps li::before { content: "0" counter(s); font-family: var(--font-family-display); font-weight: 700; color: var(--text-muted); font-size: 0.8125rem; }
+.bento2-steps strong { color: var(--color-dark-forest); }
+.bento2-steps span { font-size: 0.875rem; color: var(--text-secondary); }
+
+@media (max-width: 960px) {
+  .hero2-grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+  .hero2 { padding: var(--space-6) 0; }
+  .bento2-health, .bento2-ai, .bento2-booking { grid-column: span 12; }
+  .bento2-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bento2-card { padding: 24px; }
+}

@@ -1,0 +1,460 @@
+/* ==========================================================================
+   PetCare AI Hub - Customer Dashboard & Pet Profile Form
+   Reuses tokens and components from style.css / components.css.
+   ========================================================================== */
+
+/* ---------- Dashboard layout ---------- */
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+  padding-bottom: 72px;
+}
+
+.dash-section + .dash-section {
+  margin-top: 40px;
+}
+
+.dash-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.dash-section-head h2 {
+  font-size: 1.25rem;
+}
+
+/* ---------- Pet rows ---------- */
+
+.pet-list {
+  display: grid;
+  gap: 14px;
+}
+
+.pet-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 18px;
+  padding: 20px;
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-white);
+}
+
+.pet-name {
+  font-family: var(--font-family-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-dark-forest);
+}
+
+.pet-summary {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.pet-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pet-actions {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 14px;
+  border-top: var(--border-hairline);
+}
+
+/* ---------- Booking list ---------- */
+
+.booking-list {
+  display: grid;
+  gap: 12px;
+}
+
+.booking-item {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 14px;
+  padding: 16px;
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-white);
+}
+
+.booking-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  border-radius: var(--radius-control);
+  background: var(--color-dark-forest);
+  color: var(--color-hero-lime);
+  font-family: var(--font-family-display);
+  line-height: 1.1;
+}
+
+.booking-date strong {
+  font-size: 1.25rem;
+}
+
+.booking-date span {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.booking-item.is-cancelled .booking-date {
+  background: var(--color-surface-muted);
+  color: var(--text-muted);
+}
+
+.booking-item.is-cancelled .booking-title {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+.booking-title {
+  font-weight: 700;
+  color: var(--color-dark-forest);
+}
+
+.booking-meta {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.booking-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.booking-code {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.account-card {
+  padding: 22px;
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-white);
+}
+
+.account-card dl {
+  display: grid;
+  gap: 12px;
+}
+
+.account-card dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.account-card dd {
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Pet profile form ---------- */
+
+.pet-form-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 40px;
+  align-items: start;
+  padding-bottom: 72px;
+}
+
+.pet-form {
+  border: var(--border-hairline);
+  border-radius: var(--radius-bento);
+  background: var(--color-surface-white);
+  padding: 8px 36px 36px;
+}
+
+.form-section {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 8px 32px;
+  padding: 28px 0;
+  border-top: var(--border-hairline);
+  min-width: 0;
+}
+
+.form-section:first-of-type {
+  border-top: 0;
+}
+
+.form-section-head h2 {
+  font-size: 1rem;
+  color: var(--color-dark-forest);
+}
+
+.form-section-head p {
+  margin-top: 4px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.form-section-fields {
+  min-width: 0;
+}
+
+.pet-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding-top: 28px;
+  border-top: var(--border-hairline);
+}
+
+.pet-preview {
+  position: sticky;
+  top: calc(var(--header-height) + 24px);
+  padding: 24px;
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-white);
+}
+
+.pet-preview-label {
+  margin-bottom: 16px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.pet-preview .pet-avatar {
+  width: 96px;
+  height: 96px;
+  font-size: 2.25rem;
+}
+
+.pet-preview .pet-name {
+  margin-top: 16px;
+  font-size: 1.35rem;
+  overflow-wrap: anywhere;
+}
+
+.pet-preview .pet-name.is-placeholder {
+  color: var(--text-muted);
+}
+
+.pet-preview-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.pet-preview-note {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: var(--border-hairline);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 1000px) {
+  .dash-grid,
+  .pet-form-layout {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .pet-preview {
+    position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .pet-form {
+    padding: 4px 20px 28px;
+  }
+  .form-section {
+    grid-template-columns: 1fr;
+    padding: 24px 0;
+  }
+}
+
+.account-card .btn-block {
+  margin-top: 20px;
+}
+
+/* ---------- Today strip (numbers come from /dashboard/customer) ---------- */
+
+.today-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 var(--space-6);
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-white);
+}
+
+.today-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px 24px;
+  min-width: 0;
+}
+
+.today-fact + .today-fact {
+  border-left: var(--border-hairline);
+}
+
+.today-label {
+  font-family: var(--font-family-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.today-fact strong {
+  font-family: var(--font-family-display);
+  font-size: 1.0625rem;
+  color: var(--color-dark-forest);
+}
+
+.today-fact span {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.today-fact.is-alert strong {
+  color: var(--color-danger-text);
+}
+
+.today-strip > .panel-loading,
+.today-strip > .panel-error {
+  grid-column: 1 / -1;
+  padding: 20px 24px;
+}
+
+/* ---------- Async panel states ---------- */
+
+.panel-loading {
+  padding: 16px 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.panel-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--color-danger-text);
+  border-radius: var(--radius-control);
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+  font-size: 0.875rem;
+}
+
+.empty-steps {
+  margin: 12px auto 20px;
+  padding-left: 20px;
+  max-width: 340px;
+  text-align: left;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.slot-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ---------- Row overflow menu (<details>) ---------- */
+
+.row-menu {
+  position: relative;
+}
+
+.row-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.row-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.row-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+  display: grid;
+  min-width: 180px;
+  padding: 6px;
+  border: var(--border-hairline);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-white);
+  box-shadow: var(--shadow-lg);
+}
+
+.row-menu-list a,
+.row-menu-list button {
+  display: block;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  color: var(--color-dark-forest);
+  cursor: pointer;
+}
+
+.row-menu-list .row-menu-danger {
+  color: var(--color-danger-text);
+}
+
+@media (hover: hover) {
+  .row-menu-list a:hover,
+  .row-menu-list button:hover {
+    background: var(--color-surface-muted);
+  }
+}
+
+.row-menu-list a:focus-visible,
+.row-menu-list button:focus-visible {
+  outline: 2px solid var(--color-dark-forest);
+  outline-offset: -2px;
+}
+
+@media (max-width: 960px) {
+  .dash-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .today-strip { grid-template-columns: minmax(0, 1fr); }
+  .today-fact + .today-fact { border-left: 0; border-top: var(--border-hairline); }
+}
+
+.dash-grid > .dash-section + .dash-section { margin-top: 0; }

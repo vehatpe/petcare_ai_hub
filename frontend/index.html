@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="js/components/motion-boot.js"></script>
+  <title>PetCare AI Hub - Hồ sơ sức khỏe và đặt lịch cho thú cưng</title>
+  
+  <!-- Design System Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/animations.css">
+  <link rel="stylesheet" href="css/landing.css">
+  <script src="js/components/motion.js" defer></script>
+</head>
+<body>
+
+  <!-- Main Site Header Navigation -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="index.html" class="brand-logo">
+        <div class="logo-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a4 4 0 0 0-4 4c0 1.6 1 3 2.5 3.7A5 5 0 0 0 6 14v1a5 5 0 0 0 5 5h2a5 5 0 0 0 5-5v-1a5 5 0 0 0-4.5-4.3C15 9 16 7.6 16 6a4 4 0 0 0-4-4Z"></path>
+            <circle cx="5" cy="8" r="2"></circle>
+            <circle cx="19" cy="8" r="2"></circle>
+          </svg>
+        </div>
+        <span>PetCare AI Hub</span>
+      </a>
+
+      <!-- Navigation Links -->
+      <nav class="main-nav" aria-label="Điều hướng chính">
+        <a href="index.html" class="nav-link active">Trang chủ</a>
+        <a href="pages/services.html" class="nav-link">Dịch vụ Thú cưng</a>
+        <a href="pages/providers.html" class="nav-link">Cơ sở & Phòng khám</a>
+        <a href="pages/booking.html" class="nav-link">Đặt lịch hẹn</a>
+        <a href="pages/ai-assistant.html" class="nav-link">Trợ lý AI</a>
+      </nav>
+
+      <!-- Action Buttons -->
+      <div class="header-actions">
+        <div class="header-account" data-auth-slot="header"></div>
+        <!-- Mobile Trigger -->
+        <button type="button" class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Mở menu di động">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero: left-aligned copy + a profile card built from the signed-in owner's real data -->
+    <section class="hero2">
+      <div class="container hero2-grid">
+        <div class="hero2-copy">
+          <h1 class="hero2-title">Hồ sơ sức khỏe, lịch hẹn và Trợ lý AI cho từng bé.</h1>
+          <p class="hero2-sub">Lưu cân nặng, mũi tiêm và bệnh án của thú cưng ở một nơi. Đặt lịch với cơ sở thú y trong bốn bước và hỏi Trợ lý AI khi cần tham khảo.</p>
+          <div class="hero2-actions">
+            <a href="pages/pet-profile.html" class="btn btn-primary btn-lg" data-auth-required="Hồ sơ thú cưng gắn với tài khoản của bạn nên cần đăng nhập. Đăng ký miễn phí chỉ mất một phút.">Tạo hồ sơ cho bé</a>
+            <a href="pages/services.html" class="btn btn-outline btn-lg">Xem dịch vụ</a>
+          </div>
+        </div>
+
+        <aside class="pcard" id="profileCard" aria-label="Hồ sơ thú cưng">
+          <p class="pcard-tag" id="pcardTag">Cấu trúc hồ sơ, chưa có dữ liệu</p>
+          <div class="pcard-head">
+            <div class="pet-avatar" id="pcardAvatar" aria-hidden="true">?</div>
+            <div>
+              <h2 class="pcard-name" id="pcardName">Tên thú cưng</h2>
+              <p class="pcard-specs" id="pcardSpecs">Loài · giống · tuổi</p>
+            </div>
+          </div>
+          <dl class="pcard-facts">
+            <div><dt>Cân nặng gần nhất</dt><dd id="pcardWeight">Chưa có</dd></div>
+            <div><dt>Tiêm chủng</dt><dd id="pcardVax">Chưa có dữ liệu</dd></div>
+            <div><dt>Lịch hẹn sắp tới</dt><dd id="pcardBooking">Chưa có</dd></div>
+          </dl>
+          <a href="pages/pet-profile.html" class="btn btn-secondary btn-sm" id="pcardCta" data-auth-required="Hồ sơ thú cưng gắn với tài khoản của bạn nên cần đăng nhập. Đăng ký miễn phí chỉ mất một phút.">Tạo hồ sơ cho bé</a>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Bento: three features, 12-column grid -->
+    <section class="section">
+      <div class="container">
+        <div class="section-header">
+          <h2>Những gì bạn làm được hôm nay</h2>
+        </div>
+
+        <div class="bento2" data-reveal-group>
+          <article class="bento2-card bento2-health">
+            <h3>Sổ sức khỏe</h3>
+            <p>Ghi cân nặng theo thời gian và các mũi tiêm. Biểu đồ chỉ hiện khi có ít nhất hai lần đo; tình trạng tiêm chủng được tính từ ngày tiêm và hạn mũi tiếp theo bạn nhập, không có dữ liệu thì không kết luận gì.</p>
+            <ul class="bento2-points">
+              <li>Mũi tiêm bạn tự nhập được ghi rõ là chưa được cơ sở xác nhận.</li>
+              <li>Bệnh án chỉ do bác sĩ thú y ghi, bạn xem được nhưng không sửa.</li>
+            </ul>
+            <a href="pages/health-records.html" class="btn btn-primary btn-sm" data-auth-required="Sổ sức khỏe gắn với hồ sơ thú cưng của bạn nên cần đăng nhập.">Mở sổ sức khỏe</a>
+          </article>
+
+          <article class="bento2-card bento2-ai">
+            <h3>Trợ lý AI</h3>
+            <p>Trả lời dựa trên tài liệu tham khảo trong hệ thống và có dẫn nguồn. Khi không có tài liệu phù hợp, trợ lý nói rõ điều đó.</p>
+            <p class="bento2-disclaimer"><strong>Cảnh báo y tế:</strong> AI chỉ hỗ trợ tham khảo, không thay thế chẩn đoán của bác sĩ thú y.</p>
+            <a href="pages/ai-assistant.html" class="btn btn-dark btn-sm">Mở Trợ lý AI</a>
+          </article>
+
+          <article class="bento2-card bento2-booking">
+            <h3>Đặt lịch trong bốn bước</h3>
+            <ol class="bento2-steps">
+              <li><strong>Chọn bé</strong><span>từ hồ sơ của bạn</span></li>
+              <li><strong>Chọn dịch vụ</strong><span>giá niêm yết rõ ràng</span></li>
+              <li><strong>Chọn ngày và giờ</strong><span>chỉ hiện khung giờ còn chỗ</span></li>
+              <li><strong>Gửi yêu cầu</strong><span>cơ sở xác nhận lại với bạn</span></li>
+            </ol>
+            <a href="pages/booking.html" class="btn btn-outline btn-sm">Đặt lịch</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Services ledger: rows come from /api/v1/services -->
+    <section class="section">
+      <div class="container">
+        <div class="section-header">
+          <h2>Dịch vụ</h2>
+          <p class="sample-note" id="landingSampleNote" hidden></p>
+        </div>
+        <div id="landingLedger" class="ledger"></div>
+        <div class="marketplace-more-action">
+          <a href="pages/services.html" class="btn btn-outline">Xem tất cả dịch vụ &rarr;</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="container cta-banner-wrapper">
+      <div class="cta-banner-card">
+        <h2 class="cta-banner-title">Bắt đầu với hồ sơ của bé.</h2>
+        <p class="cta-banner-subtext">Đăng ký miễn phí, khai báo thú cưng và bạn có thể đặt lịch hoặc hỏi Trợ lý AI ngay.</p>
+        <div class="cta-banner-actions">
+          <a href="pages/register.html" class="btn btn-primary btn-lg">Tạo tài khoản</a>
+          <a href="pages/login.html" class="btn btn-outline-white btn-lg">Đăng nhập</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="brand-logo brand-logo-inverse">PetCare AI Hub</div>
+          <p>Hồ sơ sức khỏe, đặt lịch và Trợ lý AI cho thú cưng.</p>
+        </div>
+
+        <div class="footer-col">
+          <h5>Dịch vụ</h5>
+          <ul class="footer-links">
+            <li><a href="pages/services.html?type=medical">Khám & điều trị</a></li>
+            <li><a href="pages/services.html?type=grooming">Spa & làm đẹp</a></li>
+            <li><a href="pages/services.html?type=hotel">Lưu trú</a></li>
+            <li><a href="pages/services.html?type=emergency">Cấp cứu</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>Nền tảng</h5>
+          <ul class="footer-links">
+            <li><a href="pages/ai-assistant.html">Trợ lý AI</a></li>
+            <li><a href="pages/booking.html">Đặt lịch</a></li>
+            <li><a href="pages/providers.html">Cơ sở</a></li>
+            <li><a href="pages/customer-dashboard.html">Bảng điều khiển</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>Tài khoản</h5>
+          <ul class="footer-links">
+            <li><a href="pages/login.html">Đăng nhập</a></li>
+            <li><a href="pages/register.html">Đăng ký chủ nuôi</a></li>
+            <li><a href="pages/register.html?role=provider">Đăng ký cơ sở dịch vụ</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>Khuyến nghị y tế</h5>
+          <div class="medical-disclaimer-card">
+            <strong>Lưu ý:</strong>
+            Thông tin từ Trợ lý AI và hệ thống chỉ mang tính tham khảo. Khi thú cưng có triệu chứng bất thường, hãy đưa bé đến cơ sở thú y để được bác sĩ chẩn đoán.
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>&copy; 2026 PetCare AI Hub</div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Core JavaScript Modules -->
+  <script src="js/utils/format.js"></script>
+  <script src="js/components/toast.js"></script>
+  <script src="js/components/panel.js"></script>
+  <script src="js/config/api.config.js"></script>
+  <script src="js/services/auth.service.js"></script>
+  <script src="js/services/catalog.service.js"></script>
+  <script src="js/services/pet.service.js"></script>
+  <script src="js/services/booking.service.js"></script>
+  <script src="js/services/health.service.js"></script>
+  <script src="js/components/auth-gate.js"></script>
+  <script src="js/components/header.js"></script>
+  <script src="js/services/ai-chat.service.js"></script>
+  <script src="js/components/ai-widget.js"></script>
+  <script src="js/pages/landing.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

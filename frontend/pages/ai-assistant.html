@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="../js/components/motion-boot.js"></script>
+  <title>Trợ Lý Y Tế AI - PetCare AI Hub</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/pages.css">
+  <script src="../js/components/motion.js" defer></script>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="../index.html" class="brand-logo">
+        <div class="logo-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a4 4 0 0 0-4 4c0 1.6 1 3 2.5 3.7A5 5 0 0 0 6 14v1a5 5 0 0 0 5 5h2a5 5 0 0 0 5-5v-1a5 5 0 0 0-4.5-4.3C15 9 16 7.6 16 6a4 4 0 0 0-4-4Z"></path></svg>
+        </div>
+        <span>PetCare AI Hub</span>
+      </a>
+
+      <nav class="main-nav" aria-label="Điều hướng chính">
+        <a href="../index.html" class="nav-link">Trang chủ</a>
+        <a href="services.html" class="nav-link">Dịch vụ Thú cưng</a>
+        <a href="providers.html" class="nav-link">Cơ sở & Phòng khám</a>
+        <a href="booking.html" class="nav-link">Đặt lịch hẹn</a>
+        <a href="ai-assistant.html" class="nav-link active">Trợ lý AI</a>
+      </nav>
+
+      <div class="header-actions">
+        <div class="header-account" data-auth-slot="header"></div>
+        <button type="button" class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Mở menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container ai-page-main">
+    <!-- Medical Disclaimer Top Notice -->
+    <div class="medical-disclaimer-card ai-page-disclaimer">
+      <strong>Cảnh báo an toàn y tế bắt buộc:</strong>
+      AI chỉ đóng vai trò tư vấn & sàng lọc ban đầu, không thay thế chẩn đoán lâm sàng của Bác sĩ thú y chuyên môn. Nếu thú cưng có triệu chứng nguy hiểm, vui lòng đưa bé đến cơ sở cấp cứu gần nhất.
+    </div>
+
+    <!-- AI Page Layout -->
+    <div class="ai-page-layout">
+      <!-- Left Conversation Sidebar -->
+      <aside class="ai-sidebar-conversations">
+        <button type="button" class="btn btn-primary btn-sm btn-block" id="btnNewChat">+ Cuộc trò chuyện mới</button>
+
+        <label class="form-label ai-side-label" for="pagePetSelect">Hồ sơ thú cưng liên kết</label>
+        <select class="form-control ai-side-select" id="pagePetSelect"></select>
+        <p class="form-hint" id="petSelectHint" hidden></p>
+
+        <h2 class="ai-side-heading">Câu hỏi gần đây</h2>
+        <div class="ai-conv-list" id="recentList"></div>
+      </aside>
+
+      <!-- Main Dedicated Chat Window -->
+      <section class="ai-main-chat-window" id="aiMainWindow">
+        <div class="ai-widget-header">
+          <div class="ai-header-info">
+            <div class="ai-header-avatar">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path></svg>
+            </div>
+            <div>
+              <div class="ai-header-title">Trợ lý Y tế & Dinh dưỡng AI</div>
+              <div class="ai-header-subtitle">Tham khảo sơ bộ, không thay bác sĩ</div>
+            </div>
+          </div>
+          
+        </div>
+
+        <div class="ai-lock" id="pageLock"></div>
+
+        <div class="ai-chat-body">
+        <!-- Chat Messages Body -->
+        <div class="ai-messages-container" id="pageChatMessages" >
+          <div class="chat-bubble chat-bubble-bot">
+            Xin chào! Tôi là Trợ lý AI y tế của <strong>PetCare AI Hub</strong>. Tôi trả lời dựa trên các tài liệu tham khảo của hệ thống và chỉ mang tính tham khảo. Bạn muốn hỏi điều gì về thú cưng của mình?
+          </div>
+        </div>
+
+        <!-- Quick Question Chips -->
+        <div class="ai-quick-suggestions">
+          <button class="ai-chip" data-query="Chó bị nôn bỏ ăn phải làm sao?">Chó bị nôn bỏ ăn</button>
+          <button class="ai-chip" data-query="Lịch tiêm phòng chuẩn cho chó mèo">Lịch tiêm vắc xin</button>
+          <button class="ai-chip" data-query="Chế độ ăn phòng sỏi thận cho mèo">Dinh dưỡng phòng sỏi thận</button>
+          <button class="ai-chip" data-query="Lịch tẩy giun định kỳ">Lịch tẩy giun</button>
+        </div>
+
+        <!-- Chat Input Form -->
+        <form class="ai-input-footer" id="pageChatForm">
+          <input type="text" id="pageChatInput" placeholder="Nhập câu hỏi hoặc mô tả triệu chứng của thú cưng..." autocomplete="off" required>
+          <button type="submit" class="ai-send-btn" aria-label="Gửi tin nhắn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </form>
+      </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom">
+        <div>&copy; 2026 PetCare AI Hub. All rights reserved.</div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../js/utils/format.js"></script>
+  <script src="../js/components/toast.js"></script>
+  <script src="../js/components/panel.js"></script>
+  <script src="../js/config/api.config.js"></script>
+  <script src="../js/services/auth.service.js"></script>
+  <script src="../js/services/pet.service.js"></script>
+  <script src="../js/components/auth-gate.js"></script>
+  <script src="../js/components/header.js"></script>
+  <script src="../js/services/ai-chat.service.js"></script>
+  <script src="../js/pages/ai-assistant.js"></script>
+  <script src="../js/main.js"></script>
+</body>
+</html>

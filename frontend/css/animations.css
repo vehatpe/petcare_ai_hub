@@ -1,0 +1,311 @@
+/* ==========================================================================
+   PetCare AI Hub - Motion System (animations.css)
+   Tokens, keyframes and animation utilities. Loaded AFTER components.css.
+
+   Rules of this file
+   - Animate transform / opacity (plus colour props on interactive states).
+     Never width / height / top / left / margin / padding.
+   - Reveal states are hidden ONLY when <html> has .js-motion, so a page
+     without working JS still shows all of its content.
+   - Reduced motion: every effect below has an explicit opt-out at the bottom.
+   ========================================================================== */
+
+:root {
+  /* Motion tokens */
+  --dur-quick: 180ms;
+  --dur-medium: 280ms;
+  --dur-smooth: 450ms;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ==========================================================================
+   1. Keyframes
+   Reveal keyframes only declare "from": the end state is the element's
+   normal style, so hover transforms keep working after the animation ends.
+   ========================================================================== */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes revealUp {
+  from { opacity: 0; transform: translate3d(0, 18px, 0); }
+}
+
+@keyframes revealScale {
+  from { opacity: 0; transform: scale(0.96); }
+}
+
+@keyframes heroIn {
+  from { opacity: 0; transform: translate3d(0, 20px, 0); }
+}
+
+/* Transform-only: the hero image is the largest paint, so it never fades. */
+@keyframes heroRise {
+  from { transform: translate3d(0, 24px, 0); }
+}
+
+@keyframes markerSweep {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes shimmerSweep {
+  from { transform: translateX(-120%); }
+  to   { transform: translateX(120%); }
+}
+
+@keyframes pulseGlowOpacity {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 0.8; }
+}
+
+@keyframes dotWave {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30%           { transform: translateY(-5px); opacity: 1; }
+}
+
+@keyframes slideInToast {
+  from { opacity: 0; transform: translate3d(40px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes toastOut {
+  to { opacity: 0; transform: translate3d(40px, 0, 0); }
+}
+
+@keyframes toastProgress {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translate3d(32px, 0, 0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translate3d(-32px, 0, 0); }
+}
+
+@keyframes backdropIn {
+  from { opacity: 0; }
+}
+
+@keyframes backdropOut {
+  to { opacity: 0; }
+}
+
+@keyframes dialogOut {
+  to { opacity: 0; transform: translateY(6px) scale(0.98); }
+}
+
+/* ==========================================================================
+   2. Scroll reveal (motion.js adds .is-visible once per element)
+   ========================================================================== */
+
+.js-motion .reveal-on-scroll:not(.is-visible) {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+}
+
+.js-motion .reveal-scale:not(.is-visible) {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+.reveal-on-scroll,
+.reveal-scale {
+  --reveal-delay: 0ms;
+}
+
+.reveal-on-scroll.is-visible {
+  animation: revealUp var(--dur-smooth) var(--ease-out-expo) backwards;
+  animation-delay: var(--reveal-delay);
+}
+
+.reveal-scale.is-visible {
+  animation: revealScale var(--dur-smooth) var(--ease-out-expo) backwards;
+  animation-delay: var(--reveal-delay);
+}
+
+/* Stagger steps: 60ms each, capped at 240ms (limit is 320ms). */
+.stagger-1 { --reveal-delay: 60ms; }
+.stagger-2 { --reveal-delay: 120ms; }
+.stagger-3 { --reveal-delay: 180ms; }
+.stagger-4 { --reveal-delay: 240ms; }
+
+/* Cards shown again by the landing page category filter */
+.service-card.is-filter-in {
+  animation: fadeIn var(--dur-medium) var(--ease-out-expo) backwards;
+}
+
+/* ==========================================================================
+   3. Hero entrance (runs on load, pure CSS, not tied to scroll)
+   ========================================================================== */
+
+.hero-enter {
+  --hero-delay: 0ms;
+  animation: heroIn var(--dur-smooth) var(--ease-out-expo) backwards;
+  animation-delay: var(--hero-delay);
+}
+
+.hero-enter-rise {
+  --hero-delay: 0ms;
+  animation: heroRise var(--dur-smooth) var(--ease-out-expo) backwards;
+  animation-delay: var(--hero-delay);
+}
+
+.hero-enter-1 { --hero-delay: 0ms; }
+.hero-enter-2 { --hero-delay: 90ms; }
+.hero-enter-3 { --hero-delay: 180ms; }
+.hero-enter-4 { --hero-delay: 270ms; }
+.hero-enter-5 { --hero-delay: 420ms; }
+
+/* ==========================================================================
+   4. Shimmer CTA (hero primary button only; runs on hover)
+   Uses ::before so it never collides with the .is-loading spinner (::after).
+   ========================================================================== */
+
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.btn-shimmer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.5) 50%, transparent 65%);
+  transform: translateX(-120%);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-shimmer:hover::before {
+    animation: shimmerSweep 700ms var(--ease-out-expo) 1;
+  }
+}
+
+.btn-shimmer.is-loading::before {
+  display: none;
+}
+
+/* ==========================================================================
+   5. AI launcher idle breathing (stops for good after the first open)
+   The ring is static; only its opacity animates, so there is no repaint loop.
+   ========================================================================== */
+
+.ai-widget-launcher.is-idle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 7px rgba(159, 232, 112, 0.5);
+  opacity: 0.3;
+  animation: pulseGlowOpacity 3s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   6. Typing indicator (the accessible text lives in a .visually-hidden node)
+   ========================================================================== */
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 1.25em;
+}
+
+.typing-dots i {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--text-muted);
+  animation: dotWave 1.4s ease-in-out infinite;
+}
+
+.typing-dots i:nth-child(2) { animation-delay: 0.18s; }
+.typing-dots i:nth-child(3) { animation-delay: 0.36s; }
+
+/* ==========================================================================
+   7. Native <dialog>: backdrop fade + closing state (dialog.js adds .is-closing)
+   ========================================================================== */
+
+.pc-dialog[open]::backdrop {
+  animation: backdropIn 200ms ease-out;
+}
+
+.pc-dialog[open].is-closing {
+  animation: dialogOut var(--dur-quick) ease-in forwards;
+}
+
+.pc-dialog[open].is-closing::backdrop {
+  animation: backdropOut var(--dur-quick) ease-in forwards;
+}
+
+/* ==========================================================================
+   8. Booking wizard: only the entering step animates (direction aware)
+   ========================================================================== */
+
+.wizard-step-pane.active.slide-in-right {
+  animation: slideInRight var(--dur-medium) var(--ease-out-expo) backwards;
+}
+
+.wizard-step-pane.active.slide-in-left {
+  animation: slideInLeft var(--dur-medium) var(--ease-out-expo) backwards;
+}
+
+/* ==========================================================================
+   9. Reduced motion: scoped opt-outs (never a global opacity/transform reset,
+   which would expose closed dialogs, popups and drawers)
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-on-scroll,
+  .reveal-scale {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+
+  .stagger-1, .stagger-2, .stagger-3, .stagger-4 {
+    --reveal-delay: 0ms;
+  }
+
+  .hero-enter,
+  .hero-enter-rise,
+  .hero-highlight-pill::before,
+  .service-card.is-filter-in,
+  .wizard-step-pane.active.slide-in-right,
+  .wizard-step-pane.active.slide-in-left,
+  .toast-item,
+  .toast-item.is-leaving {
+    animation: none !important;
+  }
+
+  .btn-shimmer::before,
+  .toast-progress {
+    display: none;
+  }
+
+  .ai-widget-launcher.is-idle::before {
+    animation: none;
+    opacity: 0;
+  }
+
+  .typing-dots i {
+    animation: none;
+    opacity: 0.7;
+  }
+
+  .bento-card:hover,
+  .service-card:hover,
+  .service-card:hover .service-card-media img {
+    transform: none;
+  }
+}

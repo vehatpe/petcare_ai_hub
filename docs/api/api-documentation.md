@@ -1,0 +1,119 @@
+# PetCare AI Hub – API v1 (hợp đồng giữa frontend và backend)
+
+Base URL: `/api/v1`. Backend (Express) phục vụ cả thư mục `frontend/` ở cùng origin khi `SERVE_FRONTEND=true`.
+
+## Quy ước chung
+- Mọi phản hồi: `{ "success": boolean, "data": any, "message": string }`.
+- Lỗi: `{ "success": false, "data": null, "message": "<tiếng Việt, nói rõ cách khắc phục>", "code": "<mã>", "errors": { "<field>": "<thông báo>" } }` (`code`, `errors` chỉ có khi liên quan).
+- Xác thực: header `Authorization: Bearer <jwt>` (HS256). Token do `/auth/login` và `/auth/register` (khách hàng) trả về.
+- Mọi bản ghi của chủ nuôi chỉ truy cập được bởi chính chủ (`UserId` lấy từ token, không bao giờ từ body). Sai chủ → `404` (không lộ sự tồn tại).
+- Ngày: `YYYY-MM-DD`. Giờ: `HH:mm`. Thời điểm: ISO-8601 UTC. Tiền: số nguyên VND.
+- Mã trạng thái: 200, 201, 400 (JSON hỏng), 401 (`unauthenticated`/`credentials`), 403 (`forbidden`/`pending`/`disabled`), 404, 409 (`duplicate`/`conflict`), 422 (`validation`), 429, 500, 503 (`ai_unavailable`).
+
+## Đối tượng
+```
+User     { id, role: "customer"|"provider"|"vet"|"admin", status: "active"|"pending"|"disabled",
+           fullName, email, phone, orgName?, orgType?, createdAt }
+Provider { id, name, area, type: "clinic"|"spa"|"hotel"|"emergency", isSample }
+Service  { id, category: "medical"|"grooming"|"hotel"|"emergency", categoryLabel, providerId, providerName,
+           providerArea, name, description, priceVnd, unit, isSample }
+Pet      { id, name, species: "dog"|"cat"|"other", breed, sex: "male"|"female", birthDate, weightKg|null,
+           color, neutered: "yes"|"no"|"unknown", microchip, conditions, photo|null, createdAt, updatedAt }
+           // weightKg = số đo mới nhất trong Health_Metrics, null nếu chưa có.
+Booking  { id, petId, petName, serviceId, serviceName, providerName, priceVnd, date, time, notes,
+           status: "pending"|"confirmed"|"completed"|"cancelled", createdAt }
+```
+
+## Auth
+| Method | Path | Body | Kết quả |
+|---|---|---|---|
+| POST | `/auth/register` | `{role:"customer"|"provider", fullName, email, phone, password, orgName?, orgType?}` | 201 `{user, token}` (customer) hoặc `{user, token:null}` (provider, status `pending`). vet/admin không tự đăng ký (role khác → 422). |
+| POST | `/auth/login` | `{identifier, password, remember?}` | 200 `{user, token}`; `credentials` 401 (thông báo chung), `pending` 403, `disabled` 403. |
+| GET | `/auth/me` | – | 200 `{user}`; 401 nếu token sai/hết hạn. |
+
+Validation giống frontend: email hợp lệ; SĐT VN `^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$` (chuẩn hóa về `0xxxxxxxxx`); mật khẩu ≥ 8 ký tự gồm chữ và số; provider cần `orgName` ≥ 2 ký tự, `orgType` ∈ clinic|spa|hotel|emergency. Email/SĐT trùng → 409 `duplicate` kèm `errors.email`/`errors.phone`.
+Mật khẩu băm bằng bcrypt (cost ≥ 10). Giới hạn tốc độ cho `/auth/*`.
+
+## Danh mục (công khai, không cần token)
+| Method | Path | Ghi chú |
+|---|---|---|
+| GET | `/providers` | `Provider[]` đang hoạt động |
+| GET | `/services?category=&providerId=&q=` | `Service[]` đang hoạt động |
+| GET | `/services/:id` | `Service` |
+| GET | `/services/:id/slots?date=YYYY-MM-DD` | `[{time, available}]`. Khung giờ cố định: 08:30 09:30 10:30 14:00 15:30 16:30 18:00 19:30. `available=false` khi đủ `SlotCapacity` lịch chưa hủy, hoặc giờ đã qua (ngày hôm nay, múi giờ `APP_TIMEZONE`). Ngày quá khứ → 422. |
+
+`isSample=true` nghĩa là dữ liệu minh họa do seed; frontend phải gắn nhãn "minh họa" dựa trên cờ này, không hard-code.
+
+## Thú cưng (customer)
+| Method | Path | Body / Kết quả |
+|---|---|---|
+| GET | `/pets` | `Pet[]` của chủ, cũ → mới |
+| POST | `/pets` | body: name, species, breed?, sex, birthDate, weightKg?, color?, neutered?, microchip?, conditions?, photo? (data URL ≤ 400 KB). 201 `Pet`. Tối đa 10 thú/chủ → 409 `conflict`. Có `weightKg` → tạo thêm 1 dòng Health_Metrics hôm nay. |
+| GET | `/pets/:id` | `Pet` |
+| PUT | `/pets/:id` | cùng body; `weightKg` khác số đo mới nhất → thêm dòng Health_Metrics hôm nay |
+| DELETE | `/pets/:id` | 200 `{deleted:true}`. Xóa kèm cân nặng/tiêm chủng/bệnh án của bé; lịch hẹn giữ lại (PetName lưu trên Booking). |
+
+Validation: name 1–40; species/sex thuộc tập; birthDate hợp lệ, không ở tương lai, ≥ 1995-01-01; weightKg 0.1–150; microchip đúng 15 chữ số nếu có; conditions ≤ 500.
+
+## Sổ sức khỏe (customer, chủ của bé)
+| Method | Path | Ghi chú |
+|---|---|---|
+| GET | `/health-records?petId=` | Tổng hợp (xem dưới) |
+| POST | `/pets/:id/weights` | `{weightKg, measuredOn?}` (mặc định hôm nay; không ở tương lai) → 201 `WeightPoint` |
+| DELETE | `/pets/:id/weights/:metricId` | xóa số đo nhập nhầm |
+| POST | `/pets/:id/vaccinations` | `{vaccineName, administeredOn, nextDueOn?, providerName?, batchNo?}` → 201. Bản ghi do chủ nuôi nhập có `source:"owner"` (chưa được cơ sở xác nhận). |
+| DELETE | `/pets/:id/vaccinations/:vaccinationId` | chỉ xóa được bản ghi `source:"owner"` |
+| POST | `/pets/:id/medical-records` | chỉ role `vet`/`admin`; `{visitDate, subjective, objective, assessment, plan, bookingId?}` |
+
+Tổng hợp `GET /health-records?petId=`:
+```
+{ pet:{id,name},
+  weights:[{id, weightKg, measuredOn}],            // tăng dần theo ngày
+  weightChart:{ count, canRender },                // canRender = count >= 2 (nếu false frontend hiển thị empty state)
+  vaccinations:[{id, vaccineName, administeredOn, nextDueOn|null, providerName, batchNo, source:"owner"|"clinic",
+                 status:"ok"|"due-soon"|"overdue"|"recorded"}],   // status tính ở server theo ngày hiện tại
+  vaccineSummary:{ total, upToDate, dueSoon, overdue, nextDue:{vaccineName, dueOn}|null },
+  medicalRecords:[{id, visitDate, vetName|null, subjective, objective, assessment, plan}] }  // mới → cũ
+```
+Quy tắc trạng thái tiêm: với mỗi `vaccineName` chỉ tính mũi có `administeredOn` mới nhất. `nextDueOn` null → `recorded`; `< hôm nay` → `overdue`; trong 30 ngày tới → `due-soon`; còn lại `ok`. `vaccineSummary` đếm trên các mũi mới nhất đó; `total` = số loại vắc-xin; không có dữ liệu thì mọi số bằng 0 và `nextDue:null`. Server **không** trả cờ kiểu "sổ tiêm hợp lệ" nào ngoài các số tính được.
+
+## Lịch hẹn (customer)
+| Method | Path | Ghi chú |
+|---|---|---|
+| GET | `/bookings` | `Booking[]` của chủ, sắp theo ngày+giờ |
+| POST | `/bookings` | `{petId, serviceId, date, time, notes?}` → 201 `Booking` status `pending`. Kiểm tra: bé thuộc chủ; dịch vụ còn hoạt động; ngày không ở quá khứ; `time` thuộc khung giờ; còn chỗ (`SlotCapacity`); bé không trùng giờ → 409 `conflict` với `errors.time`. |
+| PATCH | `/bookings/:id/cancel` | → `Booking` status `cancelled`; đã hủy/hoàn tất → 409 |
+
+## Dashboard (customer) – mọi số được tính từ DB
+`GET /dashboard/customer` →
+```
+{ petCount,
+  bookings:{ total, upcomingCount, next:Booking|null },     // upcoming = chưa hủy, ngày+giờ >= hiện tại
+  vaccines:{ dueSoonCount, overdueCount, nextDue:{petId, petName, vaccineName, dueOn}|null } }
+```
+
+## Trợ lý AI (customer)
+`POST /ai/chat` `{message (1–1000 ký tự), petId?}` →
+```
+200 { text, disclaimer, sources:[{title}], grounded:boolean }
+```
+- RAG: nhúng câu hỏi bằng Gemini embeddings, lấy top-K từ `Knowledge_Chunks` theo cosine; nếu điểm cao nhất < `RAG_MIN_SCORE` → `grounded:false` và câu trả lời nói rõ chưa có tài liệu phù hợp, khuyên hỏi bác sĩ (không để mô hình tự bịa).
+- Ngữ cảnh bé (loài, giống, tuổi, cân nặng mới nhất, lưu ý sức khỏe) lấy từ DB theo `petId` của chính chủ.
+- `disclaimer` luôn do server gắn: "AI chỉ đóng vai trò tư vấn & sàng lọc ban đầu, không thay thế chẩn đoán lâm sàng của Bác sĩ thú y chuyên môn."
+- Thiếu `GEMINI_API_KEY`, chưa có chunk nào, hoặc Gemini lỗi → 503 `ai_unavailable` với thông báo thật. Tuyệt đối không trả câu trả lời giả lập.
+- `sources` chỉ gồm tiêu đề tài liệu thật trong `Knowledge_Chunks`.
+
+## Ghi chú triển khai
+Các điểm hợp đồng chưa nói rõ; backend chọn cách hiểu đơn giản nhất như sau.
+- **Booking** có thêm trường `code` (mã hiển thị `BK-XXXXXXXX`); `id` là GUID chữ thường.
+- **Sức chứa khung giờ** (`SlotCapacity`) là cột của bảng `Services` (mặc định 3), tính theo dịch vụ + ngày + giờ; không lộ ra API.
+- **Đặt lịch**: bé/dịch vụ không tồn tại (hoặc không thuộc chủ) → `404`; giờ đã qua trong ngày hôm nay → `422 errors.time`; trùng giờ của cùng bé được kiểm tra trước, rồi mới đến hết chỗ; cả hai trả `409 conflict` với `errors.time`. `providerName` của Booking có dạng `"Tên cơ sở (Khu vực)"`.
+- **Hủy lịch**: chỉ `pending`/`confirmed` hủy được; `cancelled`/`completed` → `409`.
+- **`GET /health-records`** bắt buộc `petId` hợp lệ (thiếu/sai định dạng → `422`).
+- **Tiêm chủng**: danh sách trả mọi mũi; chỉ mũi mới nhất của mỗi `vaccineName` (không phân biệt hoa thường/khoảng trắng) được đánh giá, các mũi cũ có `status:"recorded"`. `upToDate` = số vắc-xin có status `ok`. `nextDue` = `nextDueOn` sớm nhất trong các mũi mới nhất có `nextDueOn` (kể cả đã quá hạn). Dashboard đánh giá theo từng bé rồi cộng dồn.
+- **Dashboard**: `bookings.total` = mọi lịch của chủ (kể cả đã hủy); `upcomingCount`/`next` chỉ tính `pending`/`confirmed` có ngày+giờ ≥ hiện tại (múi giờ `APP_TIMEZONE`).
+- **`PUT /pets/:id`** thay toàn bộ trường; riêng `photo`: vắng mặt → giữ ảnh cũ, `null` → xóa ảnh. `GET /pets` trả cả ảnh (tối đa 10 × 400 KB).
+- **Bệnh án**: vet/admin ghi được cho bất kỳ bé nào (chưa có khái niệm bác sĩ phụ trách bé); `bookingId` nếu có phải là lịch của chính bé đó (`422 errors.bookingId`).
+- **Mã bổ sung**: `413 too_large` khi body > 600 KB; `400 bad_json`; `404 not_found` cho đường dẫn lạ; `429 rate_limited`; `403 disabled` khi token hợp lệ nhưng tài khoản bị khóa.
+- **AI**: tài liệu có `ReviewStatus='rejected'` không bao giờ được dùng; `RAG_REQUIRE_APPROVED=true` chỉ dùng tài liệu đã `approved`. Nguồn hiển thị chỉ là tiêu đề tài liệu.
+- Token: HS256, hết hạn 1 ngày (30 ngày nếu `remember`). Vắc-xin `source:"clinic"` chưa có API tạo (chờ luồng cơ sở xác nhận); hiện chỉ chủ nuôi nhập `owner`.

@@ -1,0 +1,209 @@
+/* ==========================================================================
+   PetCare AI Hub - Authentication Pages (login.html / register.html)
+   Split layout: dark-forest "ledger" panel + calm form column.
+   Reuses core tokens from style.css; no new colors or radii.
+   ========================================================================== */
+
+.auth-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  min-height: calc(100vh - var(--header-height));
+}
+
+/* ---------- Left: brand / ledger panel ---------- */
+
+.auth-aside {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 48px;
+  padding: 64px clamp(32px, 5vw, 80px);
+  overflow: hidden;
+  background: var(--color-dark-forest);
+  color: var(--text-inverse);
+}
+
+.auth-aside h2 {
+  max-width: 14ch;
+  font-size: clamp(2rem, 3.2vw, 2.9rem);
+  line-height: 1.12;
+  color: var(--text-inverse);
+}
+
+.auth-aside h2 em {
+  font-style: normal;
+  color: var(--color-hero-lime);
+}
+
+.auth-aside-lead {
+  max-width: 38ch;
+  margin-top: 16px;
+  color: var(--text-inverse-muted);
+}
+
+.ledger {
+  position: relative;
+  z-index: 1;
+  max-width: 420px;
+  counter-reset: ledger;
+}
+
+.ledger li {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 16px;
+  align-items: baseline;
+  padding: 18px 0;
+  border-top: var(--border-hairline-dark);
+  counter-increment: ledger;
+}
+
+.ledger li:last-child {
+  border-bottom: var(--border-hairline-dark);
+}
+
+.ledger li::before {
+  content: counter(ledger, decimal-leading-zero);
+  font-family: var(--font-family-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-hero-lime);
+}
+
+.ledger strong {
+  display: block;
+  font-family: var(--font-family-display);
+  font-weight: 600;
+  color: var(--text-inverse);
+}
+
+.ledger span {
+  font-size: 0.875rem;
+  color: var(--text-inverse-muted);
+}
+
+.auth-aside-foot {
+  position: relative;
+  z-index: 1;
+  max-width: 44ch;
+  font-size: 0.8125rem;
+  color: var(--text-inverse-muted);
+}
+
+.auth-aside-mark {
+  position: absolute;
+  right: -72px;
+  bottom: -72px;
+  width: 320px;
+  height: 320px;
+  color: var(--color-hero-lime);
+  opacity: 0.07;
+  pointer-events: none;
+}
+
+/* ---------- Right: form column ---------- */
+
+.auth-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  background: var(--color-surface-white);
+}
+
+.auth-form-wrap {
+  width: 100%;
+  max-width: 440px;
+}
+
+.auth-form-wrap h1 {
+  font-size: clamp(1.7rem, 2.6vw, 2.1rem);
+  margin-bottom: 8px;
+}
+
+.auth-form-wrap .auth-sub {
+  margin-bottom: 28px;
+}
+
+.auth-switch {
+  margin-top: 24px;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.auth-switch a {
+  font-weight: 700;
+  color: var(--color-dark-forest);
+  text-decoration: underline;
+  text-decoration-color: var(--color-hero-lime);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 3px;
+}
+
+.auth-switch a:hover {
+  text-decoration-color: var(--color-dark-forest);
+}
+
+.auth-note {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: var(--border-hairline);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.auth-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.pw-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 8px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.pw-checks li.is-met {
+  color: #145A35;
+  font-weight: 600;
+}
+
+.partner-fields[hidden] {
+  display: none;
+}
+
+.partner-fields {
+  padding: 16px 16px 0;
+  margin-bottom: 20px;
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+}
+
+.auth-done h1 {
+  margin-bottom: 12px;
+}
+
+.auth-done .btn {
+  margin-top: 24px;
+}
+
+@media (max-width: 900px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+  .auth-aside {
+    display: none;
+  }
+  .auth-main {
+    align-items: flex-start;
+    padding: 36px 20px 56px;
+  }
+}

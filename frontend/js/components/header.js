@@ -1,0 +1,168 @@
+/**
+ * PetCare AI Hub - Header & Mobile Drawer
+ * Fills <div data-auth-slot="header"> with guest or signed-in controls and builds
+ * the mobile drawer from the desktop <nav class="main-nav"> so both always match.
+ */
+(function () {
+  'use strict';
+
+  const DASHBOARD_BY_ROLE = { customer: 'customer-dashboard.html' };
+  const ROLE_LABEL = { customer: 'Chủ nuôi', provider: 'Đối tác dịch vụ', vet: 'Bác sĩ thú y', admin: 'Quản trị viên' };
+
+  const esc = Fmt.esc;
+  const url = (file) => AuthService.pageUrl(file);
+
+  function guestMarkup() {
+    return `
+      <a href="${url('login.html')}" class="btn btn-outline btn-sm header-login">Đăng nhập</a>
+      <a href="${url('register.html')}" class="btn btn-primary btn-sm">Đăng ký</a>`;
+  }
+
+  function userMarkup(user) {
+    const dash = DASHBOARD_BY_ROLE[user.role];
+    const cta = user.role === 'customer'
+      ? `<a href="${url('booking.html')}" class="btn btn-primary btn-sm header-cta">Đặt lịch</a>`
+      : '';
+    return `
+      ${cta}
+      <div class="account-menu">
+        <button type="button" class="account-trigger" id="accountTrigger" aria-haspopup="menu" aria-expanded="false" aria-controls="accountPopover">
+          <span class="account-avatar" aria-hidden="true">${esc(Fmt.initials(user.fullName))}</span>
+          <span class="account-name">${esc(Fmt.firstName(user.fullName))}</span>
+        </button>
+        <div class="account-popover" id="accountPopover" role="menu" aria-labelledby="accountTrigger" hidden>
+          <div class="account-who">
+            <strong>${esc(user.fullName)}</strong>
+            <span>${esc(user.email)}</span>
+            <span class="account-role">${esc(ROLE_LABEL[user.role] || '')}</span>
+          </div>
+          ${dash ? `<a role="menuitem" href="${url(dash)}">Bảng điều khiển</a>` : ''}
+          ${user.role === 'customer' ? `<a role="menuitem" href="${url('health-records.html')}">Sổ sức khỏe</a>` : ''}
+          ${user.role === 'customer' ? `<a role="menuitem" href="${url('pet-profile.html')}">Thêm thú cưng</a>` : ''}
+          <button type="button" role="menuitem" class="account-logout" data-action="logout">Đăng xuất</button>
+        </div>
+      </div>`;
+  }
+
+  function renderHeader() {
+    const user = AuthService.currentUser();
+    document.querySelectorAll('[data-auth-slot="header"]').forEach((slot) => {
+      slot.innerHTML = user ? userMarkup(user) : guestMarkup();
+    });
+    bindAccountMenu();
+    renderDrawerAuth(user);
+  }
+
+  function bindAccountMenu() {
+    const trigger = document.getElementById('accountTrigger');
+    const pop = document.getElementById('accountPopover');
+    if (!trigger || !pop) return;
+
+    const close = (returnFocus) => {
+      pop.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+      if (returnFocus) trigger.focus();
+    };
+    const open = () => {
+      pop.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+      const first = pop.querySelector('[role="menuitem"]');
+      if (first) first.focus();
+    };
+
+    trigger.addEventListener('click', () => (pop.hidden ? open() : close(false)));
+    pop.addEventListener('keydown', (e) => {
+      const items = Array.from(pop.querySelectorAll('[role="menuitem"]'));
+      const i = items.indexOf(document.activeElement);
+      if (e.key === 'Escape') { e.preventDefault(); close(true); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    });
+    document.addEventListener('click', (e) => {
+      if (!pop.hidden && !e.target.closest('.account-menu')) close(false);
+    });
+    pop.addEventListener('focusout', (e) => {
+      if (!pop.hidden && e.relatedTarget && !e.relatedTarget.closest('.account-menu')) close(false);
+    });
+  }
+
+  /* ---------- Mobile drawer ---------- */
+  function buildDrawer() {
+    const nav = document.querySelector('.main-nav');
+    const toggle = document.getElementById('mobileMenuToggle');
+    if (!nav || !toggle) return;
+
+    const old = document.getElementById('mobileDrawer');
+    if (old) old.remove();
+
+    const links = Array.from(nav.querySelectorAll('a')).map((a) => {
+      const active = a.classList.contains('active') ? ' class="active" aria-current="page"' : '';
+      return `<a href="${esc(a.getAttribute('href'))}"${active}>${esc(a.textContent.trim())}</a>`;
+    }).join('');
+
+    const drawer = document.createElement('div');
+    drawer.className = 'mobile-drawer';
+    drawer.id = 'mobileDrawer';
+    drawer.innerHTML = `
+      <div class="mobile-drawer-content" role="dialog" aria-modal="true" aria-label="Menu điều hướng">
+        <div class="mobile-drawer-header">
+          <span class="brand-logo">PetCare AI Hub</span>
+          <button type="button" class="drawer-close" id="mobileDrawerClose" aria-label="Đóng menu">&times;</button>
+        </div>
+        <nav class="mobile-nav-links" aria-label="Điều hướng chính">${links}</nav>
+        <div class="mobile-drawer-auth" data-drawer-auth></div>
+      </div>`;
+    document.body.appendChild(drawer);
+
+    toggle.setAttribute('aria-controls', 'mobileDrawer');
+    toggle.setAttribute('aria-expanded', 'false');
+
+    const closeBtn = drawer.querySelector('#mobileDrawerClose');
+    const setOpen = (isOpen) => {
+      drawer.classList.toggle('active', isOpen);
+      toggle.setAttribute('aria-expanded', String(isOpen));
+      document.body.classList.toggle('drawer-open', isOpen);
+      if (isOpen) closeBtn.focus(); else toggle.focus();
+    };
+
+    toggle.addEventListener('click', () => setOpen(true));
+    closeBtn.addEventListener('click', () => setOpen(false));
+    drawer.addEventListener('click', (e) => { if (e.target === drawer) setOpen(false); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && drawer.classList.contains('active')) setOpen(false);
+    });
+    window.matchMedia('(min-width: 861px)').addEventListener('change', (m) => {
+      if (m.matches && drawer.classList.contains('active')) setOpen(false);
+    });
+  }
+
+  function renderDrawerAuth(user) {
+    const slot = document.querySelector('[data-drawer-auth]');
+    if (!slot) return;
+    if (!user) {
+      slot.innerHTML = `
+        <a href="${url('login.html')}" class="btn btn-outline">Đăng nhập</a>
+        <a href="${url('register.html')}" class="btn btn-primary">Đăng ký</a>`;
+      return;
+    }
+    const dash = DASHBOARD_BY_ROLE[user.role];
+    slot.innerHTML = `
+      <div class="drawer-who"><strong>${esc(user.fullName)}</strong><span>${esc(user.email)}</span></div>
+      ${dash ? `<a href="${url(dash)}" class="btn btn-secondary">Bảng điều khiển</a>` : ''}
+      <button type="button" class="btn btn-outline" data-action="logout">Đăng xuất</button>`;
+  }
+
+  /* ---------- Logout (header + drawer) ---------- */
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-action="logout"]')) return;
+    AuthService.logout();
+    window.location.href = AuthService.homeUrl();
+  });
+
+  window.addEventListener('petcare:auth-changed', renderHeader);
+
+  buildDrawer();
+  renderHeader();
+  // Re-validate the stored token once per page load; a revoked/expired one signs out (-> auth-changed).
+  AuthService.refresh();
+})();

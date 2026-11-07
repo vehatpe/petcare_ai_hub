@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: 'YourStrong@Password123'
+          MSSQL_PID: 'Express'
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Password123' -C -Q 'SELECT 1' || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 15s
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run database migration
+        working-directory: backend
+        env:
+          DB_SERVER: localhost
+          DB_NAME: PetCareAIHub
+          DB_USER: sa
+          DB_PASSWORD: 'YourStrong@Password123'
+          DB_PORT: 1433
+          DB_ENCRYPT: 'false'
+          DB_TRUST_SERVER_CERT: 'true'
+        run: node scripts/migrate.js --seed
+
+      - name: Run tests
+        working-directory: backend
+        run: npm test
