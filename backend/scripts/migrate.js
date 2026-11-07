@@ -60,6 +60,13 @@ function runSqlcmd(server, database, user, password, queryOrFile, isFile = false
   return (res.stdout || '').trim();
 }
 
+function stripComments(sql) {
+  return sql
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/--.*$/gm, '')
+    .trim();
+}
+
 function splitSqlBatches(content) {
   // Strip hardcoded database creation/switching statements so batches stay in the pool's target database
   const cleaned = content
@@ -70,7 +77,8 @@ function splitSqlBatches(content) {
     .replace(/\r\n/g, '\n')
     .split(/^\s*GO\s*$/im)
     .map((b) => b.trim())
-    .filter((b) => b.length > 0);
+    .filter((b) => b.length > 0)
+    .filter((b) => stripComments(b).length > 0);
 }
 
 // ------------------- SQLCMD Runner -------------------
@@ -84,7 +92,7 @@ async function runWithSqlcmd(dbConfig, filesToRun) {
 
   // 1. Ensure Database exists
   try {
-    runSqlcmd(server, null, user, password, `
+    runSqlcmd(server, 'master', user, password, `
       IF DB_ID(N'${database}') IS NULL
       BEGIN
         CREATE DATABASE [${database}];
@@ -327,4 +335,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { runMigrations };
+module.exports = { runMigrations, splitSqlBatches, computeChecksum };

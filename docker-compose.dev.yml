@@ -33,4 +33,4 @@ services:
     depends_on:
       mssql:
         condition: service_healthy
-    command: sh -c "npm install && node scripts/migrate.js --seed"
+    command: sh -c "npm install && node scripts/migrate.js --seed --pool-only"

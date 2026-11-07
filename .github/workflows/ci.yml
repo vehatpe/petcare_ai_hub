@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: ['main', 'master', 'giai-doan-*']
   pull_request:
-    branches: [main, master]
+    branches: ['main', 'master']
 
 jobs:
   test:
@@ -51,7 +51,7 @@ jobs:
           DB_PORT: 1433
           DB_ENCRYPT: 'false'
           DB_TRUST_SERVER_CERT: 'true'
-        run: node scripts/migrate.js --seed
+        run: node scripts/migrate.js --seed --pool-only
 
       - name: Run tests
         working-directory: backend
