@@ -129,7 +129,8 @@ function createFakeModels() {
         s.chunks = s.chunks.filter((c) => c.docSlug !== docSlug);
         chunks.forEach((c) => s.chunks.push({ chunkId: ++seq, docSlug, docTitle, reviewStatus, ...clone(c) }));
       }
-    }
+    },
+    async ping() { return true; }
   };
 
   // ---- test-only helpers (not part of the model interface) ----

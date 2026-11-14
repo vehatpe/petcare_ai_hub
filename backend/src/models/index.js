@@ -16,7 +16,11 @@ async function createSqlModels(dbConfig) {
     pets: require('./pet.model')(db),
     health: require('./health.model')(db),
     bookings: require('./booking.model')(db),
-    knowledge: require('./knowledge.model')(db)
+    knowledge: require('./knowledge.model')(db),
+    async ping() {
+      const r = await pool.request().query('SELECT 1 AS ok;');
+      return r.recordset?.[0]?.ok === 1;
+    }
   };
   return { models, pool };
 }

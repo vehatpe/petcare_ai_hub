@@ -26,7 +26,7 @@ async function startTestApp({ now = '2026-06-10T03:00:00Z', ai, env = {} } = {})
       body: raw !== undefined ? raw : body !== undefined ? JSON.stringify(body) : undefined
     });
     const json = await res.json();
-    return { status: res.status, body: json, data: json.data };
+    return { status: res.status, body: json, data: json.data, headers: res.headers };
   }
   let n = 0;
   async function registerCustomer(over = {}) {

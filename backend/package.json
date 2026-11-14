@@ -9,6 +9,7 @@
     "start": "node server.js",
     "test": "node --test \"tests/**/*.test.js\"",
     "migrate": "node scripts/migrate.js",
+    "smoke": "node scripts/smoke.js",
     "ingest": "node scripts/ingest-knowledge.js",
     "check-sql": "node scripts/check-sql.js"
   },

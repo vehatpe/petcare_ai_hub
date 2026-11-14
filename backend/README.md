@@ -12,7 +12,12 @@ cp .env.example .env        # điền DB_*, JWT_SECRET, GEMINI_API_KEY
 2. `npm run ingest` để nạp `docs/knowledge-base/*.md` (cần DB + `GEMINI_API_KEY`; `npm run ingest -- --dry-run` chỉ chia chunk, không gọi mạng/DB). Chạy lại khi sửa tài liệu.
 3. `npm start` rồi mở `http://localhost:3000` (frontend cùng origin khi `SERVE_FRONTEND=true`).
 
-Production (`NODE_ENV=production`) từ chối khởi động nếu `JWT_SECRET` ngắn hơn 32 ký tự hoặc giống giá trị mẫu. Đặt `TRUST_PROXY` khi chạy sau reverse proxy để giới hạn tốc độ theo IP thật.
+Production (`NODE_ENV=production`) từ chối khởi động nếu `JWT_SECRET` ngắn hơn 32 ký tự hoặc giống giá trị mẫu.
+
+### Lưu ý quan trọng về Reverse Proxy (`TRUST_PROXY`)
+Khi chạy ứng dụng sau reverse proxy (như Nginx, Cloudflare, Traefik, AWS ALB hoặc Docker Swarm/Kubernetes Ingress), **bắt buộc phải cấu hình biến môi trường `TRUST_PROXY`** (ví dụ: `TRUST_PROXY=1` hoặc `TRUST_PROXY=true`).
+- **Lý do kỹ thuật:** Express dựa vào cấu hình `trust proxy` để đọc header `X-Forwarded-For`. Nếu không bật, `req.ip` sẽ luôn nhận địa chỉ IP của reverse proxy thay vì IP thật của client.
+- **Hậu quả:** Toàn bộ người dùng trên Internet sẽ bị coi là chung một địa chỉ IP, khiến các tầng rate limit (`/auth/register`, `/auth/login`, `/auth/me`) tính chung một hạn mức và đồng loạt chặn tất cả người dùng bằng mã lỗi `429 rate_limited`.
 
 ## Biến môi trường
 Xem `.env.example`. Mặc định: `GEMINI_MODEL=gemini-2.5-flash`, `GEMINI_EMBED_MODEL=gemini-embedding-001` (768 chiều, `GEMINI_EMBED_DIM`), `RAG_TOP_K=4`, `RAG_MIN_SCORE=0.6` (ngưỡng cần hiệu chỉnh trên dữ liệu thật), `APP_TIMEZONE=Asia/Ho_Chi_Minh`. Tên model là mặc định chưa được kiểm chứng với tài khoản Gemini của bạn; đổi trong env nếu cần.

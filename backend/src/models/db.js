@@ -33,19 +33,29 @@ function runner(source) {
   };
 }
 
+const isDeadlock = (e) => !!(e && (e.number === 1205 || e.originalError?.number === 1205));
+
 function createDb(pool) {
   return {
     ...runner(pool),
     async transaction(work) {
-      const tx = new sql.Transaction(pool);
-      await tx.begin();
-      try {
-        const result = await work(runner(tx));
-        await tx.commit();
-        return result;
-      } catch (e) {
-        try { await tx.rollback(); } catch (_) { /* already rolled back */ }
-        throw e;
+      const maxRetries = 2;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const tx = new sql.Transaction(pool);
+        await tx.begin();
+        try {
+          const result = await work(runner(tx));
+          await tx.commit();
+          return result;
+        } catch (e) {
+          try { await tx.rollback(); } catch (_) { /* already rolled back */ }
+          if (isDeadlock(e) && attempt < maxRetries) {
+            const delayMs = (attempt + 1) * 50 + Math.floor(Math.random() * 25);
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            continue;
+          }
+          throw e;
+        }
       }
     }
   };
@@ -55,4 +65,4 @@ const lc = (v) => (v === null || v === undefined ? v : String(v).toLowerCase());
 const iso = (d) => (d instanceof Date ? d.toISOString() : d);
 const isUniqueViolation = (e) => e && (e.number === 2601 || e.number === 2627);
 
-module.exports = { sql, T, createDb, lc, iso, isUniqueViolation };
+module.exports = { sql, T, createDb, lc, iso, isUniqueViolation, isDeadlock };

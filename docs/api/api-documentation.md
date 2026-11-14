@@ -24,6 +24,26 @@ Booking  { id, petId, petName, serviceId, serviceName, providerName, priceVnd, d
            status: "pending"|"confirmed"|"completed"|"cancelled", createdAt }
 ```
 
+## Giám sát & Sức khỏe hệ thống
+| Method | Path | Xác thực | Kết quả |
+|---|---|---|---|
+| GET | `/health` | Không yêu cầu | 200 `{status: "ok", database: "connected"}` khi hệ thống và kết nối CSDL bình thường; 503 `{status: "down", database: "disconnected"}` khi mất kết nối CSDL (không lộ chi tiết lỗi nội bộ). |
+
+## Giới hạn tốc độ (Rate Limiting)
+Khi vượt quá hạn mức yêu cầu trong cửa sổ thời gian (mặc định 15 phút), API phản hồi mã `429` với cấu trúc:
+```json
+{
+  "success": false,
+  "data": null,
+  "code": "rate_limited",
+  "message": "Bạn thử quá nhiều lần. Vui lòng đợi vài phút rồi thử lại."
+}
+```
+Các tầng rate limiter được tách riêng:
+- **Auth (`/auth/register`, `/auth/login`)**: Khóa theo cặp `IP` + `identifier` (email hoặc số điện thoại đã chuẩn hóa chữ thường).
+- **Session verification (`/auth/me`)**: Hạn mức rộng (mặc định 300 lượt / 15 phút / IP) cho phép client kiểm tra phiên khi chuyển trang.
+- **AI Chat (`/ai/chat`)**: Khóa theo `UserId` đã xác thực (mặc định 20 lượt / 15 phút / tài khoản), ngăn chặn lạm dụng hạn ngạch Gemini API.
+
 ## Auth
 | Method | Path | Body | Kết quả |
 |---|---|---|---|
