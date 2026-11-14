@@ -491,13 +491,20 @@ p {
   margin-bottom: 12px;
 }
 
-.footer-links a {
+.footer-links a,
+.footer-links button {
   color: var(--text-inverse-muted);
   font-size: 0.875rem;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
   transition: color var(--transition-fast);
 }
 
-.footer-links a:hover {
+.footer-links a:hover,
+.footer-links button:hover {
   color: var(--color-hero-lime);
 }
 

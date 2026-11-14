@@ -48,6 +48,7 @@
     updateUser(user) {
       const current = this.get();
       if (!current) return;
+      if (JSON.stringify(current.user) === JSON.stringify(user)) return;
       const store = readFrom(sessionStorage) ? sessionStorage : localStorage;
       try { store.setItem(SESSION_KEY, JSON.stringify({ token: current.token, user })); } catch (_) { /* ignore */ }
       notify();

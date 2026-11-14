@@ -8,7 +8,7 @@ const T = {
   vstr: (n) => sql.VarChar(n),
   max: sql.NVarChar(sql.MAX),
   int: sql.Int,
-  dec: sql.Decimal(5, 2),
+  dec: sql.Decimal(7, 3),
   bool: sql.Bit,
   ymd: sql.VarChar(10), // dates travel as 'YYYY-MM-DD' strings; SQL does CAST(@x AS DATE)
   dt: sql.DateTime2(3)

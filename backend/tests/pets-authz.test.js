@@ -35,13 +35,13 @@ test('pets CRUD', async (t) => {
   });
 
   await t.test('validation errors use the prototype messages', async () => {
-    const r = await call('POST', '/pets', { token, body: { name: '', species: 'bird', sex: 'x', birthDate: '2999-01-01', weightKg: 500, microchip: '123', conditions: 'a'.repeat(501) } });
+    const r = await call('POST', '/pets', { token, body: { name: '', species: 'dragon', sex: 'x', birthDate: '2999-01-01', weightKg: 500, microchip: '123', conditions: 'a'.repeat(501) } });
     assert.equal(r.status, 422);
     assert.equal(r.body.errors.name, 'Vui lòng nhập tên của bé.');
     assert.equal(r.body.errors.species, 'Vui lòng chọn loài.');
     assert.equal(r.body.errors.sex, 'Vui lòng chọn giới tính.');
     assert.equal(r.body.errors.birthDate, 'Ngày sinh không thể ở tương lai.');
-    assert.equal(r.body.errors.weightKg, 'Cân nặng cần trong khoảng 0,1 – 150 kg.');
+    assert.equal(r.body.errors.weightKg, 'Cân nặng cần trong khoảng 0,005 – 150 kg.');
     assert.equal(r.body.errors.microchip, 'Mã microchip gồm đúng 15 chữ số.');
     assert.equal(r.body.errors.conditions, 'Ghi chú sức khỏe tối đa 500 ký tự.');
     const old = await call('POST', '/pets', { token, body: app.validPet({ birthDate: '1990-01-01' }) });

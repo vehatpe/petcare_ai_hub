@@ -62,29 +62,31 @@
     <section class="hero2">
       <div class="container hero2-grid">
         <div class="hero2-copy">
-          <h1 class="hero2-title">Hồ sơ sức khỏe, lịch hẹn và Trợ lý AI cho từng bé.</h1>
-          <p class="hero2-sub">Lưu cân nặng, mũi tiêm và bệnh án của thú cưng ở một nơi. Đặt lịch với cơ sở thú y trong bốn bước và hỏi Trợ lý AI khi cần tham khảo.</p>
-          <div class="hero2-actions">
-            <a href="pages/pet-profile.html" class="btn btn-primary btn-lg" data-auth-required="Hồ sơ thú cưng gắn với tài khoản của bạn nên cần đăng nhập. Đăng ký miễn phí chỉ mất một phút.">Tạo hồ sơ cho bé</a>
-            <a href="pages/services.html" class="btn btn-outline btn-lg">Xem dịch vụ</a>
+          <h1 class="hero2-title" id="heroTitle">Hồ sơ sức khỏe, lịch hẹn và Trợ lý AI cho từng bé.</h1>
+          <p class="hero2-sub" id="heroSub">Lưu cân nặng, mũi tiêm và bệnh án của thú cưng ở một nơi. Đặt lịch với cơ sở thú y trong bốn bước và hỏi Trợ lý AI khi cần tham khảo.</p>
+          <div class="hero2-actions" id="heroActions">
+            <a href="pages/pet-profile.html" class="btn btn-primary btn-lg" id="heroPrimaryBtn" data-auth-required="Hồ sơ thú cưng gắn với tài khoản của bạn nên cần đăng nhập. Đăng ký miễn phí chỉ mất một phút.">Tạo hồ sơ cho bé</a>
+            <a href="pages/services.html" class="btn btn-outline btn-lg" id="heroSecondaryBtn">Xem dịch vụ</a>
           </div>
         </div>
 
         <aside class="pcard" id="profileCard" aria-label="Hồ sơ thú cưng">
-          <p class="pcard-tag" id="pcardTag">Cấu trúc hồ sơ, chưa có dữ liệu</p>
-          <div class="pcard-head">
-            <div class="pet-avatar" id="pcardAvatar" aria-hidden="true">?</div>
-            <div>
-              <h2 class="pcard-name" id="pcardName">Tên thú cưng</h2>
-              <p class="pcard-specs" id="pcardSpecs">Loài · giống · tuổi</p>
+          <div id="pcardContent">
+            <p class="pcard-tag" id="pcardTag">Cấu trúc hồ sơ, chưa có dữ liệu</p>
+            <div class="pcard-head">
+              <div class="pet-avatar" id="pcardAvatar" aria-hidden="true">?</div>
+              <div>
+                <h2 class="pcard-name" id="pcardName">Tên thú cưng</h2>
+                <p class="pcard-specs" id="pcardSpecs">Loài · giống · tuổi</p>
+              </div>
             </div>
+            <dl class="pcard-facts" id="pcardFacts">
+              <div><dt>Cân nặng gần nhất</dt><dd id="pcardWeight">Chưa có</dd></div>
+              <div><dt>Tiêm chủng</dt><dd id="pcardVax">Chưa có dữ liệu</dd></div>
+              <div><dt>Lịch hẹn sắp tới</dt><dd id="pcardBooking">Chưa có</dd></div>
+            </dl>
+            <a href="pages/pet-profile.html" class="btn btn-secondary btn-sm" id="pcardCta" data-auth-required="Hồ sơ thú cưng gắn với tài khoản của bạn nên cần đăng nhập. Đăng ký miễn phí chỉ mất một phút.">Tạo hồ sơ cho bé</a>
           </div>
-          <dl class="pcard-facts">
-            <div><dt>Cân nặng gần nhất</dt><dd id="pcardWeight">Chưa có</dd></div>
-            <div><dt>Tiêm chủng</dt><dd id="pcardVax">Chưa có dữ liệu</dd></div>
-            <div><dt>Lịch hẹn sắp tới</dt><dd id="pcardBooking">Chưa có</dd></div>
-          </dl>
-          <a href="pages/pet-profile.html" class="btn btn-secondary btn-sm" id="pcardCta" data-auth-required="Hồ sơ thú cưng gắn với tài khoản của bạn nên cần đăng nhập. Đăng ký miễn phí chỉ mất một phút.">Tạo hồ sơ cho bé</a>
         </aside>
       </div>
     </section>
@@ -144,9 +146,9 @@
 
     <section class="container cta-banner-wrapper">
       <div class="cta-banner-card">
-        <h2 class="cta-banner-title">Bắt đầu với hồ sơ của bé.</h2>
-        <p class="cta-banner-subtext">Đăng ký miễn phí, khai báo thú cưng và bạn có thể đặt lịch hoặc hỏi Trợ lý AI ngay.</p>
-        <div class="cta-banner-actions">
+        <h2 class="cta-banner-title" id="ctaBannerTitle">Bắt đầu với hồ sơ của bé.</h2>
+        <p class="cta-banner-subtext" id="ctaBannerSub">Đăng ký miễn phí, khai báo thú cưng và bạn có thể đặt lịch hoặc hỏi Trợ lý AI ngay.</p>
+        <div class="cta-banner-actions" id="ctaBannerActions">
           <a href="pages/register.html" class="btn btn-primary btn-lg">Tạo tài khoản</a>
           <a href="pages/login.html" class="btn btn-outline-white btn-lg">Đăng nhập</a>
         </div>
@@ -184,7 +186,7 @@
 
         <div class="footer-col">
           <h5>Tài khoản</h5>
-          <ul class="footer-links">
+          <ul class="footer-links" data-auth-slot="footer-account">
             <li><a href="pages/login.html">Đăng nhập</a></li>
             <li><a href="pages/register.html">Đăng ký chủ nuôi</a></li>
             <li><a href="pages/register.html?role=provider">Đăng ký cơ sở dịch vụ</a></li>

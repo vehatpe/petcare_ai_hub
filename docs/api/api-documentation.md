@@ -17,7 +17,7 @@ User     { id, role: "customer"|"provider"|"vet"|"admin", status: "active"|"pend
 Provider { id, name, area, type: "clinic"|"spa"|"hotel"|"emergency", isSample }
 Service  { id, category: "medical"|"grooming"|"hotel"|"emergency", categoryLabel, providerId, providerName,
            providerArea, name, description, priceVnd, unit, isSample }
-Pet      { id, name, species: "dog"|"cat"|"other", breed, sex: "male"|"female", birthDate, weightKg|null,
+Pet      { id, name, species: "dog"|"cat"|"rabbit"|"hamster"|"bird"|"fish"|"reptile"|"other", breed, sex: "male"|"female", birthDate, weightKg|null,
            color, neutered: "yes"|"no"|"unknown", microchip, conditions, photo|null, createdAt, updatedAt }
            // weightKg = số đo mới nhất trong Health_Metrics, null nếu chưa có.
 Booking  { id, petId, petName, serviceId, serviceName, providerName, priceVnd, date, time, notes,
@@ -73,7 +73,7 @@ Mật khẩu băm bằng bcrypt (cost ≥ 10). Giới hạn tốc độ cho `/au
 | PUT | `/pets/:id` | cùng body; `weightKg` khác số đo mới nhất → thêm dòng Health_Metrics hôm nay |
 | DELETE | `/pets/:id` | 200 `{deleted:true}`. Xóa kèm cân nặng/tiêm chủng/bệnh án của bé; lịch hẹn giữ lại (PetName lưu trên Booking). |
 
-Validation: name 1–40; species/sex thuộc tập; birthDate hợp lệ, không ở tương lai, ≥ 1995-01-01; weightKg 0.1–150; microchip đúng 15 chữ số nếu có; conditions ≤ 500.
+Validation: name 1–40; species/sex thuộc tập; birthDate hợp lệ, không ở tương lai, ≥ 1995-01-01; weightKg 0,005–150 kg (làm tròn 3 chữ số; thú nhỏ như hamster 0,045 kg hợp lệ, ngoài khoảng → 422 `weightKg`: "Cân nặng cần trong khoảng 0,005 – 150 kg."); species ngoài 8 giá trị trên → 422 `species`: "Vui lòng chọn loài."; microchip đúng 15 chữ số nếu có; conditions ≤ 500.
 
 ## Sổ sức khỏe (customer, chủ của bé)
 | Method | Path | Ghi chú |

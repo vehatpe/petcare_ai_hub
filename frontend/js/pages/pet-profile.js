@@ -27,6 +27,19 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('cancelLink').href = returnUrl;
   form.birthDate.max = Fmt.todayIso();
 
+  /* ---------- Species options ---------- */
+  function renderSpeciesOptions() {
+    const container = document.getElementById('speciesSegmented');
+    if (!container) return;
+    container.innerHTML = PetService.SPECIES.map((s) => `
+      <label><input type="radio" name="species" value="${Fmt.esc(s.id)}"><span>${Fmt.esc(s.label)}</span></label>
+    `).join('');
+    container.querySelectorAll('input[name="species"]').forEach((r) => r.addEventListener('change', () => {
+      syncBreeds();
+      renderPreview();
+    }));
+  }
+
   /* ---------- Breed suggestions follow the species ---------- */
   function syncBreeds() {
     const species = form.elements.species.value;
@@ -139,12 +152,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  alertBox.addEventListener('click', (e) => {
+    if (e.target.closest('[data-action="reload"]')) {
+      e.preventDefault();
+      location.reload();
+    }
+  });
+
   /* ---------- Wiring ---------- */
   form.addEventListener('input', (e) => {
     if (e.target.name) setFieldError(e.target.name, '');
     renderPreview();
   });
-  form.querySelectorAll('input[name="species"]').forEach((r) => r.addEventListener('change', syncBreeds));
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -197,6 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function init() {
+    renderSpeciesOptions();
     form.setAttribute('aria-busy', 'true');
     try {
       if (editId) {
@@ -223,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     } catch (err) {
-      showBlocked('error', `${Fmt.esc(err.message || 'Không tải được hồ sơ.')} <a href="" onclick="location.reload();return false"><strong>Thử lại</strong></a>`);
+      showBlocked('error', `${Fmt.esc(err.message || 'Không tải được hồ sơ.')} <a href="#" data-action="reload"><strong>Thử lại</strong></a>`);
       return;
     } finally {
       form.removeAttribute('aria-busy');

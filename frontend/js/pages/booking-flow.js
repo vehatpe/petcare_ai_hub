@@ -301,6 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btnNext.disabled = pets.length === 0;
     })
     .catch((err) => {
-      loadingEl.innerHTML = `<div class="panel-error" role="alert"><p>${esc(err.message || 'Không tải được dữ liệu.')}</p><button type="button" class="btn btn-outline btn-sm" onclick="location.reload()">Thử lại</button></div>`;
+      loadingEl.innerHTML = `<div class="panel-error" role="alert"><p>${esc(err.message || 'Không tải được dữ liệu.')}</p><button type="button" class="btn btn-outline btn-sm" data-action="reload">Thử lại</button></div>`;
+      loadingEl.querySelector('[data-action="reload"]')?.addEventListener('click', () => location.reload());
     });
 });
