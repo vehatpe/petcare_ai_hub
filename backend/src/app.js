@@ -26,7 +26,7 @@ function createApp({ models, config, ai, clock = () => new Date(), logger = cons
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         imgSrc: ["'self'", 'data:', 'https://images.unsplash.com'],
@@ -53,7 +53,7 @@ function createApp({ models, config, ai, clock = () => new Date(), logger = cons
   };
   const mw = createAuth({ models, config });
 
-  app.use('/api/v1', createRouter({ services, mw, config }));
+  app.use('/api/v1', createRouter({ services, mw, config, models }));
   app.use('/api', notFoundHandler);
 
   if (config.serveFrontend) {

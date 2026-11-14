@@ -1,11 +1,11 @@
 'use strict';
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const { createRateLimiters } = require('../middlewares/rate-limiters');
 const { uuidParam } = require('../utils/http');
 
 const mk = (name, deps) => require(`../controllers/${name}.controller`)(deps);
 
-function createRouter({ services, mw, config }) {
+function createRouter({ services, mw, config, models }) {
   const r = express.Router();
   const c = {
     auth: mk('auth', services), catalog: mk('catalog', services), pet: mk('pet', services),
@@ -14,13 +14,24 @@ function createRouter({ services, mw, config }) {
   const { authenticate, requireRole } = mw;
   const customer = [authenticate, requireRole('customer')];
 
-  const limiter = rateLimit({
-    windowMs: config.rateLimit.windowMs, max: config.rateLimit.max, standardHeaders: true, legacyHeaders: false,
-    handler: (req, res) => res.status(429).json({ success: false, data: null, code: 'rate_limited', message: 'Bạn thử quá nhiều lần. Vui lòng đợi vài phút rồi thử lại.' })
+  const { authLimiter, meLimiter, aiLimiter } = createRateLimiters(config);
+
+  // Health check endpoint (public, reports DB connectivity)
+  r.get('/health', async (req, res) => {
+    try {
+      const dbOk = models?.ping ? await models.ping() : true;
+      if (!dbOk) {
+        return res.status(503).json({ success: false, data: { status: 'down', database: 'disconnected' }, message: 'Hệ thống đang gặp sự cố.' });
+      }
+      return res.status(200).json({ success: true, data: { status: 'ok', database: 'connected' }, message: 'Hệ thống hoạt động bình thường.' });
+    } catch (_) {
+      return res.status(503).json({ success: false, data: { status: 'down', database: 'disconnected' }, message: 'Hệ thống đang gặp sự cố.' });
+    }
   });
-  r.post('/auth/register', limiter, c.auth.register);
-  r.post('/auth/login', limiter, c.auth.login);
-  r.get('/auth/me', limiter, authenticate, c.auth.me);
+
+  r.post('/auth/register', authLimiter, c.auth.register);
+  r.post('/auth/login', authLimiter, c.auth.login);
+  r.get('/auth/me', meLimiter, authenticate, c.auth.me);
 
   r.get('/providers', c.catalog.providers);
   r.get('/services', c.catalog.services);
@@ -45,7 +56,7 @@ function createRouter({ services, mw, config }) {
   r.patch('/bookings/:id/cancel', customer, uuidParam('id'), c.booking.cancel);
 
   r.get('/dashboard/customer', customer, c.dashboard.customer);
-  r.post('/ai/chat', customer, c.ai.chat);
+  r.post('/ai/chat', customer, aiLimiter, c.ai.chat);
   return r;
 }
 

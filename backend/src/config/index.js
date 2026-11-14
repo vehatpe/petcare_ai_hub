@@ -31,7 +31,12 @@ function loadConfig(env = process.env) {
     jwtSecret,
     jwtSecretEphemeral,
     bcryptCost: int(env.BCRYPT_COST, 10),
-    rateLimit: { windowMs: 15 * 60 * 1000, max: int(env.AUTH_RATE_LIMIT_MAX, 30) },
+    rateLimit: {
+      windowMs: int(env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
+      authMax: int(env.AUTH_RATE_LIMIT_MAX, 15),
+      meMax: int(env.ME_RATE_LIMIT_MAX, 300),
+      aiMax: int(env.AI_RATE_LIMIT_MAX, 20)
+    },
     db: {
       server: env.DB_SERVER || 'localhost',
       database: env.DB_NAME || 'PetCareAIHub',

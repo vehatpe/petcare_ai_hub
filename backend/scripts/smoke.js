@@ -56,6 +56,14 @@ async function main() {
   }
 
   try {
+    // 0. GET /health
+    const healthCheckRes = await api('GET', '/health');
+    record(
+      '0. GET /health',
+      healthCheckRes.status === 200 && healthCheckRes.body.data?.status === 'ok' && healthCheckRes.body.data?.database === 'connected',
+      `Status: ${healthCheckRes.body.data?.status}, Database: ${healthCheckRes.body.data?.database}`
+    );
+
     // 1. GET /services
     const servicesRes = await api('GET', '/services');
     record(
