@@ -423,4 +423,19 @@ test('Landing page states: loading, error, empty, with pets', async (t) => {
       assert.equal(env.documentElement.dataset.authReady, '1');
     });
   });
+
+  await t.test('landing.css anti-flicker block covers all four hero/pcard elements', () => {
+    const landingCssPath = path.resolve(__dirname, '../../frontend/css/landing.css');
+    const landingCssContent = fs.readFileSync(landingCssPath, 'utf8');
+
+    // Locate the anti-flicker rule block
+    const ruleMatch = landingCssContent.match(/html\[data-auth="user"\]:not\(\[data-auth-ready\]\)[\s\S]*?\{[\s\S]*?visibility:\s*hidden;[\s\S]*?\}/);
+    assert.ok(ruleMatch, 'Anti-flicker CSS rule block must exist in landing.css');
+
+    const blockText = ruleMatch[0];
+    assert.ok(blockText.includes('#heroTitle'), 'Anti-flicker block must include #heroTitle');
+    assert.ok(blockText.includes('#heroSub'), 'Anti-flicker block must include #heroSub');
+    assert.ok(blockText.includes('#heroActions'), 'Anti-flicker block must include #heroActions');
+    assert.ok(blockText.includes('#pcardContent'), 'Anti-flicker block must include #pcardContent');
+  });
 });
