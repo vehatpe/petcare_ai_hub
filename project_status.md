@@ -5,7 +5,7 @@
 
 - **Cập nhật lần cuối:** 2026-11-17
 - **Nhánh làm việc:** `giai-doan-b-plus` (tách từ `main`, `main` đã gộp PR #1 của Giai đoạn B)
-- **Giai đoạn hiện tại:** **B+ (sửa lỗi sau khi chạy thật) — Session 1/9 hoàn thành**. Chưa bắt đầu C.
+- **Giai đoạn hiện tại:** **B+ (sửa lỗi sau khi chạy thật) — Session 1.1 hoàn thành**. Chưa bắt đầu C.
 - **Việc kế tiếp (một đề xuất duy nhất):** Session 2/9 (theo kế hoạch đóng B+ của chủ dự án).
 
 ## Đang làm
@@ -114,3 +114,4 @@ Sau **mỗi lần** sửa/cập nhật dự án, trước khi báo cáo:
 | 2026-11-15 | B+ | Sửa `smoke.js` (giới hạn 10 pet, thêm `11-setup`); hỗ trợ Live Server 5500/5501 (+CORS dev, +test) | `npm test` 91/91 (DB giả); `smoke.js` 25/25 trên SQL Server thật (chủ dự án chạy) |
 | 2026-11-15 | — | Tạo `project_status.md`; đối chiếu hiện trạng với Master Prompt | Đọc mã nguồn, chạy lại `npm test` 91/91 (DB giả); **chưa** chạy smoke/CI từ phía AI |
 | 2026-11-17 | B+ (Session 1/9) | landing.js tách 3 trạng thái tải / lỗi / trống; data-action="reload-profile"; test landing-states.test.js | `npm test` 99 pass (DB giả); `check-frontend-csp.js` pass | Chưa kiểm chứng giao diện thực tế trên trình duyệt |
+| 2026-11-17 | B+ (Session 1.1) | Chống nhấp nháy hero: thêm auth-boot.js, CSS landing.css, data-authReady trong landing.js, test auth-boot & landing-states | `npm test` 113 pass (DB giả); `check-frontend-csp.js` pass | Chưa đo độ trễ mạng thực tế trên trình duyệt |

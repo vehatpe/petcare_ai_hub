@@ -155,7 +155,12 @@ function setupTestEnvironment({ currentUser = null, petListImpl = async () => []
     }
   };
 
+  const documentElement = {
+    dataset: {}
+  };
+
   const documentObj = {
+    documentElement,
     getElementById: (id) => dom.getElementById(id),
     addEventListener: (type, cb) => {
       if (!docListeners.has(type)) docListeners.set(type, []);
@@ -185,6 +190,7 @@ function setupTestEnvironment({ currentUser = null, petListImpl = async () => []
 
   return {
     dom,
+    documentElement,
     context,
     AuthService,
     PetService,
@@ -362,5 +368,59 @@ test('Landing page states: loading, error, empty, with pets', async (t) => {
     const pcardHtml = env.dom.getElementById('pcardContent').innerHTML;
     assert.doesNotMatch(pcardHtml, /GhostPet/);
     assert.match(pcardHtml, /Cấu trúc hồ sơ, chưa có dữ liệu/);
+  });
+
+  await t.test('landing.js sets authReady in all branches', async (subTest) => {
+    await subTest.test('nhánh khách -> authReady được đặt', () => {
+      const env = setupTestEnvironment({ currentUser: null });
+      env.triggerDomContentLoaded();
+      assert.equal(env.documentElement.dataset.authReady, '1');
+    });
+
+    await subTest.test('nhánh vai trò khác -> authReady được đặt', () => {
+      const env = setupTestEnvironment({ currentUser: { fullName: 'Dr. John', role: 'vet' } });
+      env.triggerDomContentLoaded();
+      assert.equal(env.documentElement.dataset.authReady, '1');
+    });
+
+    await subTest.test('nhánh đang tải -> authReady được đặt ngay khi render loading', () => {
+      const pendingPromise = new Promise(() => {});
+      const env = setupTestEnvironment({
+        currentUser: { fullName: 'Nguyễn Văn An', role: 'customer' },
+        petListImpl: () => pendingPromise
+      });
+      env.triggerDomContentLoaded();
+      assert.equal(env.documentElement.dataset.authReady, '1');
+    });
+
+    await subTest.test('nhánh lỗi API -> authReady được đặt', async () => {
+      const env = setupTestEnvironment({
+        currentUser: { fullName: 'Nguyễn Văn An', role: 'customer' },
+        petListImpl: async () => { throw new Error('fail'); }
+      });
+      env.triggerDomContentLoaded();
+      await new Promise((r) => setImmediate(r));
+      assert.equal(env.documentElement.dataset.authReady, '1');
+    });
+
+    await subTest.test('nhánh trống -> authReady được đặt', async () => {
+      const env = setupTestEnvironment({
+        currentUser: { fullName: 'Nguyễn Văn An', role: 'customer' },
+        petListImpl: async () => []
+      });
+      env.triggerDomContentLoaded();
+      await new Promise((r) => setImmediate(r));
+      assert.equal(env.documentElement.dataset.authReady, '1');
+    });
+
+    await subTest.test('nhánh có bé -> authReady được đặt', async () => {
+      const env = setupTestEnvironment({
+        currentUser: { fullName: 'Nguyễn Văn An', role: 'customer' },
+        petListImpl: async () => [{ id: 'p1', name: 'Miu', species: 'cat' }]
+      });
+      env.triggerDomContentLoaded();
+      await new Promise((r) => setImmediate(r));
+      assert.equal(env.documentElement.dataset.authReady, '1');
+    });
   });
 });

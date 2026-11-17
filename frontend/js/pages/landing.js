@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. Guest state
     if (!user) {
+      document.documentElement.dataset.authReady = '1';
       $('heroTitle').textContent = 'Hồ sơ sức khỏe, lịch hẹn và Trợ lý AI cho từng bé.';
       $('heroSub').textContent = 'Lưu cân nặng, mũi tiêm và bệnh án của thú cưng ở một nơi. Đặt lịch với cơ sở thú y trong bốn bước và hỏi Trợ lý AI khi cần tham khảo.';
       $('heroActions').innerHTML = `
@@ -51,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Non-customer roles: provider / vet / admin
     if (user.role !== 'customer') {
+      document.documentElement.dataset.authReady = '1';
       const firstName = Fmt.firstName(user.fullName);
       $('heroTitle').textContent = `Xin chào, ${firstName}.`;
       $('heroSub').textContent = 'Bảng điều khiển cho vai trò này đang được xây dựng.';
@@ -92,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <p class="pcard-tag">Hồ sơ thú cưng</p>
         <p>Đang tải thông tin…</p>
       </div>`;
+    document.documentElement.dataset.authReady = '1';
 
     // Fetch pets
     let pets = null;

@@ -1037,6 +1037,12 @@
 
 .hero2-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: var(--space-5); }
 
+/* Prevent guest hero/profile flicker before landing.js renders auth state */
+html[data-auth="user"]:not([data-auth-ready]) #heroActions,
+html[data-auth="user"]:not([data-auth-ready]) #pcardContent {
+  visibility: hidden;
+}
+
 .pcard {
   display: grid;
   gap: var(--space-4);
