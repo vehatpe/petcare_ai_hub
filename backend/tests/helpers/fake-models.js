@@ -10,7 +10,7 @@ const { DuplicateError, LimitError } = require('../../src/utils/errors');
 const clone = (o) => (o === null || o === undefined ? o : JSON.parse(JSON.stringify(o)));
 
 function createFakeModels() {
-  const s = { users: [], providers: [], services: [], pets: [], metrics: [], vaccs: [], records: [], bookings: [], chunks: [] };
+  const s = { users: [], providers: [], services: [], pets: [], metrics: [], vaccs: [], records: [], bookings: [], chunks: [], auditLogs: [] };
   let seq = 0;
   const tick = () => new Date(Date.UTC(2026, 0, 1, 0, 0, ++seq)).toISOString();
 
@@ -31,16 +31,61 @@ function createFakeModels() {
       isSample: sv.isSample, slotCapacity: sv.slotCapacity };
   };
 
+  const userOut = (u) => {
+    if (!u) return null;
+    return {
+      id: u.id,
+      role: u.role,
+      status: u.status,
+      fullName: u.fullName,
+      email: u.email,
+      phone: u.phone,
+      passwordHash: u.passwordHash,
+      orgName: u.orgName || null,
+      orgType: u.orgType || null,
+      createdAt: u.createdAt || null,
+      providerId: u.providerId || null,
+      orgArea: u.orgArea || null,
+      approvedBy: u.approvedBy || null,
+      approvedAt: u.approvedAt || null,
+      mustChangePassword: Boolean(u.mustChangePassword),
+      rejectReason: u.rejectReason || null
+    };
+  };
+
   const models = {
     users: {
       async create(u) {
         if (s.users.some((x) => x.email === u.email)) throw new DuplicateError('email');
         if (s.users.some((x) => x.phone === u.phone)) throw new DuplicateError('phone');
-        s.users.push(clone(u)); return u;
+        const userObj = {
+          ...u,
+          providerId: u.providerId || null,
+          orgArea: u.orgArea || null,
+          approvedBy: u.approvedBy || null,
+          approvedAt: u.approvedAt || null,
+          mustChangePassword: Boolean(u.mustChangePassword),
+          rejectReason: u.rejectReason || null
+        };
+        s.users.push(clone(userObj));
+        return userOut(userObj);
       },
-      async findByEmail(e) { return clone(s.users.find((u) => u.email === e)) || null; },
-      async findByPhone(p) { return clone(s.users.find((u) => u.phone === p)) || null; },
-      async findById(id) { return clone(s.users.find((u) => u.id === id)) || null; }
+      async findByEmail(e) { return userOut(s.users.find((u) => u.email === e)); },
+      async findByPhone(p) { return userOut(s.users.find((u) => u.phone === p)); },
+      async findById(id) { return userOut(s.users.find((u) => u.id === id)); }
+    },
+    audit: {
+      async log({ actorUserId, action, targetType, targetId, detail }) {
+        s.auditLogs.push({
+          auditId: ++seq,
+          actorUserId: actorUserId || null,
+          action,
+          targetType,
+          targetId: String(targetId),
+          detail: detail || null,
+          createdAt: tick()
+        });
+      }
     },
     catalog: {
       async listProviders() { return s.providers.filter((p) => p.active !== false).map(({ active, ...p }) => clone(p)); }, // eslint-disable-line no-unused-vars

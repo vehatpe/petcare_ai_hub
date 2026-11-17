@@ -63,3 +63,30 @@ SELECT ProviderId, Name, Area FROM dbo.Providers;
 ## Migration 003: loài thú cưng và cân nặng
 
 `migrations/003_Expand_Pet_Species_And_Weight.sql` (chạy lại được): `Pets.Species` → `VARCHAR(12)` với 8 loài; `Health_Metrics.Value` → `DECIMAL(7,3)`, `CHECK (Value > 0)`. Dữ liệu cũ giữ nguyên.
+
+## Migration 004: Vòng đời vai trò (Roles Lifecycle), liên kết Provider và AuditLog
+
+`migrations/004_Roles_Lifecycle.sql` (chạy lại được):
+- `Users`: thêm các cột `ProviderId VARCHAR(50) NULL` (FK → `Providers`), `OrgArea NVARCHAR(100) NULL`, `ApprovedBy UNIQUEIDENTIFIER NULL` (FK → `Users`), `ApprovedAt DATETIME2(3) NULL`, `MustChangePassword BIT NOT NULL DEFAULT 0`, `RejectReason NVARCHAR(200) NULL`.
+- `Users`: nới rộng `CK_Users_Status` cho phép `'active'`, `'pending'`, `'disabled'`, `'rejected'`.
+- `Users`: ràng buộc kiểm tra toàn vẹn tầng DB `CK_Users_ProviderLink` đảm bảo các vai trò `vet`/`provider` khi `active` bắt buộc phải có `ProviderId`, và người dùng không thuộc vai trò này không được gắn `ProviderId`.
+- `Users`: non-clustered filtered index `IX_Users_ProviderId` (WHERE `ProviderId IS NOT NULL`).
+- `AuditLog`: bảng ghi vết kiểm toán quản trị (`AuditId`, `ActorUserId`, `Action`, `TargetType`, `TargetId`, `Detail`, `CreatedAt`) và index `IX_AuditLog_CreatedAt`. `Detail` không bao giờ chứa mật khẩu/token.
+
+### Tạo tài khoản Quản trị viên (Admin)
+
+Admin chỉ được khởi tạo qua script dòng lệnh `scripts/create-admin.js`, không tạo qua form đăng ký công khai:
+
+```bash
+cd backend
+# Cách 1: Thiết lập biến môi trường ADMIN_PASSWORD trước khi chạy
+node scripts/create-admin.js --email <email-admin> --name "<Họ và tên>" --phone <số-điện-thoại>
+
+# Cách 2: Chạy script và nhập mật khẩu ẩn trực tiếp qua stdin khi được nhắc
+node scripts/create-admin.js --email <email-admin> --name "<Họ và tên>" --phone <số-điện-thoại>
+```
+
+- Mật khẩu tuân thủ nghiêm ngặt chuẩn hệ thống (ít nhất 8 ký tự, có cả chữ và số, tối đa 72 ký tự).
+- Tuyệt đối không truyền mật khẩu qua tham số dòng lệnh CLI, không ghi log hay in ra stdout.
+- Script có tính chất idempotent: nếu email đã là admin thì báo đã tồn tại và thoát 0; nếu email đã thuộc role khác thì từ chối (không nâng quyền ngầm). Ghi vết `admin_created` vào `AuditLog`.
+
