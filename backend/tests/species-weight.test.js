@@ -79,3 +79,24 @@ test('API responses declare charset=utf-8 and Vietnamese text round-trips', asyn
   const p = await app.call('POST', '/pets', { token, body: app.validPet({ name: 'Bánh Bao Đậu', species: 'rabbit' }) });
   assert.equal(p.data.name, 'Bánh Bao Đậu');
 });
+
+test('dev: Live Server (5500) is allowed by CORS and frontend targets API on :3000', async (t) => {
+  const { loadConfig } = require('../src/config');
+  assert.match(loadConfig({ NODE_ENV: 'test' }).corsOrigin, /127\.0\.0\.1:5500/);
+  assert.equal(loadConfig({ NODE_ENV: 'production', JWT_SECRET: 'x'.repeat(40) + 'Zq9' }).corsOrigin, '');
+  const code = fs.readFileSync(path.resolve(__dirname, '../../frontend/js/config/api.config.js'), 'utf8');
+  const calls = [];
+  for (const [loc, want] of [
+    [{ protocol: 'http:', hostname: '127.0.0.1', port: '5500' }, 'http://127.0.0.1:3000/api/v1/ping'],
+    [{ protocol: 'http:', hostname: 'localhost', port: '3000' }, '/api/v1/ping'],
+    [{ protocol: 'file:', hostname: '', port: '' }, 'http://localhost:3000/api/v1/ping']
+  ]) {
+    const win = { location: loc, addEventListener() {}, removeEventListener() {}, dispatchEvent() {} };
+    const st = { getItem: () => null, setItem() {}, removeItem() {} };
+    const fetchStub = async (u) => { calls.push([want, u]); return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({ success: true, data: {} }), text: async () => '{}' }; };
+    vm.runInNewContext(code, { window: win, localStorage: st, sessionStorage: st, CustomEvent: function () {}, fetch: fetchStub, console, setTimeout, clearTimeout, AbortController, URLSearchParams });
+    await win.Api.get('/ping').catch(() => {});
+  }
+  assert.equal(calls.length, 3);
+  for (const [want, got] of calls) assert.equal(got, want);
+});

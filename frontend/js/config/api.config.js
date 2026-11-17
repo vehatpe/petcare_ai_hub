@@ -10,7 +10,15 @@
   'use strict';
 
   const SESSION_KEY = 'petcare_session';
-  const BASE = (window.PETCARE_API_BASE || (/^https?:$/.test(window.location.protocol) ? '/api/v1' : 'http://localhost:3000/api/v1')).replace(/\/$/, '');
+  // Static dev servers (VS Code Live Server 5500/5501) do not host the API: send calls to the backend on :3000.
+  const STATIC_DEV_PORTS = ['5500', '5501'];
+  function defaultBase() {
+    const loc = window.location;
+    if (!/^https?:$/.test(loc.protocol)) return 'http://localhost:3000/api/v1';
+    if (STATIC_DEV_PORTS.indexOf(String(loc.port)) !== -1) return `${loc.protocol}//${loc.hostname}:3000/api/v1`;
+    return '/api/v1';
+  }
+  const BASE = (window.PETCARE_API_BASE || defaultBase()).replace(/\/$/, '');
 
   class ApiError extends Error {
     constructor(status, code, message, errors) {

@@ -133,13 +133,14 @@ async function main() {
         token,
         body: { name: `Smoke-${sp}`, species: sp, sex: 'male', birthDate: '2024-03-01', weightKg: sp === 'hamster' ? 0.045 : undefined }
       });
-      if (r.body.data?.id) createdPetIds.push(r.body.data.id);
       record(`4b. POST /pets species=${sp}`, r.status === 201 && r.body.data?.species === sp,
         sp === 'hamster' ? `weightKg=${r.body.data?.weightKg}` : `status ${r.status}`);
       if (sp === 'hamster' && r.body.data?.id) {
         const back = await api('GET', `/pets/${r.body.data.id}`, { token });
         record('4c. 0.045 kg stored and read back', back.body.data?.weightKg === 0.045, `weightKg=${back.body.data?.weightKg}`);
       }
+      // Remove right away: an owner can hold at most 10 pets and later steps need room.
+      if (r.body.data?.id) await api('DELETE', `/pets/${r.body.data.id}`, { token });
     }
     const badSp = await api('POST', '/pets', { token, body: { name: 'X', species: 'dragon', sex: 'male', birthDate: '2024-03-01' } });
     record('4d. unknown species -> 422', badSp.status === 422, `status ${badSp.status}`);
@@ -270,13 +271,15 @@ async function main() {
     }
 
     const capTime = '16:30';
+    let capBooked = 0;
     for (const pid of capacityPets) {
       const bRes = await api('POST', '/bookings', {
         token,
         body: { petId: pid, serviceId: targetService.id, date: testDate, time: capTime }
       });
-      if (bRes.body.data?.id) createdBookingIds.push(bRes.body.data.id);
+      if (bRes.body.data?.id) { createdBookingIds.push(bRes.body.data.id); capBooked += 1; }
     }
+    record('11-setup. filled slot capacity (3 bookings)', capBooked === 3, `${capBooked}/3 booked, ${capacityPets.length}/3 pets created`);
 
     // Now slot is full (3/3). Next booking with Pet 1 must return 409 conflict (full)
     const bookFullRes = await api('POST', '/bookings', {
