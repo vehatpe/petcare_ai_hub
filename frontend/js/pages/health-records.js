@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = `
       <form class="inline-form" id="weightForm" novalidate>
         <div class="form-group"><label class="form-label" for="wKg">Cân nặng (kg)</label>
-          <input class="form-control" id="wKg" name="weightKg" type="number" inputmode="decimal" step="0.01" min="0.1" max="150" required></div>
+          <input class="form-control" id="wKg" name="weightKg" type="number" inputmode="decimal" step="0.001" min="0.005" max="150" required></div>
         <div class="form-group"><label class="form-label" for="wDate">Ngày đo</label>
           <input class="form-control" id="wDate" name="measuredOn" type="date" max="${Fmt.todayIso()}" value="${Fmt.todayIso()}" required></div>
         <button class="btn btn-primary btn-sm" type="submit">Lưu số đo</button>
@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       const f = e.target;
       const kg = Number(f.weightKg.value);
-      if (!(kg >= 0.1 && kg <= 150)) { showError(f, 'weightError', 'Cân nặng cần trong khoảng 0,1 – 150 kg.'); return; }
+      if (!(kg >= 0.005 && kg <= 150)) { showError(f, 'weightError', 'Cân nặng cần trong khoảng 0,005 – 150 kg.'); return; }
       try {
         await HealthService.addWeight(petId, { weightKg: kg, measuredOn: f.measuredOn.value });
         Toast.show({ title: 'Đã lưu cân nặng', message: `${Fmt.kg(kg)}`, type: 'success' });

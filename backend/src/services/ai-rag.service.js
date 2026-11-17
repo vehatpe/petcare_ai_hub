@@ -12,7 +12,7 @@ const guard = async (fn) => {
   }
 };
 
-const SPECIES_VI = { dog: 'chó', cat: 'mèo', other: 'khác' };
+const { SPECIES_VI } = require('../utils/species');
 
 /** ai = { embed(text, taskType) -> number[], generate({system, user}) -> string } (injectable). */
 function createAiRagService({ models, ai, config, clock = () => new Date() }) {

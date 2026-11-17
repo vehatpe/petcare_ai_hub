@@ -414,19 +414,22 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 20px 12px 14px;
+  padding: 10px;
   border-radius: var(--radius-pill);
   background-color: var(--color-dark-forest);
   color: var(--color-hero-lime);
   border: 1px solid rgba(159, 232, 112, 0.4);
   box-shadow: 0 10px 30px rgba(22, 51, 0, 0.35);
   cursor: pointer;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  overflow: hidden;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), padding var(--transition-fast);
 }
 
-.ai-widget-launcher:hover {
+.ai-widget-launcher:hover,
+.ai-widget-launcher:focus-visible {
   transform: translateY(-3px) scale(1.02);
   box-shadow: 0 14px 38px rgba(22, 51, 0, 0.45);
+  padding: 10px 18px 10px 10px;
 }
 
 .ai-launcher-avatar {
@@ -438,12 +441,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .ai-launcher-text {
-  display: flex;
+  display: none;
   flex-direction: column;
   text-align: left;
+  white-space: nowrap;
+}
+
+.ai-widget-launcher:hover .ai-launcher-text,
+.ai-widget-launcher:focus-visible .ai-launcher-text {
+  display: flex;
 }
 
 .ai-launcher-title {
@@ -1071,6 +1081,19 @@ textarea.form-control {
 .segmented input:focus-visible + span {
   outline: 2px solid var(--color-dark-forest);
   outline-offset: 2px;
+}
+
+/* Many options (species): wrap into a grid of rounded tiles instead of one squeezed pill row */
+.segmented.segmented-wrap {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)); /* 8 species = 4 x 2, no orphan tile */
+  border-radius: var(--radius-card);
+}
+
+.segmented-wrap span {
+  padding: 10px 2px;
+  font-size: 0.8125rem;
+  border-radius: calc(var(--radius-control) - 2px);
 }
 
 fieldset.field-set {

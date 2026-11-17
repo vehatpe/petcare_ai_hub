@@ -95,9 +95,16 @@
       return String(value || '').slice(0, 10);
     },
 
-    /** 11.2 -> "11,2 kg" */
+    /** 11.2 -> "11,2 kg", 0.045 -> "45 g" */
     kg(value) {
-      return value === null || value === undefined ? '' : String(value).replace('.', ',') + ' kg';
+      if (value === null || value === undefined || value === '') return '';
+      const n = typeof value === 'number' ? value : Number(String(value).replace(',', '.'));
+      if (!Number.isFinite(n)) return '';
+      if (n < 1) {
+        const grams = Math.max(1, Math.round(n * 1000));
+        if (grams < 1000) return `${grams} g`;
+      }
+      return String(Math.round(n * 1000) / 1000).replace('.', ',') + ' kg';
     },
 
     randomId(prefix = '') {

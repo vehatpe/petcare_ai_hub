@@ -1,10 +1,11 @@
 'use strict';
 const { isValidYmd } = require('./time');
+const { SPECIES_IDS } = require('./species');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PHONE_RE = /^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$/;
 const PROVIDER_TYPES = ['clinic', 'spa', 'hotel', 'emergency'];
-const SPECIES = ['dog', 'cat', 'other'];
+const SPECIES = SPECIES_IDS;
 const SEX = ['male', 'female'];
 const NEUTERED = ['yes', 'no', 'unknown'];
 const TIME_SLOTS = ['08:30', '09:30', '10:30', '14:00', '15:30', '16:30', '18:00', '19:30'];
@@ -55,11 +56,11 @@ function validateRegister(input) {
 function parseWeight(raw, errors, key = 'weightKg') {
   if (raw === undefined || raw === null || raw === '') return null;
   const w = typeof raw === 'number' ? raw : Number(String(raw).replace(',', '.'));
-  if (!Number.isFinite(w) || w < 0.1 || w > 150) {
-    errors[key] = 'Cân nặng cần trong khoảng 0,1 – 150 kg.';
+  if (!Number.isFinite(w) || w < 0.005 || w > 150) {
+    errors[key] = 'Cân nặng cần trong khoảng 0,005 – 150 kg.';
     return null;
   }
-  return Math.round(w * 100) / 100;
+  return Math.round(w * 1000) / 1000;
 }
 
 /** hasPhoto tells whether the key was present (PUT keeps the stored photo when absent). */

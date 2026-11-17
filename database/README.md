@@ -39,3 +39,27 @@ npm run migrate -- --seed # Chạy kèm script seed minh họa
 
 ## Đã kiểm chứng trên SQL Server 2022 thật
 Toàn bộ các script tạo schema (`001_Create_Schema.sql`), tri thức RAG (`002_Create_AI_Knowledge.sql`) và dữ liệu mẫu (`001_Seed_Providers_And_Services.sql`) đã được thực thi và kiểm chứng thành công trên Microsoft SQL Server 2022 (RTM) thật và container Docker `mcr.microsoft.com/mssql/server:2022-latest`. Mọi cú pháp T-SQL, kiểu dữ liệu (`UNIQUEIDENTIFIER`, `DATETIME2(3)`, `NVARCHAR(MAX)` JSON check constraint), chỉ mục có điều kiện (`UX_Bookings_Pet_Slot`), và câu lệnh `MERGE` đều hoạt động trơn tru không phát sinh lỗi.
+
+
+## Sửa chữ tiếng Việt bị hỏng (encoding)
+
+Nguyên nhân thường gặp: `sqlcmd` đọc seed UTF-8 bằng ANSI. `migrate.js` hiện truyền `-f 65001` (qua `buildSqlcmdArgs()`) và sau mỗi seed tự đọc lại `CategoryLabel` của `medical-general` để phát hiện lỗi ("encoding corrupt").
+
+Dòng seed đã ghi trong `SchemaVersions` bị bỏ qua, nên dữ liệu đã hỏng được sửa bằng file mới `seeds/002_Repair_Sample_Text.sql` (idempotent, chỉ cập nhật dòng `IsSample = 1`, không đụng dữ liệu thật):
+
+```
+node scripts/migrate.js --seed
+```
+
+Kiểm tra sau sửa:
+
+```sql
+SELECT ServiceId, CategoryLabel, Name FROM dbo.Services;
+SELECT ProviderId, Name, Area FROM dbo.Providers;
+```
+
+`CategoryLabel` của `medical-general` phải là `Khám & điều trị`. Không sửa nội dung các file đã áp dụng (checksum sẽ báo MISMATCH).
+
+## Migration 003: loài thú cưng và cân nặng
+
+`migrations/003_Expand_Pet_Species_And_Weight.sql` (chạy lại được): `Pets.Species` → `VARCHAR(12)` với 8 loài; `Health_Metrics.Value` → `DECIMAL(7,3)`, `CHECK (Value > 0)`. Dữ liệu cũ giữ nguyên.

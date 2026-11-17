@@ -39,7 +39,7 @@ async function main() {
       body: body !== undefined ? JSON.stringify(body) : undefined
     });
     const json = await res.json().catch(() => ({}));
-    return { status: res.status, ok: res.ok, body: json };
+    return { status: res.status, ok: res.ok, body: json, headers: res.headers };
   }
 
   const runId = Date.now();
@@ -70,6 +70,22 @@ async function main() {
       '1. GET /services',
       servicesRes.status === 200 && Array.isArray(servicesRes.body.data) && servicesRes.body.data.length > 0,
       `Found ${servicesRes.body.data?.length || 0} active services`
+    );
+
+    // 1b. Vietnamese text is stored/served intact (UTF-8 end to end)
+    const allServices = servicesRes.body.data || [];
+    const medical = allServices.find((x) => x.id === 'medical-general');
+    const provRes = await api('GET', '/providers');
+    const allText = JSON.stringify([allServices, provRes.body.data || []]);
+    record(
+      '1b. Vietnamese text intact',
+      (!medical || medical.categoryLabel === 'Khám & điều trị') && !/[ÃÄ]/.test(allText),
+      medical ? `medical-general = "${medical.categoryLabel}"` : 'medical-general not in seed'
+    );
+    record(
+      '1c. Content-Type has charset=utf-8',
+      /charset=utf-8/i.test(servicesRes.headers?.get?.('content-type') || ''),
+      servicesRes.headers?.get?.('content-type') || 'no header'
     );
 
     // 2. GET /services/:id/slots
@@ -110,6 +126,24 @@ async function main() {
       loginRes.status === 200 && !!token,
       'Obtained valid JWT'
     );
+
+    // 4b. Every supported species + a 45 g weight (hamster)
+    for (const sp of ['rabbit', 'hamster', 'bird', 'fish', 'reptile', 'other']) {
+      const r = await api('POST', '/pets', {
+        token,
+        body: { name: `Smoke-${sp}`, species: sp, sex: 'male', birthDate: '2024-03-01', weightKg: sp === 'hamster' ? 0.045 : undefined }
+      });
+      record(`4b. POST /pets species=${sp}`, r.status === 201 && r.body.data?.species === sp,
+        sp === 'hamster' ? `weightKg=${r.body.data?.weightKg}` : `status ${r.status}`);
+      if (sp === 'hamster' && r.body.data?.id) {
+        const back = await api('GET', `/pets/${r.body.data.id}`, { token });
+        record('4c. 0.045 kg stored and read back', back.body.data?.weightKg === 0.045, `weightKg=${back.body.data?.weightKg}`);
+      }
+      // Remove right away: an owner can hold at most 10 pets and later steps need room.
+      if (r.body.data?.id) await api('DELETE', `/pets/${r.body.data.id}`, { token });
+    }
+    const badSp = await api('POST', '/pets', { token, body: { name: 'X', species: 'dragon', sex: 'male', birthDate: '2024-03-01' } });
+    record('4d. unknown species -> 422', badSp.status === 422, `status ${badSp.status}`);
 
     // 5. Create Pet 1 and Pet 2
     const pet1Res = await api('POST', '/pets', {
@@ -237,13 +271,15 @@ async function main() {
     }
 
     const capTime = '16:30';
+    let capBooked = 0;
     for (const pid of capacityPets) {
       const bRes = await api('POST', '/bookings', {
         token,
         body: { petId: pid, serviceId: targetService.id, date: testDate, time: capTime }
       });
-      if (bRes.body.data?.id) createdBookingIds.push(bRes.body.data.id);
+      if (bRes.body.data?.id) { createdBookingIds.push(bRes.body.data.id); capBooked += 1; }
     }
+    record('11-setup. filled slot capacity (3 bookings)', capBooked === 3, `${capBooked}/3 booked, ${capacityPets.length}/3 pets created`);
 
     // Now slot is full (3/3). Next booking with Pet 1 must return 409 conflict (full)
     const bookFullRes = await api('POST', '/bookings', {

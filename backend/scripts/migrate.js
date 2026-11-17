@@ -35,7 +35,7 @@ function checkSqlcmdAvailable() {
   }
 }
 
-function runSqlcmd(server, database, user, password, queryOrFile, isFile = false) {
+function buildSqlcmdArgs(server, database, user, password, queryOrFile, isFile = false) {
   const args = ['-S', server];
   if (user) {
     args.push('-U', user, '-P', password);
@@ -45,13 +45,17 @@ function runSqlcmd(server, database, user, password, queryOrFile, isFile = false
   if (database) {
     args.push('-d', database);
   }
-  args.push('-C', '-b', '-h', '-1', '-W');
+  args.push('-C', '-b', '-h', '-1', '-W', '-f', '65001');
   if (isFile) {
     args.push('-i', queryOrFile);
   } else {
     args.push('-Q', queryOrFile);
   }
+  return args;
+}
 
+function runSqlcmd(server, database, user, password, queryOrFile, isFile = false) {
+  const args = buildSqlcmdArgs(server, database, user, password, queryOrFile, isFile);
   const res = spawnSync('sqlcmd', args, { encoding: 'utf8' });
   if (res.error) throw res.error;
   if (res.status !== 0) {
@@ -151,6 +155,15 @@ async function runWithSqlcmd(dbConfig, filesToRun) {
       runSqlcmd(server, database, user, password, `INSERT INTO dbo.SchemaVersions (Version, Checksum) VALUES ('${escapedVersion}', '${checksum}');`);
       console.log(`[MIGRATE] OK: ${item.version}`);
       appliedCount++;
+
+      // Verify UTF-8 encoding after applying any seed script
+      if (item.version.startsWith('seed_')) {
+        const verifyOut = runSqlcmd(server, database, user, password, "SET NOCOUNT ON; SELECT CategoryLabel FROM dbo.Services WHERE ServiceId = 'medical-general';");
+        const categoryLabel = verifyOut.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)[0];
+        if (categoryLabel !== 'Khám & điều trị') {
+          throw new Error(`[ENCODING CORRUPT] Seed applied with corrupt encoding: expected 'Khám & điều trị', got '${categoryLabel}'`);
+        }
+      }
     }
   }
 
@@ -249,6 +262,16 @@ async function runWithMssql(dbConfig, filesToRun) {
         await recordReq.query('INSERT INTO dbo.SchemaVersions (Version, Checksum) VALUES (@version, @checksum);');
         console.log(`[MIGRATE] OK: ${item.version}`);
         appliedCount++;
+
+        // Verify UTF-8 encoding after applying any seed script
+        if (item.version.startsWith('seed_')) {
+          const checkReq = pool.request();
+          const checkRes = await checkReq.query("SELECT CategoryLabel FROM dbo.Services WHERE ServiceId = 'medical-general';");
+          const categoryLabel = checkRes.recordset?.[0]?.CategoryLabel;
+          if (categoryLabel !== 'Khám & điều trị') {
+            throw new Error(`[ENCODING CORRUPT] Seed applied with corrupt encoding: expected 'Khám & điều trị', got '${categoryLabel}'`);
+          }
+        }
       }
     }
     console.log(`Migration finished. ${appliedCount} script(s) applied, ${filesToRun.length - appliedCount} skipped.`);
@@ -335,4 +358,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { runMigrations, splitSqlBatches, computeChecksum };
+module.exports = { runMigrations, splitSqlBatches, computeChecksum, buildSqlcmdArgs };

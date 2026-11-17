@@ -44,7 +44,7 @@ module.exports = (db) => {
           `INSERT INTO dbo.Pets (PetId, OwnerId, Name, Species, Breed, Sex, BirthDate, Color, Neutered, Microchip, Conditions, Photo)
            VALUES (@id, @owner, @name, @species, @breed, @sex, CAST(@birth AS DATE), @color, @neutered, @microchip, @conditions, @photo)`,
           {
-            id: [T.guid, pet.id], owner: [T.guid, pet.ownerId], name: [T.str(40), pet.name], species: [T.vstr(5), pet.species],
+            id: [T.guid, pet.id], owner: [T.guid, pet.ownerId], name: [T.str(40), pet.name], species: [T.vstr(12), pet.species],
             breed: [T.str(80), pet.breed], sex: [T.vstr(6), pet.sex], birth: [T.ymd, pet.birthDate], color: [T.str(50), pet.color],
             neutered: [T.vstr(7), pet.neutered], microchip: [T.vstr(15), pet.microchip], conditions: [T.str(500), pet.conditions],
             photo: [T.max, pet.photo]
@@ -62,7 +62,7 @@ module.exports = (db) => {
                   UpdatedAt = SYSUTCDATETIME()${photoSql}
            WHERE PetId = @id AND OwnerId = @owner`,
           {
-            id: [T.guid, id], owner: [T.guid, ownerId], name: [T.str(40), ch.name], species: [T.vstr(5), ch.species],
+            id: [T.guid, id], owner: [T.guid, ownerId], name: [T.str(40), ch.name], species: [T.vstr(12), ch.species],
             breed: [T.str(80), ch.breed], sex: [T.vstr(6), ch.sex], birth: [T.ymd, ch.birthDate], color: [T.str(50), ch.color],
             neutered: [T.vstr(7), ch.neutered], microchip: [T.vstr(15), ch.microchip], conditions: [T.str(500), ch.conditions],
             photo: [T.max, ch.photo]

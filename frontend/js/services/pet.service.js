@@ -13,12 +13,22 @@
   const SPECIES = [
     { id: 'dog', label: 'Chó' },
     { id: 'cat', label: 'Mèo' },
+    { id: 'rabbit', label: 'Thỏ' },
+    { id: 'hamster', label: 'Hamster' },
+    { id: 'bird', label: 'Chim' },
+    { id: 'fish', label: 'Cá' },
+    { id: 'reptile', label: 'Bò sát' },
     { id: 'other', label: 'Khác' }
   ];
 
   const BREEDS = {
     dog: ['Poodle', 'Corgi Pembroke', 'Golden Retriever', 'Labrador Retriever', 'Pug', 'Phốc sóc (Pomeranian)', 'Chihuahua', 'Husky Siberia', 'Alaskan Malamute', 'Shiba Inu', 'Becgie Đức (German Shepherd)', 'Bulldog Pháp', 'Chó Phú Quốc', 'Chó cỏ (chó ta)', 'Chó lai'],
     cat: ['Mèo Anh lông ngắn', 'Mèo Anh lông dài', 'Mèo Ba Tư', 'Mèo Munchkin', 'Mèo tai cụp (Scottish Fold)', 'Mèo Bengal', 'Mèo Maine Coon', 'Mèo Xiêm', 'Mèo ta (mèo mướp, tam thể)', 'Mèo lai'],
+    rabbit: ['Thỏ Minilop', 'Thỏ Netherland Dwarf', 'Thỏ Lionhead', 'Thỏ Rex', 'Thỏ New Zealand', 'Thỏ lai'],
+    hamster: ['Hamster Winter White', 'Hamster Robo (Roborovski)', 'Hamster Campbell', 'Hamster Bear (Syrian)', 'Hamster lai'],
+    bird: ['Vẹt Yến Phụng (Budgie)', 'Vẹt Cockatiel (Mã Lai)', 'Vẹt Lovebird', 'Vẹt Sun Conure', 'Chim Chào mào', 'Chim Khuyên', 'Chim Họa mi', 'Chim Cu gáy'],
+    fish: ['Cá Betta (Xiêm)', 'Cá Bảy màu (Guppy)', 'Cá Vàng (Goldfish)', 'Cá Koi', 'Cá La hán', 'Cá Dĩa (Discus)', 'Cá Thần tiên (Angelfish)'],
+    reptile: ['Rồng Nam Mỹ (Iguana)', 'Rồng Úc (Bearded Dragon)', 'Tắc kè hoa (Veiled Chameleon)', 'Trăn bóng (Ball Python)', 'Rùa cạn Sulcata', 'Rùa tai đỏ', 'Gecko da báo (Leopard Gecko)'],
     other: []
   };
 
@@ -72,7 +82,7 @@
 
       if (input.weightKg !== null && input.weightKg !== undefined && input.weightKg !== '') {
         const w = Number(input.weightKg);
-        if (!Number.isFinite(w) || w < 0.1 || w > 150) errors.weightKg = 'Cân nặng cần trong khoảng 0,1 – 150 kg.';
+        if (!Number.isFinite(w) || w < 0.005 || w > 150) errors.weightKg = 'Cân nặng cần trong khoảng 0,005 – 150 kg.';
       }
       if (input.microchip && !/^\d{15}$/.test(String(input.microchip).trim())) {
         errors.microchip = 'Mã microchip gồm đúng 15 chữ số.';
@@ -142,7 +152,9 @@
       if (pet.breed) parts.push(pet.breed);
       const age = this.ageLabel(pet.birthDate);
       if (age) parts.push(age);
-      if (pet.weightKg) parts.push(String(pet.weightKg).replace('.', ',') + ' kg');
+      if (pet.weightKg !== null && pet.weightKg !== undefined && pet.weightKg !== '') {
+        parts.push(typeof Fmt !== 'undefined' && Fmt.kg ? Fmt.kg(pet.weightKg) : (String(pet.weightKg).replace('.', ',') + ' kg'));
+      }
       return parts.join(' · ');
     }
   };

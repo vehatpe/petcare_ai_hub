@@ -49,42 +49,98 @@
     document.querySelectorAll('[data-auth-slot="header"]').forEach((slot) => {
       slot.innerHTML = user ? userMarkup(user) : guestMarkup();
     });
-    bindAccountMenu();
+    applyAuthVisibility(user);
+    renderFooterAuth(user);
     renderDrawerAuth(user);
   }
 
-  function bindAccountMenu() {
-    const trigger = document.getElementById('accountTrigger');
-    const pop = document.getElementById('accountPopover');
-    if (!trigger || !pop) return;
-
-    const close = (returnFocus) => {
-      pop.hidden = true;
-      trigger.setAttribute('aria-expanded', 'false');
-      if (returnFocus) trigger.focus();
-    };
-    const open = () => {
-      pop.hidden = false;
-      trigger.setAttribute('aria-expanded', 'true');
-      const first = pop.querySelector('[role="menuitem"]');
-      if (first) first.focus();
-    };
-
-    trigger.addEventListener('click', () => (pop.hidden ? open() : close(false)));
-    pop.addEventListener('keydown', (e) => {
-      const items = Array.from(pop.querySelectorAll('[role="menuitem"]'));
-      const i = items.indexOf(document.activeElement);
-      if (e.key === 'Escape') { e.preventDefault(); close(true); }
-      else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+  function applyAuthVisibility(user) {
+    document.querySelectorAll('[data-guest-only]').forEach((el) => {
+      el.hidden = !!user;
     });
-    document.addEventListener('click', (e) => {
-      if (!pop.hidden && !e.target.closest('.account-menu')) close(false);
+    document.querySelectorAll('[data-user-only]').forEach((el) => {
+      el.hidden = !user;
     });
-    pop.addEventListener('focusout', (e) => {
-      if (!pop.hidden && e.relatedTarget && !e.relatedTarget.closest('.account-menu')) close(false);
+    document.querySelectorAll('[data-role-only]').forEach((el) => {
+      const allowedRoles = (el.getAttribute('data-role-only') || '').split(',').map((r) => r.trim());
+      el.hidden = !user || !allowedRoles.includes(user.role);
     });
   }
+
+  function renderFooterAuth(user) {
+    document.querySelectorAll('[data-auth-slot="footer-account"]').forEach((slot) => {
+      if (!user) {
+        slot.innerHTML = `
+          <li><a href="${url('login.html')}">Đăng nhập</a></li>
+          <li><a href="${url('register.html')}">Đăng ký chủ nuôi</a></li>
+          <li><a href="${url('register.html')}?role=provider">Đăng ký cơ sở dịch vụ</a></li>`;
+      } else {
+        const dash = DASHBOARD_BY_ROLE[user.role] || (user.role === 'customer' ? 'customer-dashboard.html' : '');
+        slot.innerHTML = `
+          ${dash ? `<li><a href="${url(dash)}">Bảng điều khiển</a></li>` : ''}
+          ${user.role === 'customer' ? `<li><a href="${url('health-records.html')}">Sổ sức khỏe</a></li>` : ''}
+          <li><button type="button" class="btn-link" data-action="logout">Đăng xuất</button></li>`;
+      }
+    });
+  }
+
+  /* Delegated account popover event handling - attached once */
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('#accountTrigger');
+    const pop = document.getElementById('accountPopover');
+    if (trigger) {
+      if (!pop) return;
+      const isOpen = !pop.hidden;
+      if (isOpen) {
+        pop.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+      } else {
+        pop.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        const first = pop.querySelector('[role="menuitem"]');
+        if (first) first.focus();
+      }
+      return;
+    }
+
+    if (pop && !pop.hidden && !e.target.closest('.account-menu')) {
+      pop.hidden = true;
+      const trig = document.getElementById('accountTrigger');
+      if (trig) trig.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const pop = document.getElementById('accountPopover');
+    if (!pop || pop.hidden) return;
+    const trigger = document.getElementById('accountTrigger');
+    const items = Array.from(pop.querySelectorAll('[role="menuitem"]'));
+    const i = items.indexOf(document.activeElement);
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      pop.hidden = true;
+      if (trigger) {
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.focus();
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (items.length) items[(i + 1) % items.length].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (items.length) items[(i - 1 + items.length) % items.length].focus();
+    }
+  });
+
+  document.addEventListener('focusout', (e) => {
+    const pop = document.getElementById('accountPopover');
+    if (pop && !pop.hidden && e.relatedTarget && !e.relatedTarget.closest('.account-menu')) {
+      pop.hidden = true;
+      const trig = document.getElementById('accountTrigger');
+      if (trig) trig.setAttribute('aria-expanded', 'false');
+    }
+  });
 
   /* ---------- Mobile drawer ---------- */
   function buildDrawer() {
