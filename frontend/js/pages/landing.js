@@ -81,17 +81,49 @@ document.addEventListener('DOMContentLoaded', () => {
       <a href="pages/customer-dashboard.html" class="btn btn-primary btn-lg">Mở bảng điều khiển</a>
       <a href="pages/booking.html" class="btn btn-outline-white btn-lg">Đặt lịch</a>`;
 
+    // 3a. Trạng thái Đang tải (đã đăng nhập, chưa có dữ liệu): hero và thẻ hồ sơ hiện khung chờ, KHÔNG hiện nội dung khách
+    $('heroTitle').textContent = `Xin chào, ${firstName}.`;
+    $('heroSub').textContent = 'Đang tải thông tin hồ sơ của bé…';
+    $('heroActions').innerHTML = `
+      <a href="pages/customer-dashboard.html" class="btn btn-outline btn-lg" id="heroSecondaryBtn">Mở bảng điều khiển</a>`;
+
+    $('pcardContent').innerHTML = `
+      <div class="empty-state pcard-empty">
+        <p class="pcard-tag">Hồ sơ thú cưng</p>
+        <p>Đang tải thông tin…</p>
+      </div>`;
+
     // Fetch pets
-    let pets = [];
+    let pets = null;
+    let fetchError = false;
     try {
       pets = await PetService.list();
     } catch (_) {
-      pets = [];
+      fetchError = true;
+      pets = null;
     }
 
     // Drop stale response if another auth change triggered during await
     if (thisVersion !== renderVersion) return;
 
+    // 3b. Trạng thái Lỗi
+    if (fetchError) {
+      $('heroTitle').textContent = `Xin chào, ${firstName}.`;
+      $('heroSub').textContent = 'Không tải được hồ sơ thú cưng. Vui lòng thử lại hoặc mở bảng điều khiển.';
+      $('heroActions').innerHTML = `
+        <a href="pages/customer-dashboard.html" class="btn btn-outline btn-lg" id="heroSecondaryBtn">Mở bảng điều khiển</a>`;
+
+      $('pcardContent').innerHTML = `
+        <div class="empty-state pcard-empty">
+          <p class="pcard-tag">Hồ sơ thú cưng</p>
+          <h3>Không tải được hồ sơ</h3>
+          <p>Đã xảy ra lỗi khi lấy danh sách thú cưng của bạn.</p>
+          <button type="button" class="btn btn-outline btn-sm" data-action="reload-profile">Thử lại</button>
+        </div>`;
+      return;
+    }
+
+    // 3c. Trạng thái Thật sự trống (list thành công, 0 bé)
     if (!pets || pets.length === 0) {
       // Chủ nuôi chưa có bé
       $('heroTitle').textContent = `Xin chào, ${firstName}.`;
@@ -110,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Đã có bé
+    // 3d. Trạng thái Có bé
     const pet = pets[0];
     $('heroTitle').textContent = `Xin chào, ${firstName}.`;
     $('heroSub').textContent = `Hồ sơ của bé ${pet.name} và các dịch vụ thú y sẵn sàng hỗ trợ bạn.`;
@@ -190,4 +222,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   renderForAuth();
   window.addEventListener('petcare:auth-changed', renderForAuth);
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-action="reload-profile"]')) {
+      e.preventDefault();
+      renderForAuth();
+    }
+  });
 });
