@@ -3,10 +3,10 @@
 > **Tệp này là bộ nhớ làm việc của dự án.** Mọi AI làm việc trên repo này phải đọc nó **trước khi sửa bất cứ thứ gì**, và phải cập nhật nó **sau mỗi lần sửa/đổi dự án** (xem mục 9).
 > Nguồn chuẩn về quy trình và nguyên tắc: *Master Prompt Phát triển PetCare AI Hub (v2)*. Khi tệp này mâu thuẫn với mã nguồn, **mã nguồn là sự thật**; sửa tệp này cho đúng.
 
-- **Cập nhật lần cuối:** 2026-11-17
+- **Cập nhật lần cuối:** 2026-11-18
 - **Nhánh làm việc:** `giai-doan-c1` (tách từ `main`, `main` đã gộp PR #6 của Giai đoạn B+)
-- **Giai đoạn hiện tại:** **C1 (migration 004 + script tạo admin) — ĐÃ HOÀN THÀNH**. Sẵn sàng cho Session C2 / các endpoint quản trị.
-- **Việc kế tiếp (một đề xuất duy nhất):** Tiến hành Session C1 tiếp theo (hoặc C2): hiện thực các service/endpoint đăng ký Provider pending, Vet flow và Admin duyệt.
+- **Giai đoạn hiện tại:** **C1 — đang thực hiện: Session S3 xong (migration 004 + create-admin); còn S4, S5, S6a, S6b, S7a, S7b**.
+- **Việc kế tiếp (một đề xuất duy nhất):** S4: API admin duyệt / từ chối / khóa / mở khóa đối tác.
 
 ## Đang làm
 không có
@@ -34,7 +34,7 @@ Nền tảng (A), bảo mật nhanh (B) đã **gộp vào main**. B+ (sửa 7 nh
 | **A** | Nền kiểm thử, migration, CI | **Xong, đã gộp** | `database/migrations/`, `SchemaVersions`, `scripts/migrate.js`, `docker-compose.dev.yml`, `.github/workflows/ci.yml`; commit `db9ff95`, `ded381d` |
 | **B** | Bảo mật nhanh | **Xong, đã gộp (PR #1)** | `middlewares/rate-limiters.js` (3 limiter), `GET /health`, retry SQL 1205 (có test), CSP không còn `'unsafe-inline'` ở `script-src`, `TRUST_PROXY` ghi trong `.env.example`; commit `64b5c8a`, `dcb21f5` |
 | **B+** | Sửa lỗi thấy khi chạy thật | **Xong, đã gộp (PR #6)** | Commit `09b0837`, `7e9c50e`; CI tích hợp smoke test trên SQL Server |
-| **C** | Vòng đời 4 vai trò, trạng thái booking | **Đang thực hiện (C1 xong)** | `004_Roles_Lifecycle.sql` (cột ProviderId, OrgArea, ApprovedBy/At, MustChangePassword, RejectReason; CK_Users_ProviderLink, AuditLog); script `create-admin.js` |
+| **C** | Vòng đời 4 vai trò, trạng thái booking | **Đang thực hiện (C1: 1/7 session xong)** | `004_Roles_Lifecycle.sql` (cột ProviderId, OrgArea, ApprovedBy/At, MustChangePassword, RejectReason; CK_Users_ProviderLink, AuditLog); script `create-admin.js` |
 | **D** | Phân trang + upload ảnh (Cloudinary) | **Chưa bắt đầu** | Chưa có `utils/pagination.js`, `middlewares/upload.js`, `storage.service.js`; ảnh pet vẫn base64 `Pets.Photo` |
 | **E** | Lịch sử chat AI trên server | **Chưa bắt đầu** | Chưa có `chat.model.js`, `chat.service.js`, `ChatSessions/ChatMessages` |
 | **F** | Dashboard Provider/Vet/Admin | **Chưa bắt đầu** | `frontend/pages/` chỉ có `customer-dashboard.html`; vai trò khác thấy "đang xây dựng" |
@@ -85,6 +85,7 @@ Truy vấn SQL tham số có kiểu; JWT HS256 + chặn secret yếu ở product
 
 ## 8. Vấn đề đã biết / việc tồn đọng
 
+- AuditLog có FK ActorUserId → Users (S3 thêm, khác prompt gốc). Hệ quả: dọn dữ liệu thử ở smoke-roles.js phải xóa dòng AuditLog liên quan TRƯỚC khi xóa user thử.
 - CSP: `style-src` vẫn có `'unsafe-inline'` (Master Prompt chỉ cấm ở `script-src`).
 - Nút "Trợ lý AI": không có dữ liệu RAG cho loài ngoài chó/mèo → trả `grounded: false` (đúng thiết kế; cần bổ sung tài liệu `docs/knowledge-base/` cho thỏ, hamster, chim, cá, bò sát).
 - `Fmt.kg` và `health-records.js` đã sửa cho thú nhỏ; chưa có test e2e giao diện.
