@@ -87,6 +87,141 @@ function createFakeModels() {
         });
       }
     },
+    admin: {
+      async listUsers({ status, role, limit = 20, offset = 0 }) {
+        const lim = Math.max(1, Math.min(50, Number(limit) || 20));
+        const off = Math.max(0, Number(offset) || 0);
+
+        let filtered = s.users.slice();
+        if (status) filtered = filtered.filter((u) => u.status === status);
+        if (role) filtered = filtered.filter((u) => u.role === role);
+
+        const total = filtered.length;
+        // Sort by createdAt DESC
+        filtered.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        const paged = filtered.slice(off, off + lim);
+
+        return {
+          users: paged.map((u) => {
+            const out = userOut(u);
+            delete out.passwordHash;
+            return out;
+          }),
+          meta: { limit: lim, offset: off, total }
+        };
+      },
+
+      async transaction(work) {
+        // Sao chụp trạng thái trước transaction
+        const snapshot = {
+          users: clone(s.users),
+          providers: clone(s.providers),
+          services: clone(s.services),
+          pets: clone(s.pets),
+          metrics: clone(s.metrics),
+          vaccs: clone(s.vaccs),
+          records: clone(s.records),
+          bookings: clone(s.bookings),
+          chunks: clone(s.chunks),
+          auditLogs: clone(s.auditLogs),
+          seq
+        };
+        try {
+          // fake tx object pass through
+          const tx = models.admin;
+          const result = await work(tx);
+          return result;
+        } catch (err) {
+          // Khôi phục trạng thái khi callback ném lỗi
+          s.users = snapshot.users;
+          s.providers = snapshot.providers;
+          s.services = snapshot.services;
+          s.pets = snapshot.pets;
+          s.metrics = snapshot.metrics;
+          s.vaccs = snapshot.vaccs;
+          s.records = snapshot.records;
+          s.bookings = snapshot.bookings;
+          s.chunks = snapshot.chunks;
+          s.auditLogs = snapshot.auditLogs;
+          seq = snapshot.seq;
+          throw err;
+        }
+      },
+
+      async getUserForUpdate(tx, userId) {
+        const u = s.users.find((x) => x.id === userId);
+        return userOut(u);
+      },
+
+      async providerExists(tx, providerId) {
+        return s.providers.some((p) => p.id === providerId);
+      },
+
+      async countActiveAdmins(tx) {
+        return s.users.filter((u) => u.role === 'admin' && u.status === 'active').length;
+      },
+
+      async insertProvider(tx, p) {
+        if (s.providers.some((x) => x.id === p.providerId)) {
+          const err = new Error(`Violation of PRIMARY KEY constraint. Cannot insert duplicate key in object 'dbo.Providers'. The duplicate key value is (${p.providerId}).`);
+          err.number = 2627;
+          throw err;
+        }
+        s.providers.push({
+          id: p.providerId,
+          name: p.name,
+          area: p.area,
+          type: p.type,
+          isSample: Boolean(p.isSample),
+          active: Boolean(p.isActive),
+          createdAt: tick()
+        });
+      },
+
+      async updateUserApproval(tx, { userId, providerId, approvedBy, approvedAt }) {
+        const u = s.users.find((x) => x.id === userId);
+        if (u) {
+          u.providerId = providerId;
+          u.status = 'active';
+          u.approvedBy = approvedBy;
+          u.approvedAt = approvedAt;
+        }
+      },
+
+      async updateUserRejection(tx, { userId, rejectReason }) {
+        const u = s.users.find((x) => x.id === userId);
+        if (u) {
+          u.status = 'rejected';
+          u.rejectReason = rejectReason;
+        }
+      },
+
+      async updateUserStatus(tx, userId, status) {
+        const u = s.users.find((x) => x.id === userId);
+        if (u) {
+          u.status = status;
+        }
+      },
+
+      async disableProviderAndVets(tx, providerId) {
+        const p = s.providers.find((x) => x.id === providerId);
+        if (p) p.active = false;
+        for (const u of s.users) {
+          if (u.providerId === providerId && u.role === 'vet') {
+            u.status = 'disabled';
+          }
+        }
+      },
+
+      async enableProviderOnly(tx, providerId) {
+        const p = s.providers.find((x) => x.id === providerId);
+        if (p) p.active = true;
+      },
+
+      async logAudit(tx, logEntry) {
+        await models.audit.log(logEntry);
+      }
+    },
     catalog: {
       async listProviders() { return s.providers.filter((p) => p.active !== false).map(({ active, ...p }) => clone(p)); }, // eslint-disable-line no-unused-vars
       async listServices({ category, providerId, q }) {

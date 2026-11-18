@@ -5,8 +5,8 @@
 
 - **Cập nhật lần cuối:** 2026-11-18
 - **Nhánh làm việc:** `giai-doan-c1` (tách từ `main`, `main` đã gộp PR #6 của Giai đoạn B+)
-- **Giai đoạn hiện tại:** **C1 — đang thực hiện: Session S3 xong (migration 004 + create-admin); còn S4, S5, S6a, S6b, S7a, S7b**.
-- **Việc kế tiếp (một đề xuất duy nhất):** S4: API admin duyệt / từ chối / khóa / mở khóa đối tác.
+- **Giai đoạn hiện tại:** **C1 — đang thực hiện: Session S3, S4 xong; còn S5, S6a, S6b, S7a, S7b**.
+- **Việc kế tiếp (một đề xuất duy nhất):** S5: API Provider tạo & quản lý Vet (mật khẩu tạm, MustChangePassword, phạm vi theo cơ sở).
 
 ## Đang làm
 không có
@@ -34,7 +34,7 @@ Nền tảng (A), bảo mật nhanh (B) đã **gộp vào main**. B+ (sửa 7 nh
 | **A** | Nền kiểm thử, migration, CI | **Xong, đã gộp** | `database/migrations/`, `SchemaVersions`, `scripts/migrate.js`, `docker-compose.dev.yml`, `.github/workflows/ci.yml`; commit `db9ff95`, `ded381d` |
 | **B** | Bảo mật nhanh | **Xong, đã gộp (PR #1)** | `middlewares/rate-limiters.js` (3 limiter), `GET /health`, retry SQL 1205 (có test), CSP không còn `'unsafe-inline'` ở `script-src`, `TRUST_PROXY` ghi trong `.env.example`; commit `64b5c8a`, `dcb21f5` |
 | **B+** | Sửa lỗi thấy khi chạy thật | **Xong, đã gộp (PR #6)** | Commit `09b0837`, `7e9c50e`; CI tích hợp smoke test trên SQL Server |
-| **C** | Vòng đời 4 vai trò, trạng thái booking | **Đang thực hiện (C1: 1/7 session xong)** | `004_Roles_Lifecycle.sql` (cột ProviderId, OrgArea, ApprovedBy/At, MustChangePassword, RejectReason; CK_Users_ProviderLink, AuditLog); script `create-admin.js` |
+| **C** | Vòng đời 4 vai trò, trạng thái booking | **Đang thực hiện (C1: 2/7 session xong)** | `004_Roles_Lifecycle.sql`; script `create-admin.js`; S4: API Admin duyệt/từ chối/khóa/mở khóa (`/api/v1/admin/*`, `admin.model.js`, `admin.service.js`, `admin.controller.js`) |
 | **D** | Phân trang + upload ảnh (Cloudinary) | **Chưa bắt đầu** | Chưa có `utils/pagination.js`, `middlewares/upload.js`, `storage.service.js`; ảnh pet vẫn base64 `Pets.Photo` |
 | **E** | Lịch sử chat AI trên server | **Chưa bắt đầu** | Chưa có `chat.model.js`, `chat.service.js`, `ChatSessions/ChatMessages` |
 | **F** | Dashboard Provider/Vet/Admin | **Chưa bắt đầu** | `frontend/pages/` chỉ có `customer-dashboard.html`; vai trò khác thấy "đang xây dựng" |
@@ -116,3 +116,4 @@ Sau **mỗi lần** sửa/cập nhật dự án, trước khi báo cáo:
 | 2026-11-17 | B+ (Session 1.2) | Mở rộng CSS chống nhấp nháy cho #heroTitle, #heroSub; thêm test tĩnh kiểm tra 4 id trong landing.css | `npm test` 114 pass (DB giả); `check-frontend-csp.js` pass | Chưa đo độ trễ mạng thực tế trên trình duyệt |
 | 2026-11-17 | B+ (Session 2/9) | Đóng B+: thêm bước smoke test vào CI `.github/workflows/ci.yml`, kiểm thử toàn diện | `npm test`: 114 pass (DB giả); `check-frontend-csp.js`: pass; `migrate.js --seed`: 5/5 verified (DB thật); `smoke.js`: 25/25 pass (DB thật) | Chưa biết kết quả Actions trên GitHub (chưa có gh CLI) |
 | 2026-11-17 | C1 (Session 3/9) | Migration 004_Roles_Lifecycle.sql (cột mới, CK_Users_ProviderLink, AuditLog); user.model & fake-models đọc/ghi cột mới; script create-admin.js; test create-admin; cập nhật database/README.md | `migrate.js --seed`: 6/6 verified (DB thật); `create-admin.js`: tạo thành công & idempotent (DB thật); `npm test`: 120 pass, 0 fail (DB giả); `check-frontend-csp.js`: pass | Chưa có endpoint API cho các vai trò mới (chờ session sau) |
+| 2026-11-18 | C1 (Session 4/9) | API Admin: GET /admin/users, POST /admin/users/:id/approve, reject, disable, enable; admin.model, admin.service, admin.controller; fake-models transaction rollback; admin.test.js (10 test); cập nhật api-documentation.md | `npm test`: 131 pass, 0 fail (DB giả); `check-frontend-csp.js`: pass | Rollback transaction & race-condition slug trên SQL Server thật (chờ S7a) |

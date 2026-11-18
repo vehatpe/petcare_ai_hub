@@ -54,6 +54,17 @@ Các tầng rate limiter được tách riêng:
 Validation giống frontend: email hợp lệ; SĐT VN `^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$` (chuẩn hóa về `0xxxxxxxxx`); mật khẩu ≥ 8 ký tự gồm chữ và số; provider cần `orgName` ≥ 2 ký tự, `orgType` ∈ clinic|spa|hotel|emergency. Email/SĐT trùng → 409 `duplicate` kèm `errors.email`/`errors.phone`.
 Mật khẩu băm bằng bcrypt (cost ≥ 10). Giới hạn tốc độ cho `/auth/*`.
 
+## Quản trị hệ thống (Admin)
+Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài khoản có role `admin`. Không bao giờ trả `PasswordHash`.
+
+| Method | Path | Query / Body | Kết quả & Quy tắc |
+|---|---|---|---|
+| GET | `/admin/users?status=&role=&limit=&offset=` | Query: `status` (active/pending/disabled/rejected), `role` (customer/provider/vet/admin), `limit` (mặc định 20, tối đa 50), `offset` (mặc định 0). | 200 `{ users: User[], meta: { limit, offset, total } }`. Không rò rỉ trường nhạy cảm (`passwordHash`). |
+| POST | `/admin/users/:id/approve` | Body: `{ area? }` (bắt buộc nếu tài khoản provider chưa có `orgArea`). | 200 `{ id, role, status: "active", providerId, orgArea, approvedBy, approvedAt }`. Chạy trong 1 transaction: tạo dòng `Providers` (slug từ `orgName` duy nhất ≤ 50 ký tự, `isActive=1`), cập nhật `Users.ProviderId`, `Status='active'`, `ApprovedBy/At`, ghi `AuditLog`. Chỉ áp dụng cho `provider` `pending` (duyệt lặp → 409 `conflict`, thiếu area → 422 `validation`). |
+| POST | `/admin/users/:id/reject` | Body: `{ reason }` (bắt buộc, tối đa 200 ký tự). | 200 `{ id, status: "rejected", rejectReason }`. Chỉ áp dụng cho user `pending` (không áp dụng cho `admin`). Ghi `AuditLog`. Từ chối là kết thúc vòng đời. |
+| POST | `/admin/users/:id/disable` | – | 200 `{ id, status: "disabled" }`. Chỉ áp dụng cho tài khoản `active`. Khóa `provider` sẽ cùng transaction khóa toàn bộ `vet` thuộc cơ sở đó và đặt `Providers.IsActive = 0`. Ràng buộc: Admin không tự khóa mình (403); không được khóa Admin `active` cuối cùng (403). Ghi `AuditLog`. |
+| POST | `/admin/users/:id/enable` | – | 200 `{ id, status: "active" }`. Chỉ áp dụng cho tài khoản `disabled`. Mở khóa `provider` chỉ khôi phục provider và đặt `Providers.IsActive = 1` (các `vet` vẫn disabled, cần mở khóa riêng). Ghi `AuditLog`. |
+
 ## Danh mục (công khai, không cần token)
 | Method | Path | Ghi chú |
 |---|---|---|

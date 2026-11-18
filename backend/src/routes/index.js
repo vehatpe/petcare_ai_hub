@@ -9,10 +9,12 @@ function createRouter({ services, mw, config, models }) {
   const r = express.Router();
   const c = {
     auth: mk('auth', services), catalog: mk('catalog', services), pet: mk('pet', services),
-    health: mk('health', services), booking: mk('booking', services), dashboard: mk('dashboard', services), ai: mk('ai', services)
+    health: mk('health', services), booking: mk('booking', services), dashboard: mk('dashboard', services), ai: mk('ai', services),
+    admin: mk('admin', services)
   };
   const { authenticate, requireRole } = mw;
   const customer = [authenticate, requireRole('customer')];
+  const admin = [authenticate, requireRole('admin')];
 
   const { authLimiter, meLimiter, aiLimiter } = createRateLimiters(config);
 
@@ -57,6 +59,12 @@ function createRouter({ services, mw, config, models }) {
 
   r.get('/dashboard/customer', customer, c.dashboard.customer);
   r.post('/ai/chat', customer, aiLimiter, c.ai.chat);
+
+  r.get('/admin/users', admin, c.admin.listUsers);
+  r.post('/admin/users/:id/approve', admin, uuidParam('id'), c.admin.approve);
+  r.post('/admin/users/:id/reject', admin, uuidParam('id'), c.admin.reject);
+  r.post('/admin/users/:id/disable', admin, uuidParam('id'), c.admin.disable);
+  r.post('/admin/users/:id/enable', admin, uuidParam('id'), c.admin.enable);
   return r;
 }
 
