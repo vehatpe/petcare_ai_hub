@@ -35,7 +35,7 @@ function createRouter({ services, mw, config, models }) {
   r.post('/auth/register', authLimiter, c.auth.register);
   r.post('/auth/login', authLimiter, c.auth.login);
   r.get('/auth/me', meLimiter, authenticate, c.auth.me);
-  r.post('/auth/change-password', changePasswordLimiter, authenticate, c.auth.changePassword);
+  r.post('/auth/change-password', authenticate, changePasswordLimiter, c.auth.changePassword);
 
   r.get('/providers', c.catalog.providers);
   r.get('/services', c.catalog.services);

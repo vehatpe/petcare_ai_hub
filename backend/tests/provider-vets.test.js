@@ -390,6 +390,94 @@ test('C1: Provider management of Vets and Mandatory Change Password', async (t) 
     assert.ok(rOk.data.tempPassword);
   });
 
+  // --- S5.1 Test: Transaction atomicity khi tạo Vet & rollback nếu logAudit thất bại ---
+  await t.test('createVet transaction rollback: when logAudit throws, no vet remains in DB and no temp password returned', async () => {
+    const originalLog = app.models.audit.log;
+    app.models.audit.log = async () => {
+      throw new Error('Simulated AuditLog database failure');
+    };
+
+    try {
+      const res = await app.call('POST', '/provider/vets', {
+        token: providerToken,
+        body: {
+          fullName: 'Bác Sĩ Rollback Test',
+          email: 'vet.rollback@alpha.vn',
+          phone: '0989999999'
+        }
+      });
+
+      // (i) Request trả lỗi (500)
+      assert.equal(res.status, 500);
+      // (iii) Phản hồi không chứa tempPassword
+      assert.equal(res.data, null);
+      assert.equal(res.body.tempPassword, undefined);
+
+      // (ii) KHÔNG có dòng vet nào còn trong state (rollback đúng)
+      const inDb = await app.models.users.findByEmail('vet.rollback@alpha.vn');
+      assert.equal(inDb, null);
+    } finally {
+      app.models.audit.log = originalLog;
+    }
+
+    // Sau đó gọi lại bình thường với cùng email thì thành công (không bị 409)
+    const resRetry = await app.call('POST', '/provider/vets', {
+      token: providerToken,
+      body: {
+        fullName: 'Bác Sĩ Rollback Test',
+        email: 'vet.rollback@alpha.vn',
+        phone: '0989999999'
+      }
+    });
+    assert.equal(resRetry.status, 201);
+    assert.ok(resRetry.data.vet);
+    assert.equal(resRetry.data.vet.email, 'vet.rollback@alpha.vn');
+    assert.ok(resRetry.data.tempPassword);
+  });
+
+  // --- S5.1 Test: Rate limiting change-password isolation by User ID ---
+  await t.test('changePasswordLimiter isolates by authenticated user ID (user A rate limited, user B unaffected)', async () => {
+    // Khởi tạo một app riêng với AUTH_RATE_LIMIT_MAX = 2
+    const limitedApp = await startTestApp({
+      env: { AUTH_RATE_LIMIT_MAX: '2' }
+    });
+    try {
+      const { token: userAToken } = await limitedApp.registerCustomer({ email: 'userA@test.vn', phone: '0912111111' });
+      const { token: userBToken } = await limitedApp.registerCustomer({ email: 'userB@test.vn', phone: '0912222222' });
+
+      // User A gọi đổi pass 2 lần (thất bại vì sai pass cũ nhưng vẫn tiêu tốn rate limit)
+      const rA1 = await limitedApp.call('POST', '/auth/change-password', {
+        token: userAToken,
+        body: { currentPassword: 'WrongOldPass1!', newPassword: 'NewPassword123!' }
+      });
+      assert.equal(rA1.status, 422);
+
+      const rA2 = await limitedApp.call('POST', '/auth/change-password', {
+        token: userAToken,
+        body: { currentPassword: 'WrongOldPass2!', newPassword: 'NewPassword123!' }
+      });
+      assert.equal(rA2.status, 422);
+
+      // Lần thứ 3 User A bị 429
+      const rA3 = await limitedApp.call('POST', '/auth/change-password', {
+        token: userAToken,
+        body: { currentPassword: 'WrongOldPass3!', newPassword: 'NewPassword123!' }
+      });
+      assert.equal(rA3.status, 429);
+      assert.equal(rA3.body.code, 'rate_limited');
+
+      // User B cùng IP nhưng user id khác -> vẫn gọi được bình thường (trả 422 sai pass chứ không bị 429)
+      const rB1 = await limitedApp.call('POST', '/auth/change-password', {
+        token: userBToken,
+        body: { currentPassword: 'WrongOldPassB!', newPassword: 'NewPassword123!' }
+      });
+      assert.equal(rB1.status, 422);
+      assert.notEqual(rB1.status, 429);
+    } finally {
+      await limitedApp.close();
+    }
+  });
+
   // --- Việc 3: Bệnh án của Vet (hoãn có kiểm soát) ---
   await t.test('C2 rule: vet only writes medical record for pets that have an active (non-cancelled) booking with vet facility', { todo: 'Will be implemented in C2' }, () => {});
 });

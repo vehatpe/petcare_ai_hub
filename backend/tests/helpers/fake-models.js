@@ -55,7 +55,7 @@ function createFakeModels() {
 
   const models = {
     users: {
-      async create(u) {
+      async create(u, runner) { // eslint-disable-line no-unused-vars
         if (s.users.some((x) => x.email === u.email)) throw new DuplicateError('email');
         if (s.users.some((x) => x.phone === u.phone)) throw new DuplicateError('phone');
         const userObj = {

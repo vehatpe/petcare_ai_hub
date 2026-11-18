@@ -58,19 +58,7 @@ function createProviderService({ models, config, clock = () => new Date() }) {
         if (!pId) {
           throw validation('Mã cơ sở đối tác (providerId) là bắt buộc khi quản trị viên tạo bác sĩ.', { providerId: 'Vui lòng cung cấp providerId.' });
         }
-        // Kiểm tra cơ sở tồn tại và isActive
-        return memberModel.transaction(async (tx) => {
-          const exists = await adminModel.providerExists(tx, pId);
-          if (!exists) {
-            throw notFound('Không tìm thấy cơ sở đối tác được chỉ định.');
-          }
-          const isActive = await adminModel.isProviderActive(tx, pId);
-          if (!isActive) {
-            throw validation('Cơ sở đối tác được chỉ định hiện đang bị khóa.', { providerId: 'Cơ sở này đang bị khóa.' });
-          }
-          targetProviderId = pId;
-          return this._doCreateVet(tx, actorUser, input, targetProviderId);
-        });
+        targetProviderId = pId;
       } else if (actorUser.role === 'provider') {
         if (actorUser.status !== 'active') {
           throw forbidden('Chỉ đối tác đang hoạt động (active) mới có quyền tạo bác sĩ.');
@@ -79,25 +67,17 @@ function createProviderService({ models, config, clock = () => new Date() }) {
           throw forbidden('Tài khoản đối tác chưa được liên kết với cơ sở nào.');
         }
         targetProviderId = actorUser.providerId;
-        return memberModel.transaction(async (tx) => {
-          const isActive = await adminModel.isProviderActive(tx, targetProviderId);
-          if (!isActive) {
-            throw conflict('Cơ sở của bạn hiện đang bị khóa.');
-          }
-          return this._doCreateVet(tx, actorUser, input, targetProviderId);
-        });
       } else {
         throw forbidden('Bạn không có quyền thực hiện chức năng này.');
       }
-    },
 
-    async _doCreateVet(tx, actorUser, input, providerId) {
+      // 1. Thực hiện các thao tác ngoài callback transaction: validate, sinh password, hash, uuid
       const { errors, value } = validateVetInput(input || {});
       if (Object.keys(errors).length) {
         throw validation('Vui lòng kiểm tra lại thông tin bác sĩ.', errors);
       }
 
-      // Kiểm tra trùng lặp email và phone
+      // Kiểm tra trùng email/phone ở ngoài để trả lỗi nhanh
       if (await userModel.findByEmail(value.email)) throw dupError('email');
       if (await userModel.findByPhone(value.phone)) throw dupError('phone');
 
@@ -114,39 +94,61 @@ function createProviderService({ models, config, clock = () => new Date() }) {
         email: value.email,
         phone: value.phone,
         passwordHash,
-        providerId,
+        providerId: targetProviderId,
         mustChangePassword: true,
         createdAt
       };
 
-      try {
-        await userModel.create(user);
-      } catch (e) {
-        if (e instanceof DuplicateError) throw dupError(e.field);
-        throw e;
-      }
+      // 2. Mở transaction: callback CHỈ chứa thao tác DB thuần túy
+      const createdVet = await memberModel.transaction(async (tx) => {
+        if (actorUser.role === 'admin') {
+          const exists = await adminModel.providerExists(tx, targetProviderId);
+          if (!exists) {
+            throw notFound('Không tìm thấy cơ sở đối tác được chỉ định.');
+          }
+          const isActive = await adminModel.isProviderActive(tx, targetProviderId);
+          if (!isActive) {
+            throw validation('Cơ sở đối tác được chỉ định hiện đang bị khóa.', { providerId: 'Cơ sở này đang bị khóa.' });
+          }
+        } else {
+          const isActive = await adminModel.isProviderActive(tx, targetProviderId);
+          if (!isActive) {
+            throw conflict('Cơ sở của bạn hiện đang bị khóa.');
+          }
+        }
 
-      // Ghi AuditLog (Detail TUYỆT ĐỐI không chứa mật khẩu)
-      await adminModel.logAudit(tx, {
-        actorUserId: actorUser.id,
-        action: 'vet_created',
-        targetType: 'user',
-        targetId: vetId,
-        detail: JSON.stringify({ fullName: value.fullName, email: value.email, providerId })
-      });
+        try {
+          await userModel.create(user, tx);
+        } catch (e) {
+          if (e instanceof DuplicateError) throw dupError(e.field);
+          throw e;
+        }
 
-      return {
-        vet: {
+        // Ghi AuditLog (Detail TUYỆT ĐỐI không chứa mật khẩu)
+        await adminModel.logAudit(tx, {
+          actorUserId: actorUser.id,
+          action: 'vet_created',
+          targetType: 'user',
+          targetId: vetId,
+          detail: JSON.stringify({ fullName: value.fullName, email: value.email, providerId: targetProviderId })
+        });
+
+        return {
           id: vetId,
           role: 'vet',
           status: 'active',
           fullName: value.fullName,
           email: value.email,
           phone: value.phone,
-          providerId,
+          providerId: targetProviderId,
           mustChangePassword: true,
           createdAt
-        },
+        };
+      });
+
+      // 3. tempPassword giữ ở ngoài và chỉ trả sau khi transaction commit thành công
+      return {
+        vet: createdVet,
         tempPassword
       };
     },

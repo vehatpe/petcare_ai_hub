@@ -5,7 +5,7 @@
 
 - **Cập nhật lần cuối:** 2026-11-18
 - **Nhánh làm việc:** `giai-doan-c1`
-- **Giai đoạn hiện tại:** **C1 — Session S5 hoàn thành (3/7 session C1 xong: S3, S4, S5; còn S6a, S6b, S7a, S7b)**.
+- **Giai đoạn hiện tại:** **C1 — Session S5 & S5.1 hoàn thành (3/7 session C1 xong: S3, S4, S5/S5.1; còn S6a, S6b, S7a, S7b)**.
 - **Việc kế tiếp (một đề xuất duy nhất):** S6a: Giao diện đổi mật khẩu bắt buộc (`change-password.html`), tích hợp xử lý cổng `must_change_password` vào flow đăng nhập và header/session frontend.
 
 ## Đang làm
@@ -15,7 +15,7 @@ không có
 
 ## 1. Tóm tắt một dòng
 
-Nền tảng (A), bảo mật nhanh (B) đã **gộp vào main**. B+ (sửa 7 nhóm lỗi tìm thấy khi chạy thật, CI tích hợp smoke test trên SQL Server) đã **hoàn thành toàn diện, kiểm chứng trên cả DB giả (114 tests) và SQL Server 2022 thật (25/25 smoke tests pass, migrate idempotent)**, đã gộp vào `main`. Giai đoạn C1 đã hoàn thành S3, S4, S5; đang chuẩn bị S6a.
+Nền tảng (A), bảo mật nhanh (B) đã **gộp vào main**. B+ (sửa 7 nhóm lỗi tìm thấy khi chạy thật, CI tích hợp smoke test trên SQL Server) đã **hoàn thành toàn diện, kiểm chứng trên cả DB giả (114 tests) và SQL Server 2022 thật (25/25 smoke tests pass, migrate idempotent)**, đã gộp vào `main`. Giai đoạn C1 đã hoàn thành S3, S4, S5 và bổ sung S5.1; sẵn sàng cho S6a.
 
 ## 2. Công nghệ & cách chạy
 
@@ -34,7 +34,7 @@ Nền tảng (A), bảo mật nhanh (B) đã **gộp vào main**. B+ (sửa 7 nh
 | **A** | Nền kiểm thử, migration, CI | **Xong, đã gộp** | `database/migrations/`, `SchemaVersions`, `scripts/migrate.js`, `docker-compose.dev.yml`, `.github/workflows/ci.yml`; commit `db9ff95`, `ded381d` |
 | **B** | Bảo mật nhanh | **Xong, đã gộp (PR #1)** | `middlewares/rate-limiters.js` (3 limiter), `GET /health`, retry SQL 1205 (có test), CSP không còn `'unsafe-inline'` ở `script-src`, `TRUST_PROXY` ghi trong `.env.example`; commit `64b5c8a`, `dcb21f5` |
 | **B+** | Sửa lỗi thấy khi chạy thật | **Xong, đã gộp (PR #6)** | Commit `09b0837`, `7e9c50e`; CI tích hợp smoke test trên SQL Server |
-| **C** | Vòng đời 4 vai trò, trạng thái booking | **Đang thực hiện (C1: S3, S4, S5 xong: 3/7 session)** | `004_Roles_Lifecycle.sql`; `create-admin.js`; S4: API Admin duyệt/khóa (`/admin/users/*`); S5: Provider tạo/quản lý Vet + MustChangePassword (`/provider/vets*`, `/auth/change-password`) |
+| **C** | Vòng đời 4 vai trò, trạng thái booking | **Đang thực hiện (C1: S3, S4, S5/S5.1 xong: 3/7 session)** | `004_Roles_Lifecycle.sql`; `create-admin.js`; S4: API Admin duyệt/khóa (`/admin/users/*`); S5 & S5.1: Provider tạo/quản lý Vet + MustChangePassword (transaction atomicity, isolated rate limiter) |
 | **D** | Phân trang + upload ảnh (Cloudinary) | **Chưa bắt đầu** | Chưa có `utils/pagination.js`, `middlewares/upload.js`, `storage.service.js`; ảnh pet vẫn base64 `Pets.Photo` |
 | **E** | Lịch sử chat AI trên server | **Chưa bắt đầu** | Chưa có `chat.model.js`, `chat.service.js`, `ChatSessions/ChatMessages` |
 | **F** | Dashboard Provider/Vet/Admin | **Chưa bắt đầu** | `frontend/pages/` chỉ có `customer-dashboard.html`; vai trò khác thấy "đang xây dựng" |
@@ -70,7 +70,7 @@ Truy vấn SQL tham số có kiểu; JWT HS256 + chặn secret yếu ở product
 - **C1 (Hiện tại):**
   - S3: Migration `004_Roles_Lifecycle.sql`, script `create-admin.js`.
   - S4: API Admin duyệt/từ chối/khóa đối tác (`/admin/users/*`).
-  - S5: API Provider tạo/quản lý Vet + cổng `must_change_password` + đổi mật khẩu bắt buộc (`/provider/vets*`, `/auth/change-password`).
+  - S5 / S5.1: API Provider tạo/quản lý Vet + cổng `must_change_password` + đổi mật khẩu bắt buộc (`/provider/vets*`, `/auth/change-password`).
   - S6a: Trang đổi mật khẩu bắt buộc (`change-password.html`), cập nhật header/login.
   - S6b: Trang quản lý Vet phía Provider (`provider-vets.html`).
   - S7a: Smoke test C1 trên SQL Server thật (vai trò, vòng đời, khóa cascade, đổi mật khẩu).
@@ -103,3 +103,4 @@ Sau **mỗi lần** sửa/cập nhật dự án, trước khi báo cáo:
 - 2026-11-17 · B+ · Hoàn tất B+ (BP.0 - BP.6), 114 test unit pass (DB giả), 25/25 smoke test pass (SQL Server 2022 thật), CSP xanh, tạo PR #6 gộp vào main · Đã kiểm chứng DB giả & SQL Server thật.
 - 2026-11-18 · C1 · S3 xong: migration 004, create-admin.js; S4 xong: admin.model, admin.service, admin.controller, 131 test unit pass (DB giả) · Chưa kiểm chứng S4 trên SQL Server thật (chờ S7a).
 - 2026-11-18 · C1 · S5 xong: API provider/vets, /auth/change-password, cổng must_change_password, 143 test pass + 1 todo (DB giả), CSP xanh · Chưa kiểm chứng trên SQL Server thật (chờ S7a).
+- 2026-11-18 · C1 · S5.1 xong: refactor createVet atomic runner, callback transaction DB-only, dao thứ tự middleware change-password, test rollback + isolation limiter pass 145/145 (DB giả), CSP xanh · Chưa kiểm chứng trên SQL Server thật (chờ S7a).

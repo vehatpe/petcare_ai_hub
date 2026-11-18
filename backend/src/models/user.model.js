@@ -12,9 +12,9 @@ const map = (r) => r && ({
 });
 
 module.exports = (db) => ({
-  async create(u) {
+  async create(u, runner = db) {
     try {
-      await db.query(
+      await runner.query(
         `INSERT INTO dbo.Users (UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason)
          VALUES (@id, @role, @status, @fullName, @email, @phone, @hash, @orgName, @orgType, @providerId, @orgArea, @approvedBy, @approvedAt, @mustChangePassword, @rejectReason)`,
         {
