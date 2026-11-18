@@ -17,6 +17,15 @@ function createAuth({ models, config }) {
       const user = await models.users.findById(payload.sub);
       if (!user) throw unauthenticated('Tài khoản không còn tồn tại. Vui lòng đăng nhập lại.');
       if (user.status !== 'active') throw new AppError(403, 'disabled', 'Tài khoản này hiện không thể sử dụng. Vui lòng liên hệ hotline để được hỗ trợ.');
+      if (user.mustChangePassword) {
+        // Cổng must_change_password: chỉ cho phép GET /auth/me và POST /auth/change-password
+        const path = req.path || req.originalUrl || '';
+        const isAllowed = (req.method === 'GET' && path.endsWith('/auth/me')) ||
+                          (req.method === 'POST' && path.endsWith('/auth/change-password'));
+        if (!isAllowed) {
+          throw new AppError(403, 'must_change_password', 'Bạn phải đổi mật khẩu lần đầu trước khi tiếp tục sử dụng hệ thống.');
+        }
+      }
       req.user = user;
       next();
     } catch (e) { next(e); }

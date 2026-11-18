@@ -53,6 +53,34 @@ function validateRegister(input) {
   return { errors, value };
 }
 
+function validateVetInput(input) {
+  const value = {
+    fullName: str(input.fullName).trim().replace(/\s+/g, ' '),
+    email: str(input.email).trim().toLowerCase(),
+    phone: normalizePhone(input.phone)
+  };
+  const errors = {};
+  if (value.fullName.length < 2) errors.fullName = 'Vui lòng nhập họ và tên bác sĩ (ít nhất 2 ký tự).';
+  else if (value.fullName.length > 100) errors.fullName = 'Họ và tên bác sĩ tối đa 100 ký tự.';
+  if (!EMAIL_RE.test(value.email) || value.email.length > 254) errors.email = 'Email chưa đúng định dạng, ví dụ: bacsi@clinic.vn.';
+  if (!value.phone) errors.phone = 'Số điện thoại Việt Nam gồm 10 số, ví dụ: 0912 345 678.';
+  return { errors, value };
+}
+
+function validateChangePassword(input) {
+  const currentPassword = str(input.currentPassword);
+  const newPassword = str(input.newPassword);
+  const errors = {};
+  if (!currentPassword) errors.currentPassword = 'Vui lòng nhập mật khẩu hiện tại.';
+  if (!newPassword) errors.newPassword = 'Vui lòng nhập mật khẩu mới.';
+  else if (!passwordOk(newPassword) || newPassword.length > 72) {
+    errors.newPassword = 'Mật khẩu mới cần ít nhất 8 ký tự, gồm cả chữ và số (tối đa 72 ký tự).';
+  } else if (currentPassword === newPassword) {
+    errors.newPassword = 'Mật khẩu mới phải khác mật khẩu hiện tại.';
+  }
+  return { errors, value: { currentPassword, newPassword } };
+}
+
 function parseWeight(raw, errors, key = 'weightKg') {
   if (raw === undefined || raw === null || raw === '') return null;
   const w = typeof raw === 'number' ? raw : Number(String(raw).replace(',', '.'));
@@ -176,6 +204,6 @@ function validateBooking(input, now) {
 }
 
 module.exports = {
-  EMAIL_RE, TIME_SLOTS, PROVIDER_TYPES, isUuid, normalizePhone, validateRegister, validatePet,
+  EMAIL_RE, TIME_SLOTS, PROVIDER_TYPES, isUuid, normalizePhone, validateRegister, validateVetInput, validateChangePassword, validatePet,
   validateWeight, validateVaccination, validateMedicalRecord, validateBooking
 };

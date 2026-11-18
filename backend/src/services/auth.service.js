@@ -3,7 +3,7 @@ const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { AppError, DuplicateError, validation, conflict } = require('../utils/errors');
-const { validateRegister, normalizePhone } = require('../utils/validators');
+const { validateRegister, validateChangePassword, normalizePhone } = require('../utils/validators');
 
 const DUP_MSG = {
   email: ['Email này đã được đăng ký.', 'Email này đã có tài khoản. Hãy đăng nhập hoặc dùng email khác.'],
@@ -11,7 +11,16 @@ const DUP_MSG = {
 };
 
 function toPublicUser(u) {
-  const out = { id: u.id, role: u.role, status: u.status, fullName: u.fullName, email: u.email, phone: u.phone };
+  const out = {
+    id: u.id,
+    role: u.role,
+    status: u.status,
+    fullName: u.fullName,
+    email: u.email,
+    phone: u.phone,
+    providerId: u.providerId || null,
+    mustChangePassword: Boolean(u.mustChangePassword)
+  };
   if (u.orgName) out.orgName = u.orgName;
   if (u.orgType) out.orgType = u.orgType;
   out.createdAt = u.createdAt;
@@ -78,6 +87,25 @@ function createAuthService({ models, config, clock = () => new Date() }) {
         throw new AppError(403, 'disabled', 'Tài khoản này hiện không thể đăng nhập. Vui lòng liên hệ hotline để được hỗ trợ.');
       }
       return { user: toPublicUser(user), token: sign(user, Boolean(input.remember)) };
+    },
+
+    async changePassword(userId, input) {
+      const { errors, value } = validateChangePassword(input || {});
+      if (Object.keys(errors).length) throw validation('Vui lòng kiểm tra lại thông tin đổi mật khẩu.', errors);
+
+      const user = await models.users.findById(userId);
+      if (!user) throw new AppError(401, 'unauthenticated', 'Tài khoản không tồn tại.');
+
+      const match = await bcrypt.compare(value.currentPassword, user.passwordHash);
+      if (!match) {
+        throw validation('Mật khẩu hiện tại chưa chính xác.', { currentPassword: 'Mật khẩu hiện tại không đúng.' });
+      }
+
+      const newHash = await bcrypt.hash(value.newPassword, config.bcryptCost);
+      await models.users.updatePassword(userId, newHash, false);
+
+      const updatedUser = await models.users.findById(userId);
+      return { user: toPublicUser(updatedUser) };
     }
   };
 }

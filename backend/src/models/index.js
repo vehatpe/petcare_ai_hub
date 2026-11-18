@@ -13,6 +13,7 @@ async function createSqlModels(dbConfig) {
   const models = {
     users: require('./user.model')(db),
     admin: require('./admin.model')(db),
+    providerMember: require('./provider-member.model')(db),
     catalog: require('./catalog.model')(db),
     pets: require('./pet.model')(db),
     health: require('./health.model')(db),

@@ -72,7 +72,14 @@ function createFakeModels() {
       },
       async findByEmail(e) { return userOut(s.users.find((u) => u.email === e)); },
       async findByPhone(p) { return userOut(s.users.find((u) => u.phone === p)); },
-      async findById(id) { return userOut(s.users.find((u) => u.id === id)); }
+      async findById(id) { return userOut(s.users.find((u) => u.id === id)); },
+      async updatePassword(userId, passwordHash, mustChangePassword = false) {
+        const u = s.users.find((x) => x.id === userId);
+        if (u) {
+          u.passwordHash = passwordHash;
+          u.mustChangePassword = Boolean(mustChangePassword);
+        }
+      }
     },
     audit: {
       async log({ actorUserId, action, targetType, targetId, detail }) {
@@ -225,6 +232,57 @@ function createFakeModels() {
 
       async logAudit(tx, logEntry) {
         await models.audit.log(logEntry);
+      }
+    },
+    providerMember: {
+      async transaction(work) {
+        return models.admin.transaction(work);
+      },
+      async listVets({ providerId, limit = 20, offset = 0 }) {
+        const lim = Math.max(1, Math.min(50, Number(limit) || 20));
+        const off = Math.max(0, Number(offset) || 0);
+
+        let filtered = s.users.filter((u) => u.role === 'vet' && u.providerId === providerId);
+        const total = filtered.length;
+
+        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        const paged = filtered.slice(off, off + lim).map((u) => ({
+          id: u.id,
+          role: u.role,
+          status: u.status,
+          fullName: u.fullName,
+          email: u.email,
+          phone: u.phone,
+          providerId: u.providerId,
+          mustChangePassword: Boolean(u.mustChangePassword),
+          createdAt: u.createdAt
+        }));
+
+        return {
+          vets: clone(paged),
+          meta: { limit: lim, offset: off, total }
+        };
+      },
+      async getVetForUpdate(tx, vetId) {
+        const u = s.users.find((x) => x.id === vetId && x.role === 'vet');
+        if (!u) return null;
+        return {
+          id: u.id,
+          role: u.role,
+          status: u.status,
+          fullName: u.fullName,
+          email: u.email,
+          phone: u.phone,
+          providerId: u.providerId,
+          mustChangePassword: Boolean(u.mustChangePassword),
+          createdAt: u.createdAt
+        };
+      },
+      async updateVetStatus(tx, vetId, status) {
+        const u = s.users.find((x) => x.id === vetId);
+        if (u) {
+          u.status = status;
+        }
       }
     },
     catalog: {

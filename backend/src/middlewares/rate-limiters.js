@@ -42,7 +42,17 @@ function createRateLimiters(config) {
     handler
   });
 
-  return { authLimiter, meLimiter, aiLimiter };
+  // 4. Password change limiter (/auth/change-password): keyed by user ID (or IP) to prevent password brute force
+  const changePasswordLimiter = rateLimit({
+    windowMs: config.rateLimit.windowMs,
+    max: config.rateLimit.authMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.user?.id || req.ip,
+    handler
+  });
+
+  return { authLimiter, meLimiter, aiLimiter, changePasswordLimiter };
 }
 
 module.exports = { createRateLimiters };

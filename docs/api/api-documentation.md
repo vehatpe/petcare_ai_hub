@@ -12,8 +12,8 @@ Base URL: `/api/v1`. Backend (Express) phục vụ cả thư mục `frontend/` �
 
 ## Đối tượng
 ```
-User     { id, role: "customer"|"provider"|"vet"|"admin", status: "active"|"pending"|"disabled",
-           fullName, email, phone, orgName?, orgType?, createdAt }
+User     { id, role: "customer"|"provider"|"vet"|"admin", status: "active"|"pending"|"disabled"|"rejected",
+           fullName, email, phone, providerId?, mustChangePassword?, orgName?, orgType?, createdAt }
 Provider { id, name, area, type: "clinic"|"spa"|"hotel"|"emergency", isSample }
 Service  { id, category: "medical"|"grooming"|"hotel"|"emergency", categoryLabel, providerId, providerName,
            providerArea, name, description, priceVnd, unit, isSample }
@@ -43,16 +43,32 @@ Các tầng rate limiter được tách riêng:
 - **Auth (`/auth/register`, `/auth/login`)**: Khóa theo cặp `IP` + `identifier` (email hoặc số điện thoại đã chuẩn hóa chữ thường).
 - **Session verification (`/auth/me`)**: Hạn mức rộng (mặc định 300 lượt / 15 phút / IP) cho phép client kiểm tra phiên khi chuyển trang.
 - **AI Chat (`/ai/chat`)**: Khóa theo `UserId` đã xác thực (mặc định 20 lượt / 15 phút / tài khoản), ngăn chặn lạm dụng hạn ngạch Gemini API.
+- **Đổi mật khẩu (`/auth/change-password`)**: Khóa theo `UserId` đã xác thực (hoặc IP), chống tấn công dò mật khẩu cũ brute-force.
 
 ## Auth
 | Method | Path | Body | Kết quả |
 |---|---|---|---|
 | POST | `/auth/register` | `{role:"customer"|"provider", fullName, email, phone, password, orgName?, orgType?}` | 201 `{user, token}` (customer) hoặc `{user, token:null}` (provider, status `pending`). vet/admin không tự đăng ký (role khác → 422). |
-| POST | `/auth/login` | `{identifier, password, remember?}` | 200 `{user, token}`; `credentials` 401 (thông báo chung), `pending` 403, `disabled` 403. |
-| GET | `/auth/me` | – | 200 `{user}`; 401 nếu token sai/hết hạn. |
+| POST | `/auth/login` | `{identifier, password, remember?}` | 200 `{user, token}`; `credentials` 401 (thông báo chung), `pending` 403, `disabled` 403. Phản hồi kèm `providerId` và `mustChangePassword`. |
+| GET | `/auth/me` | – | 200 `{user}`; 401 nếu token sai/hết hạn. Phản hồi kèm `providerId` và `mustChangePassword`. |
+| POST | `/auth/change-password` | `{currentPassword, newPassword}` | 200 `{user}`; yêu cầu đăng nhập. Mật khẩu mới thỏa mãn độ phức tạp (≥ 8 ký tự, có chữ và số, tối đa 72 ký tự) và phải khác mật khẩu hiện tại (trùng → 422). Sai mật khẩu cũ → 422 kèm `errors.currentPassword`. Sau khi đổi thành công, `MustChangePassword = 0`. |
 
 Validation giống frontend: email hợp lệ; SĐT VN `^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$` (chuẩn hóa về `0xxxxxxxxx`); mật khẩu ≥ 8 ký tự gồm chữ và số; provider cần `orgName` ≥ 2 ký tự, `orgType` ∈ clinic|spa|hotel|emergency. Email/SĐT trùng → 409 `duplicate` kèm `errors.email`/`errors.phone`.
 Mật khẩu băm bằng bcrypt (cost ≥ 10). Giới hạn tốc độ cho `/auth/*`.
+
+### Cổng `must_change_password`
+Khi tài khoản có cờ `mustChangePassword: true` (đặc biệt là bác sĩ mới tạo với mật khẩu tạm):
+- Mọi route yêu cầu xác thực sẽ bị chặn với mã trạng thái `403` và mã lỗi `must_change_password`:
+  ```json
+  {
+    "success": false,
+    "data": null,
+    "code": "must_change_password",
+    "message": "Bạn phải đổi mật khẩu lần đầu trước khi tiếp tục sử dụng hệ thống."
+  }
+  ```
+- **Ngoại lệ:** Chỉ `GET /api/v1/auth/me` và `POST /api/v1/auth/change-password` được phép đi qua.
+- **Lưu ý bảo mật JWT:** JWT cũ đã cấp vẫn có hiệu lực cho đến khi hết hạn (token không trạng thái). Trạng thái `MustChangePassword` được xác thực trực tiếp tại tầng middleware mỗi lượt gọi API, và token cũ sẽ không còn bị chặn một khi cờ trong DB được gỡ về 0. Cân nhắc thu hồi phiên chủ động khi triển khai refresh token trong các giai đoạn sau.
 
 ## Quản trị hệ thống (Admin)
 Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài khoản có role `admin`. Không bao giờ trả `PasswordHash`.
@@ -64,6 +80,16 @@ Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài k
 | POST | `/admin/users/:id/reject` | Body: `{ reason }` (bắt buộc, tối đa 200 ký tự). | 200 `{ id, status: "rejected", rejectReason }`. Chỉ áp dụng cho user `pending` (không áp dụng cho `admin`). Ghi `AuditLog`. Từ chối là kết thúc vòng đời. |
 | POST | `/admin/users/:id/disable` | – | 200 `{ id, status: "disabled" }`. Chỉ áp dụng cho tài khoản `active`. Khóa `provider` sẽ cùng transaction khóa toàn bộ `vet` thuộc cơ sở đó và đặt `Providers.IsActive = 0`. Ràng buộc: Admin không tự khóa mình (403); không được khóa Admin `active` cuối cùng (403). Ghi `AuditLog`. |
 | POST | `/admin/users/:id/enable` | – | 200 `{ id, status: "active" }`. Chỉ áp dụng cho tài khoản `disabled`. Mở khóa `provider` chỉ khôi phục provider và đặt `Providers.IsActive = 1` (các `vet` vẫn disabled, cần mở khóa riêng). Ghi `AuditLog`. |
+
+## Quản lý Bác sĩ Cơ sở (Provider & Admin)
+Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài khoản có role `provider` (đang `active`) hoặc `admin`.
+
+| Method | Path | Query / Body | Kết quả & Quy tắc |
+|---|---|---|---|
+| POST | `/provider/vets` | Body: `{ fullName, email, phone, providerId? }` | 201 `{ vet: User, tempPassword }`. Header kèm `Cache-Control: no-store`. Provider chỉ được tạo vet cho chính cơ sở của mình (`ProviderId` lấy từ tài khoản người gọi). Admin bắt buộc truyền `providerId` (cơ sở phải tồn tại và `IsActive = 1`, nếu không → 404/422). Mật khẩu tạm sinh ngẫu nhiên (≥ 12 ký tự, đủ hoa/thường/số) và chỉ trả **duy nhất một lần** trong phản hồi; không bao giờ lưu trữ dạng thô hoặc ghi log/AuditLog. Cờ `MustChangePassword = 1`. Trùng email/phone → 409 `duplicate` có `errors.email`/`errors.phone`. Ghi AuditLog `vet_created`. |
+| GET | `/provider/vets` | Query: `limit`, `offset`, `providerId?` (chỉ dành cho admin) | 200 `{ vets: User[], meta: { limit, offset, total } }`. Chỉ trả danh sách bác sĩ thuộc cơ sở của provider gọi API (hoặc cơ sở do admin chỉ định). Tuyệt đối không trả `passwordHash` hay mật khẩu tạm. |
+| POST | `/provider/vets/:id/disable` | – | 200 `{ id, status: "disabled" }`. Chỉ áp dụng cho vet thuộc chính cơ sở của người gọi (vet thuộc cơ sở khác trả 404 để không lộ sự tồn tại). Vet phải đang ở trạng thái `active`. Ghi AuditLog `disable_vet`. |
+| POST | `/provider/vets/:id/enable` | – | 200 `{ id, status: "active" }`. Chỉ áp dụng cho vet thuộc chính cơ sở của người gọi (vet thuộc cơ sở khác trả 404). Chỉ được mở khóa khi cơ sở của vet đang hoạt động (`Providers.IsActive = 1`), nếu cơ sở bị khóa → 409 conflict. Ghi AuditLog `enable_vet`. |
 
 ## Danh mục (công khai, không cần token)
 | Method | Path | Ghi chú |

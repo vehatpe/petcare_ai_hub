@@ -14,6 +14,7 @@ const { createBookingService } = require('./services/booking.service');
 const { createDashboardService } = require('./services/dashboard.service');
 const { createAiRagService } = require('./services/ai-rag.service');
 const { createAdminService } = require('./services/admin.service');
+const { createProviderService } = require('./services/provider.service');
 
 /**
  * @param {{models:object, config:object, ai:{embed:Function, generate:Function}, clock?:()=>Date, logger?:object}} deps
@@ -51,7 +52,8 @@ function createApp({ models, config, ai, clock = () => new Date(), logger = cons
     bookingService: createBookingService(deps),
     dashboardService: createDashboardService(deps),
     aiRagService: createAiRagService({ ...deps, ai }),
-    adminService: createAdminService(deps)
+    adminService: createAdminService(deps),
+    providerService: createProviderService(deps)
   };
   const mw = createAuth({ models, config });
 

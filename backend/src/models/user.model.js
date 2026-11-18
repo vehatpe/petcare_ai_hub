@@ -40,5 +40,17 @@ module.exports = (db) => ({
   },
   async findById(id) {
     return map((await db.query(`SELECT ${COLS} FROM dbo.Users WHERE UserId = @id`, { id: [T.guid, id] }))[0]);
+  },
+  async updatePassword(userId, passwordHash, mustChangePassword = false) {
+    await db.query(
+      `UPDATE dbo.Users
+       SET PasswordHash = @hash, MustChangePassword = @mustChangePassword
+       WHERE UserId = @id`,
+      {
+        id: [T.guid, userId],
+        hash: [T.vstr(100), passwordHash],
+        mustChangePassword: [T.bool, mustChangePassword ? 1 : 0]
+      }
+    );
   }
 });
