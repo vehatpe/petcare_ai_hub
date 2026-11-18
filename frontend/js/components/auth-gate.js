@@ -87,6 +87,9 @@
     const user = AuthService.currentUser();
     if (!user) {
       window.location.replace(AuthGate.loginUrl(AuthService.currentAsNext()));
+    } else if (required === 'authenticated') {
+      // Cho phép mọi người dùng đã đăng nhập bất kể vai trò (customer/provider/vet/admin)
+      document.body.classList.add('auth-ready');
     } else if (user.role !== required) {
       window.location.replace(AuthService.homeUrl());
     } else {

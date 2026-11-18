@@ -19,6 +19,25 @@
   }
 
   function userMarkup(user) {
+    if (user.mustChangePassword) {
+      return `
+        <div class="account-menu">
+          <button type="button" class="account-trigger" id="accountTrigger" aria-haspopup="menu" aria-expanded="false" aria-controls="accountPopover">
+            <span class="account-avatar" aria-hidden="true">${esc(Fmt.initials(user.fullName))}</span>
+            <span class="account-name">${esc(Fmt.firstName(user.fullName))}</span>
+          </button>
+          <div class="account-popover" id="accountPopover" role="menu" aria-labelledby="accountTrigger" hidden>
+            <div class="account-who">
+              <strong>${esc(user.fullName)}</strong>
+              <span>${esc(user.email)}</span>
+              <span class="account-role">${esc(ROLE_LABEL[user.role] || '')}</span>
+            </div>
+            <a role="menuitem" href="${url('change-password.html')}">Đổi mật khẩu</a>
+            <button type="button" role="menuitem" class="account-logout" data-action="logout">Đăng xuất</button>
+          </div>
+        </div>`;
+    }
+
     const dash = DASHBOARD_BY_ROLE[user.role];
     const cta = user.role === 'customer'
       ? `<a href="${url('booking.html')}" class="btn btn-primary btn-sm header-cta">Đặt lịch</a>`
@@ -39,6 +58,7 @@
           ${dash ? `<a role="menuitem" href="${url(dash)}">Bảng điều khiển</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('health-records.html')}">Sổ sức khỏe</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('pet-profile.html')}">Thêm thú cưng</a>` : ''}
+          <a role="menuitem" href="${url('change-password.html')}">Đổi mật khẩu</a>
           <button type="button" role="menuitem" class="account-logout" data-action="logout">Đăng xuất</button>
         </div>
       </div>`;
@@ -74,11 +94,16 @@
           <li><a href="${url('login.html')}">Đăng nhập</a></li>
           <li><a href="${url('register.html')}">Đăng ký chủ nuôi</a></li>
           <li><a href="${url('register.html')}?role=provider">Đăng ký cơ sở dịch vụ</a></li>`;
+      } else if (user.mustChangePassword) {
+        slot.innerHTML = `
+          <li><a href="${url('change-password.html')}">Đổi mật khẩu</a></li>
+          <li><button type="button" class="btn-link" data-action="logout">Đăng xuất</button></li>`;
       } else {
         const dash = DASHBOARD_BY_ROLE[user.role] || (user.role === 'customer' ? 'customer-dashboard.html' : '');
         slot.innerHTML = `
           ${dash ? `<li><a href="${url(dash)}">Bảng điều khiển</a></li>` : ''}
           ${user.role === 'customer' ? `<li><a href="${url('health-records.html')}">Sổ sức khỏe</a></li>` : ''}
+          <li><a href="${url('change-password.html')}">Đổi mật khẩu</a></li>
           <li><button type="button" class="btn-link" data-action="logout">Đăng xuất</button></li>`;
       }
     });
@@ -201,10 +226,18 @@
         <a href="${url('register.html')}" class="btn btn-primary">Đăng ký</a>`;
       return;
     }
+    if (user.mustChangePassword) {
+      slot.innerHTML = `
+        <div class="drawer-who"><strong>${esc(user.fullName)}</strong><span>${esc(user.email)}</span></div>
+        <a href="${url('change-password.html')}" class="btn btn-secondary">Đổi mật khẩu</a>
+        <button type="button" class="btn btn-outline" data-action="logout">Đăng xuất</button>`;
+      return;
+    }
     const dash = DASHBOARD_BY_ROLE[user.role];
     slot.innerHTML = `
       <div class="drawer-who"><strong>${esc(user.fullName)}</strong><span>${esc(user.email)}</span></div>
       ${dash ? `<a href="${url(dash)}" class="btn btn-secondary">Bảng điều khiển</a>` : ''}
+      <a href="${url('change-password.html')}" class="btn btn-outline">Đổi mật khẩu</a>
       <button type="button" class="btn btn-outline" data-action="logout">Đăng xuất</button>`;
   }
 

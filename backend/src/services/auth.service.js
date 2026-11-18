@@ -23,6 +23,7 @@ function toPublicUser(u) {
   };
   if (u.orgName) out.orgName = u.orgName;
   if (u.orgType) out.orgType = u.orgType;
+  if (u.orgArea) out.orgArea = u.orgArea;
   out.createdAt = u.createdAt;
   return out;
 }
@@ -55,6 +56,7 @@ function createAuthService({ models, config, clock = () => new Date() }) {
         passwordHash: await bcrypt.hash(value.password, config.bcryptCost),
         orgName: value.role === 'provider' ? value.orgName : null,
         orgType: value.role === 'provider' ? value.orgType : null,
+        orgArea: value.role === 'provider' ? value.orgArea : null,
         createdAt: clock().toISOString()
       };
       try {
@@ -82,6 +84,13 @@ function createAuthService({ models, config, clock = () => new Date() }) {
       if (!(await bcrypt.compare(password, user.passwordHash))) throw generic;
       if (user.status === 'pending') {
         throw new AppError(403, 'pending', 'Tài khoản đối tác của bạn đang chờ quản trị viên phê duyệt. Chúng tôi sẽ liên hệ qua email hoặc số điện thoại đã đăng ký.');
+      }
+      if (user.status === 'rejected') {
+        const detail = user.rejectReason ? ` Lý do: ${user.rejectReason}` : '';
+        throw new AppError(403, 'rejected', `Hồ sơ đối tác đã bị từ chối.${detail}`);
+      }
+      if (user.status === 'disabled') {
+        throw new AppError(403, 'disabled', 'Tài khoản đã bị tạm khóa. Vui lòng liên hệ quản trị viên hoặc hotline để được hỗ trợ.');
       }
       if (user.status !== 'active') {
         throw new AppError(403, 'disabled', 'Tài khoản này hiện không thể đăng nhập. Vui lòng liên hệ hotline để được hỗ trợ.');

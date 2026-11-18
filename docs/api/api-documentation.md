@@ -48,12 +48,12 @@ Các tầng rate limiter được tách riêng:
 ## Auth
 | Method | Path | Body | Kết quả |
 |---|---|---|---|
-| POST | `/auth/register` | `{role:"customer"|"provider", fullName, email, phone, password, orgName?, orgType?}` | 201 `{user, token}` (customer) hoặc `{user, token:null}` (provider, status `pending`). vet/admin không tự đăng ký (role khác → 422). |
-| POST | `/auth/login` | `{identifier, password, remember?}` | 200 `{user, token}`; `credentials` 401 (thông báo chung), `pending` 403, `disabled` 403. Phản hồi kèm `providerId` và `mustChangePassword`. |
-| GET | `/auth/me` | – | 200 `{user}`; 401 nếu token sai/hết hạn. Phản hồi kèm `providerId` và `mustChangePassword`. |
+| POST | `/auth/register` | `{role:"customer"|"provider", fullName, email, phone, password, orgName?, orgType?, orgArea?}` | 201 `{user, token}` (customer) hoặc `{user, token:null}` (provider, status `pending`). Với provider: bắt buộc `orgName` (≤ 150 ký tự), `orgType` (clinic/spa/hotel/emergency) và `orgArea` (≤ 100 ký tự). vet/admin không tự đăng ký (role khác → 422). |
+| POST | `/auth/login` | `{identifier, password, remember?}` | 200 `{user, token}`; sai thông tin/không tồn tại → `401 credentials` (thông báo chung). Sau khi mật khẩu đúng: nếu `pending` → `403 pending`, nếu `rejected` → `403 rejected` (kèm `RejectReason` nếu có), nếu `disabled` → `403 disabled`. Phản hồi 200 kèm `providerId`, `orgArea` và `mustChangePassword`. |
+| GET | `/auth/me` | – | 200 `{user}`; 401 nếu token sai/hết hạn. Phản hồi kèm `providerId`, `orgArea` và `mustChangePassword`. |
 | POST | `/auth/change-password` | `{currentPassword, newPassword}` | 200 `{user}`; yêu cầu đăng nhập. Mật khẩu mới thỏa mãn độ phức tạp (≥ 8 ký tự, có chữ và số, tối đa 72 ký tự) và phải khác mật khẩu hiện tại (trùng → 422). Sai mật khẩu cũ → 422 kèm `errors.currentPassword`. Sau khi đổi thành công, `MustChangePassword = 0`. |
 
-Validation giống frontend: email hợp lệ; SĐT VN `^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$` (chuẩn hóa về `0xxxxxxxxx`); mật khẩu ≥ 8 ký tự gồm chữ và số; provider cần `orgName` ≥ 2 ký tự, `orgType` ∈ clinic|spa|hotel|emergency. Email/SĐT trùng → 409 `duplicate` kèm `errors.email`/`errors.phone`.
+Validation giống frontend: email hợp lệ; SĐT VN `^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$` (chuẩn hóa về `0xxxxxxxxx`); mật khẩu ≥ 8 ký tự gồm chữ và số; provider cần `orgName` ≥ 2 ký tự, `orgType` ∈ clinic|spa|hotel|emergency, và `orgArea` ≤ 100 ký tự. Email/SĐT trùng → 409 `duplicate` kèm `errors.email`/`errors.phone`.
 Mật khẩu băm bằng bcrypt (cost ≥ 10). Giới hạn tốc độ cho `/auth/*`.
 
 ### Cổng `must_change_password`

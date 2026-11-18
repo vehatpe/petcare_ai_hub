@@ -36,7 +36,8 @@ function validateRegister(input) {
     phone: normalizePhone(input.phone),
     password: str(input.password),
     orgName: str(input.orgName).trim(),
-    orgType: str(input.orgType)
+    orgType: str(input.orgType),
+    orgArea: str(input.orgArea).trim()
   };
   const errors = {};
   if (role !== 'customer' && role !== 'provider') errors.role = 'Chỉ có thể đăng ký tài khoản chủ nuôi hoặc đối tác. Tài khoản bác sĩ/quản trị do hệ thống cấp.';
@@ -49,6 +50,8 @@ function validateRegister(input) {
     if (value.orgName.length < 2) errors.orgName = 'Vui lòng nhập tên cơ sở.';
     else if (value.orgName.length > 150) errors.orgName = 'Tên cơ sở tối đa 150 ký tự.';
     if (!PROVIDER_TYPES.includes(value.orgType)) errors.orgType = 'Vui lòng chọn loại hình cơ sở.';
+    if (!value.orgArea) errors.orgArea = 'Vui lòng nhập khu vực hoạt động của cơ sở.';
+    else if (value.orgArea.length > 100) errors.orgArea = 'Khu vực tối đa 100 ký tự.';
   }
   return { errors, value };
 }

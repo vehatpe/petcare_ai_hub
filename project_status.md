@@ -5,8 +5,8 @@
 
 - **Cập nhật lần cuối:** 2026-11-18
 - **Nhánh làm việc:** `giai-doan-c1`
-- **Giai đoạn hiện tại:** **C1 — Session S5 & S5.1 hoàn thành (3/7 session C1 xong: S3, S4, S5/S5.1; còn S6a, S6b, S7a, S7b)**.
-- **Việc kế tiếp (một đề xuất duy nhất):** S6a: Giao diện đổi mật khẩu bắt buộc (`change-password.html`), tích hợp xử lý cổng `must_change_password` vào flow đăng nhập và header/session frontend.
+- **Giai đoạn hiện tại:** **C1 — Session S6 hoàn thành (4/7 session C1 xong: S3, S4, S5/S5.1, S6; còn S6b/S7 quản lý Vet phía Provider và smoke test)**.
+- **Việc kế tiếp (một đề xuất duy nhất):** S6b: Giao diện quản lý Vet phía Provider (`provider-vets.html`), hiển thị mật khẩu tạm một lần và danh sách bác sĩ thuộc cơ sở.
 
 ## Đang làm
 không có
@@ -34,7 +34,7 @@ Nền tảng (A), bảo mật nhanh (B) đã **gộp vào main**. B+ (sửa 7 nh
 | **A** | Nền kiểm thử, migration, CI | **Xong, đã gộp** | `database/migrations/`, `SchemaVersions`, `scripts/migrate.js`, `docker-compose.dev.yml`, `.github/workflows/ci.yml`; commit `db9ff95`, `ded381d` |
 | **B** | Bảo mật nhanh | **Xong, đã gộp (PR #1)** | `middlewares/rate-limiters.js` (3 limiter), `GET /health`, retry SQL 1205 (có test), CSP không còn `'unsafe-inline'` ở `script-src`, `TRUST_PROXY` ghi trong `.env.example`; commit `64b5c8a`, `dcb21f5` |
 | **B+** | Sửa lỗi thấy khi chạy thật | **Xong, đã gộp (PR #6)** | Commit `09b0837`, `7e9c50e`; CI tích hợp smoke test trên SQL Server |
-| **C** | Vòng đời 4 vai trò, trạng thái booking | **Đang thực hiện (C1: S3, S4, S5/S5.1 xong: 3/7 session)** | `004_Roles_Lifecycle.sql`; `create-admin.js`; S4: API Admin duyệt/khóa (`/admin/users/*`); S5 & S5.1: Provider tạo/quản lý Vet + MustChangePassword (transaction atomicity, isolated rate limiter) |
+| **C** | Vòng đời 4 vai trò, trạng thái booking | **Đang thực hiện (C1: S3, S4, S5/S5.1, S6 xong: 4/7 session)** | `004_Roles_Lifecycle.sql`; `create-admin.js`; S4: API Admin duyệt/khóa (`/admin/users/*`); S5 & S5.1: Provider tạo/quản lý Vet + MustChangePassword; S6: mã lỗi login pending/rejected/disabled, ô orgArea, change-password.html |
 | **D** | Phân trang + upload ảnh (Cloudinary) | **Chưa bắt đầu** | Chưa có `utils/pagination.js`, `middlewares/upload.js`, `storage.service.js`; ảnh pet vẫn base64 `Pets.Photo` |
 | **E** | Lịch sử chat AI trên server | **Chưa bắt đầu** | Chưa có `chat.model.js`, `chat.service.js`, `ChatSessions/ChatMessages` |
 | **F** | Dashboard Provider/Vet/Admin | **Chưa bắt đầu** | `frontend/pages/` chỉ có `customer-dashboard.html`; vai trò khác thấy "đang xây dựng" |
@@ -104,3 +104,4 @@ Sau **mỗi lần** sửa/cập nhật dự án, trước khi báo cáo:
 - 2026-11-18 · C1 · S3 xong: migration 004, create-admin.js; S4 xong: admin.model, admin.service, admin.controller, 131 test unit pass (DB giả) · Chưa kiểm chứng S4 trên SQL Server thật (chờ S7a).
 - 2026-11-18 · C1 · S5 xong: API provider/vets, /auth/change-password, cổng must_change_password, 143 test pass + 1 todo (DB giả), CSP xanh · Chưa kiểm chứng trên SQL Server thật (chờ S7a).
 - 2026-11-18 · C1 · S5.1 xong: refactor createVet atomic runner, callback transaction DB-only, dao thứ tự middleware change-password, test rollback + isolation limiter pass 145/145 (DB giả), CSP xanh · Chưa kiểm chứng trên SQL Server thật (chờ S7a).
+- 2026-11-18 · C1 · S6 xong: mã lỗi login pending/rejected/disabled sau khi đúng mk, bắt buộc orgArea provider (client + server), UI đăng nhập chuyển hướng mustChangePassword, change-password.html + change-password.js + auth-gate + header cập nhật, 147 test pass (DB giả), CSP xanh · Chưa kiểm chứng trên SQL Server thật (chờ S7a).

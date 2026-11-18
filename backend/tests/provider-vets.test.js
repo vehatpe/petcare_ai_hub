@@ -43,7 +43,8 @@ test('C1: Provider management of Vets and Mandatory Change Password', async (t) 
       phone: '0911111111',
       password: 'Password123!',
       orgName: 'Bệnh Viện Thú Y Alpha',
-      orgType: 'clinic'
+      orgType: 'clinic',
+      orgArea: 'Quận 1, TP.HCM'
     }
   });
   const u1 = await app.models.users.findByEmail('clinic1@petcare.vn');
@@ -67,7 +68,8 @@ test('C1: Provider management of Vets and Mandatory Change Password', async (t) 
       phone: '0922222222',
       password: 'Password123!',
       orgName: 'Bệnh Viện Thú Y Beta',
-      orgType: 'clinic'
+      orgType: 'clinic',
+      orgArea: 'Quận 3, TP.HCM'
     }
   });
   const u2 = await app.models.users.findByEmail('clinic2@petcare.vn');
@@ -106,7 +108,8 @@ test('C1: Provider management of Vets and Mandatory Change Password', async (t) 
         phone: '0944444444',
         password: 'Password123!',
         orgName: 'Bệnh Viện Pending',
-        orgType: 'clinic'
+        orgType: 'clinic',
+        orgArea: 'Quận 10'
       }
     });
     const pendingUser = await app.models.users.findByEmail('clinicpending@petcare.vn');

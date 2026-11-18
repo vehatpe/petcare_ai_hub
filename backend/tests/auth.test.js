@@ -44,14 +44,50 @@ test('auth', async (t) => {
 
   await t.test('provider registers as pending, no token; needs org fields; login -> 403 pending', async () => {
     const bad = await call('POST', '/auth/register', { body: { ...base, role: 'provider', email: 'p@example.com', phone: '0933333333' } });
-    assert.equal(bad.status, 422); assert.ok(bad.body.errors.orgName); assert.ok(bad.body.errors.orgType);
-    const r = await call('POST', '/auth/register', { body: { ...base, role: 'provider', email: 'p@example.com', phone: '0933333333', orgName: 'Phòng khám X', orgType: 'clinic' } });
+    assert.equal(bad.status, 422); assert.ok(bad.body.errors.orgName); assert.ok(bad.body.errors.orgType); assert.ok(bad.body.errors.orgArea);
+
+    const badAreaLong = await call('POST', '/auth/register', {
+      body: { ...base, role: 'provider', email: 'p@example.com', phone: '0933333333', orgName: 'Phòng khám X', orgType: 'clinic', orgArea: 'A'.repeat(101) }
+    });
+    assert.equal(badAreaLong.status, 422); assert.ok(badAreaLong.body.errors.orgArea);
+
+    const r = await call('POST', '/auth/register', {
+      body: { ...base, role: 'provider', email: 'p@example.com', phone: '0933333333', orgName: 'Phòng khám X', orgType: 'clinic', orgArea: 'Quận 1, TP.HCM' }
+    });
     assert.equal(r.status, 201);
     assert.equal(r.data.token, null);
     assert.equal(r.data.user.status, 'pending');
     assert.equal(r.data.user.orgName, 'Phòng khám X');
+    assert.equal(r.data.user.orgArea, 'Quận 1, TP.HCM');
+
+    // Mật khẩu sai đối với tài khoản pending -> generic 401 credentials
+    const wrongPw = await call('POST', '/auth/login', { body: { identifier: 'p@example.com', password: 'sai-mat-khau1' } });
+    assert.equal(wrongPw.status, 401);
+    assert.equal(wrongPw.body.code, 'credentials');
+
+    // Mật khẩu đúng đối với tài khoản pending -> 403 pending
     const l = await call('POST', '/auth/login', { body: { identifier: 'p@example.com', password: 'matkhau123' } });
     assert.equal(l.status, 403); assert.equal(l.body.code, 'pending');
+  });
+
+  await t.test('login with rejected account -> 403 rejected (with rejectReason if available)', async () => {
+    const user = app.testHelpers.state.users.find((u) => u.email === 'p@example.com');
+    user.status = 'rejected';
+    user.rejectReason = 'Hồ sơ chưa đủ điều kiện hành nghề.';
+
+    // Sai mật khẩu -> generic 401
+    const wrong = await call('POST', '/auth/login', { body: { identifier: 'p@example.com', password: 'sai-mat-khau1' } });
+    assert.equal(wrong.status, 401);
+    assert.equal(wrong.body.code, 'credentials');
+
+    // Đúng mật khẩu -> 403 rejected
+    const rej = await call('POST', '/auth/login', { body: { identifier: 'p@example.com', password: 'matkhau123' } });
+    assert.equal(rej.status, 403);
+    assert.equal(rej.body.code, 'rejected');
+    assert.match(rej.body.message, /Hồ sơ chưa đủ điều kiện hành nghề/);
+
+    user.status = 'pending';
+    user.rejectReason = null;
   });
 
   await t.test('vet/admin cannot self-register', async () => {

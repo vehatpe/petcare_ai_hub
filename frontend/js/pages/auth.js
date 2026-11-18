@@ -88,18 +88,31 @@ document.addEventListener('DOMContentLoaded', () => {
       clearErrors(loginForm);
       setBusy(true);
       try {
-        await AuthService.login({
+        const user = await AuthService.login({
           identifier: loginForm.identifier.value,
           password: loginForm.password.value,
           remember: loginForm.remember.checked
         });
+        if (user && user.mustChangePassword) {
+          window.location.href = 'change-password.html';
+          return;
+        }
         window.location.href = afterAuth();
       } catch (err) {
         setBusy(false);
         if (err.code === 'validation') {
           applyErrors(loginForm, err.errors);
+        } else if (err.code === 'pending') {
+          showAlert(err.message || 'Tài khoản đối tác đang chờ quản trị viên phê duyệt.', 'info');
+          alertBox.focus();
+        } else if (err.code === 'rejected') {
+          showAlert(err.message || 'Hồ sơ đối tác đã bị từ chối.', 'error');
+          alertBox.focus();
+        } else if (err.code === 'disabled') {
+          showAlert(err.message || 'Tài khoản đã bị tạm khóa. Vui lòng liên hệ hỗ trợ.', 'error');
+          alertBox.focus();
         } else {
-          showAlert(err.message, err.code === 'pending' ? 'info' : 'error');
+          showAlert(err.message, 'error');
           alertBox.focus();
         }
       }
@@ -147,7 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
           phone: registerForm.phone.value,
           password: registerForm.password.value,
           orgName: registerForm.orgName.value,
-          orgType: registerForm.orgType.value
+          orgType: registerForm.orgType.value,
+          orgArea: registerForm.orgArea ? registerForm.orgArea.value : ''
         });
 
         if (user.status === 'active') {

@@ -75,7 +75,8 @@ test('Admin API: access control, partner approval, rejection, and account disabl
         phone: '0933333331',
         password: 'Password123!',
         orgName: 'Bệnh Viện Thú Y Sài Gòn',
-        orgType: 'clinic'
+        orgType: 'clinic',
+        orgArea: 'Quận 3'
       }
     });
     assert.equal(regRes.status, 201);
@@ -125,12 +126,12 @@ test('Admin API: access control, partner approval, rejection, and account disabl
         phone: '0933333332',
         password: 'Password123!',
         orgName: 'Bệnh Viện Thú Y Sài Gòn',
-        orgType: 'clinic'
+        orgType: 'clinic',
+        orgArea: 'Quận 1'
       }
     });
     const appRes2 = await app.call('POST', `/admin/users/${reg2.data.user.id}/approve`, {
-      token: adminToken,
-      body: { area: 'Quận 1' }
+      token: adminToken
     });
     assert.equal(appRes2.status, 200);
     assert.equal(appRes2.data.providerId, 'benh-vien-thu-y-sai-gon-2');
@@ -145,7 +146,8 @@ test('Admin API: access control, partner approval, rejection, and account disabl
         phone: '0933333333',
         password: 'Password123!',
         orgName: longOrgName,
-        orgType: 'clinic'
+        orgType: 'clinic',
+        orgArea: 'Quận 7'
       }
     });
     const appRes3 = await app.call('POST', `/admin/users/${reg3.data.user.id}/approve`, {
@@ -165,7 +167,8 @@ test('Admin API: access control, partner approval, rejection, and account disabl
         phone: '0933333334',
         password: 'Password123!',
         orgName: nonLatinOrgName,
-        orgType: 'clinic'
+        orgType: 'clinic',
+        orgArea: 'Quận 2'
       }
     });
     const appRes4 = await app.call('POST', `/admin/users/${reg4.data.user.id}/approve`, {
@@ -177,7 +180,8 @@ test('Admin API: access control, partner approval, rejection, and account disabl
   });
 
   await t.test('approve provider: missing area returns 422, area > 100 returns 422', async () => {
-    const reg = await app.call('POST', '/auth/register', {
+    // 1. Khi đăng ký provider mà thiếu orgArea ở auth/register -> 422 validation
+    const regMissingArea = await app.call('POST', '/auth/register', {
       body: {
         role: 'provider',
         fullName: 'Bác Sĩ E',
@@ -188,7 +192,29 @@ test('Admin API: access control, partner approval, rejection, and account disabl
         orgType: 'clinic'
       }
     });
-    // Thiếu area -> 422
+    assert.equal(regMissingArea.status, 422);
+    assert.ok(regMissingArea.body.errors?.orgArea);
+
+    // 2. Khi đăng ký với orgArea hợp lệ
+    const reg = await app.call('POST', '/auth/register', {
+      body: {
+        role: 'provider',
+        fullName: 'Bác Sĩ E',
+        email: 'provider5@clinic.vn',
+        phone: '0933333335',
+        password: 'Password123!',
+        orgName: 'Phòng Khám E',
+        orgType: 'clinic',
+        orgArea: 'Quận 5'
+      }
+    });
+    assert.equal(reg.status, 201);
+
+    // Xóa orgArea của user trong state để test fallback approve endpoint
+    const userInDb = app.testHelpers.state.users.find((u) => u.id === reg.data.user.id);
+    userInDb.orgArea = null;
+
+    // Thiếu area khi user không có orgArea -> 422
     const resMissing = await app.call('POST', `/admin/users/${reg.data.user.id}/approve`, {
       token: adminToken,
       body: {}
@@ -213,7 +239,8 @@ test('Admin API: access control, partner approval, rejection, and account disabl
         phone: '0933333336',
         password: 'Password123!',
         orgName: 'Phòng Khám F',
-        orgType: 'clinic'
+        orgType: 'clinic',
+        orgArea: 'Quận 6'
       }
     });
     const userId = reg.data.user.id;
@@ -258,7 +285,8 @@ test('Admin API: access control, partner approval, rejection, and account disabl
         phone: '0944444441',
         password: 'Password123!',
         orgName: 'Pet Spa Hoàng Gia',
-        orgType: 'spa'
+        orgType: 'spa',
+        orgArea: 'Bình Thạnh'
       }
     });
     const providerUserId = regP.data.user.id;
@@ -367,7 +395,8 @@ test('Admin API: access control, partner approval, rejection, and account disabl
         phone: '0955555555',
         password: 'Password123!',
         orgName: 'Cơ Sở Lỗi',
-        orgType: 'clinic'
+        orgType: 'clinic',
+        orgArea: 'Quận 1'
       }
     });
     const targetUserId = reg.data.user.id;
