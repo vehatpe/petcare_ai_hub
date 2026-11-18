@@ -92,6 +92,14 @@ module.exports = (db) => ({
     return rows.length > 0;
   },
 
+  async isProviderActive(tx, providerId) {
+    const rows = await tx.query(
+      `SELECT IsActive FROM dbo.Providers WITH (UPDLOCK, HOLDLOCK) WHERE ProviderId = @id`,
+      { id: [T.vstr(50), providerId] }
+    );
+    return rows.length > 0 && Boolean(rows[0].IsActive);
+  },
+
   async countActiveAdmins(tx) {
     const [r] = await tx.query(
       `SELECT COUNT(*) AS total FROM dbo.Users WITH (UPDLOCK, HOLDLOCK) WHERE Role = 'admin' AND Status = 'active'`

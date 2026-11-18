@@ -133,16 +133,16 @@ function createFakeModels() {
           return result;
         } catch (err) {
           // Khôi phục trạng thái khi callback ném lỗi
-          s.users = snapshot.users;
-          s.providers = snapshot.providers;
-          s.services = snapshot.services;
-          s.pets = snapshot.pets;
-          s.metrics = snapshot.metrics;
-          s.vaccs = snapshot.vaccs;
-          s.records = snapshot.records;
-          s.bookings = snapshot.bookings;
-          s.chunks = snapshot.chunks;
-          s.auditLogs = snapshot.auditLogs;
+          s.users.length = 0; s.users.push(...snapshot.users);
+          s.providers.length = 0; s.providers.push(...snapshot.providers);
+          s.services.length = 0; s.services.push(...snapshot.services);
+          s.pets.length = 0; s.pets.push(...snapshot.pets);
+          s.metrics.length = 0; s.metrics.push(...snapshot.metrics);
+          s.vaccs.length = 0; s.vaccs.push(...snapshot.vaccs);
+          s.records.length = 0; s.records.push(...snapshot.records);
+          s.bookings.length = 0; s.bookings.push(...snapshot.bookings);
+          s.chunks.length = 0; s.chunks.push(...snapshot.chunks);
+          s.auditLogs.length = 0; s.auditLogs.push(...snapshot.auditLogs);
           seq = snapshot.seq;
           throw err;
         }
@@ -155,6 +155,11 @@ function createFakeModels() {
 
       async providerExists(tx, providerId) {
         return s.providers.some((p) => p.id === providerId);
+      },
+
+      async isProviderActive(tx, providerId) {
+        const p = s.providers.find((x) => x.id === providerId);
+        return Boolean(p && p.active !== false);
       },
 
       async countActiveAdmins(tx) {

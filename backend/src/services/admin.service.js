@@ -74,6 +74,10 @@ function createAdminService({ models, config, clock = () => new Date() }) {
           throw validation('Khu vực hoạt động (area) là bắt buộc khi phê duyệt đối tác.', { area: 'Khu vực hoạt động là bắt buộc.' });
         }
 
+        if (orgArea.length > 100) {
+          throw validation('Khu vực hoạt động (area) tối đa 100 ký tự.', { area: 'Khu vực hoạt động tối đa 100 ký tự.' });
+        }
+
         // Tạo ProviderId không trùng lặp và <= 50 ký tự
         const baseSlug = slugifyOrgName(user.orgName);
         let chosenProviderId = null;
@@ -222,6 +226,16 @@ function createAdminService({ models, config, clock = () => new Date() }) {
 
         if (user.status !== 'disabled') {
           throw conflict('Chỉ có thể mở khóa tài khoản đang bị khóa (disabled).');
+        }
+
+        if (user.role === 'vet') {
+          if (!user.providerId) {
+            throw conflict('Bác sĩ chưa được gán vào cơ sở đối tác nào.');
+          }
+          const providerActive = await adminModel.isProviderActive(tx, user.providerId);
+          if (!providerActive) {
+            throw conflict('Cơ sở của bác sĩ này đang bị khóa; hãy mở khóa cơ sở trước.');
+          }
         }
 
         await adminModel.updateUserStatus(tx, userId, 'active');

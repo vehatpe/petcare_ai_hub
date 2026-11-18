@@ -176,7 +176,7 @@ test('Admin API: access control, partner approval, rejection, and account disabl
     assert.equal(appRes4.data.providerId, 'co-so');
   });
 
-  await t.test('approve provider: missing area returns 422', async () => {
+  await t.test('approve provider: missing area returns 422, area > 100 returns 422', async () => {
     const reg = await app.call('POST', '/auth/register', {
       body: {
         role: 'provider',
@@ -188,11 +188,20 @@ test('Admin API: access control, partner approval, rejection, and account disabl
         orgType: 'clinic'
       }
     });
-    const res = await app.call('POST', `/admin/users/${reg.data.user.id}/approve`, {
+    // Thiếu area -> 422
+    const resMissing = await app.call('POST', `/admin/users/${reg.data.user.id}/approve`, {
       token: adminToken,
       body: {}
     });
-    assert.equal(res.status, 422);
+    assert.equal(resMissing.status, 422);
+
+    // Area dài 101 ký tự -> 422
+    const resTooLong = await app.call('POST', `/admin/users/${reg.data.user.id}/approve`, {
+      token: adminToken,
+      body: { area: 'A'.repeat(101) }
+    });
+    assert.equal(resTooLong.status, 422);
+    assert.ok(resTooLong.body.errors?.area);
   });
 
   await t.test('reject provider: requires reason <= 200, updates status to rejected and logs audit', async () => {
@@ -285,10 +294,11 @@ test('Admin API: access control, partner approval, rejection, and account disabl
     assert.equal(disRes.data.status, 'disabled');
 
     // Kiểm tra Providers.active == false và Vet status == 'disabled'
-    const provRow = app.testHelpers.state.providers.find((p) => p.id === providerId);
-    assert.equal(provRow.active, false);
-    const vetRow = app.testHelpers.state.users.find((u) => u.id === vetId);
-    assert.equal(vetRow.status, 'disabled');
+    const getProvRow = () => app.testHelpers.state.providers.find((p) => p.id === providerId);
+    const getVetRow = () => app.testHelpers.state.users.find((u) => u.id === vetId);
+
+    assert.equal(getProvRow().active, false);
+    assert.equal(getVetRow().status, 'disabled');
 
     // 3. Khóa có hiệu lực ngay ở request kế tiếp với token cũ
     const meWithOldToken = await app.call('GET', '/auth/me', { token: providerToken });
@@ -300,8 +310,26 @@ test('Admin API: access control, partner approval, rejection, and account disabl
     assert.equal(enRes.status, 200);
     assert.equal(enRes.data.status, 'active');
 
-    assert.equal(provRow.active, true);
-    assert.equal(vetRow.status, 'disabled', 'Vet remains disabled on provider enable');
+    assert.equal(getProvRow().active, true);
+    assert.equal(getVetRow().status, 'disabled', 'Vet remains disabled on provider enable');
+
+    // 5. Thử mở khóa vet khi cơ sở bị khóa -> 409
+    // Khóa lại provider
+    await app.call('POST', `/admin/users/${providerUserId}/disable`, { token: adminToken });
+    assert.equal(getProvRow().active, false);
+
+    const disVetRes = await app.call('POST', `/admin/users/${vetId}/enable`, { token: adminToken });
+    assert.equal(disVetRes.status, 409);
+    assert.match(disVetRes.body.message, /Cơ sở của bác sĩ này đang bị khóa/);
+
+    // Mở khóa cơ sở trước rồi mở khóa vet -> 200
+    await app.call('POST', `/admin/users/${providerUserId}/enable`, { token: adminToken });
+    assert.equal(getProvRow().active, true);
+
+    const enVetRes = await app.call('POST', `/admin/users/${vetId}/enable`, { token: adminToken });
+    assert.equal(enVetRes.status, 200);
+    assert.equal(enVetRes.data.status, 'active');
+    assert.equal(getVetRow().status, 'active');
   });
 
   await t.test('admin constraints: admin cannot disable self, cannot disable last active admin', async () => {
