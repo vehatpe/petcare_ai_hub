@@ -3,9 +3,9 @@
 > **Tệp này là bộ nhớ làm việc của dự án.** Mọi AI làm việc trên repo này phải đọc nó **trước khi sửa bất cứ thứ gì**, và phải cập nhật nó **sau mỗi lần sửa/đổi dự án** (xem mục 9).
 > Nguồn chuẩn về quy trình và nguyên tắc: *Master Prompt Phát triển PetCare AI Hub (v2)*. Khi tệp này mâu thuẫn với mã nguồn, **mã nguồn là sự thật**; sửa tệp này cho đúng.
 
-- **Cập nhật lần cuối:** 2026-11-18
+- **Cập nhật lần cuối:** 2026-11-19
 - **Nhánh làm việc:** `giai-doan-c1`
-- **Giai đoạn hiện tại:** **C1 — Session S6 hoàn thành (4/7 session C1 xong: S3, S4, S5/S5.1, S6; còn S6b/S7 quản lý Vet phía Provider và smoke test)**.
+- **Giai đoạn hiện tại:** **C1 — S6 & Việc 0 hoàn thành (chuẩn bị Session S6b)**.
 - **Việc kế tiếp (một đề xuất duy nhất):** S6b: Giao diện quản lý Vet phía Provider (`provider-vets.html`), hiển thị mật khẩu tạm một lần và danh sách bác sĩ thuộc cơ sở.
 
 ## Đang làm
@@ -105,3 +105,4 @@ Sau **mỗi lần** sửa/cập nhật dự án, trước khi báo cáo:
 - 2026-11-18 · C1 · S5 xong: API provider/vets, /auth/change-password, cổng must_change_password, 143 test pass + 1 todo (DB giả), CSP xanh · Chưa kiểm chứng trên SQL Server thật (chờ S7a).
 - 2026-11-18 · C1 · S5.1 xong: refactor createVet atomic runner, callback transaction DB-only, dao thứ tự middleware change-password, test rollback + isolation limiter pass 145/145 (DB giả), CSP xanh · Chưa kiểm chứng trên SQL Server thật (chờ S7a).
 - 2026-11-18 · C1 · S6 xong: mã lỗi login pending/rejected/disabled sau khi đúng mk, bắt buộc orgArea provider (client + server), UI đăng nhập chuyển hướng mustChangePassword, change-password.html + change-password.js + auth-gate + header cập nhật, 147 test pass (DB giả), CSP xanh · Chưa kiểm chứng trên SQL Server thật (chờ S7a).
+- 2026-11-19 · C1 · Việc 0 xong: redirect tự động sang change-password.html khi Api nhận 403 must_change_password (ở ngoài change-password.html) + set user.mustChangePassword=true trong phiên + không hiện toast chung, 148 test pass (DB giả), CSP xanh · Chưa kiểm chứng trên SQL Server thật (chờ S7a).

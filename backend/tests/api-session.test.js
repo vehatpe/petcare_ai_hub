@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const apiConfigPath = path.resolve(__dirname, '../../frontend/js/config/api.config.js');
 const apiConfigCode = fs.readFileSync(apiConfigPath, 'utf8');
 
-function createMockEnvironment() {
+function createMockEnvironment(options = {}) {
   const store = {
     session: new Map(),
     local: new Map()
@@ -27,7 +27,14 @@ function createMockEnvironment() {
   let authChangedEventCount = 0;
 
   const windowObj = {
-    location: { protocol: 'http:' },
+    location: {
+      protocol: 'http:',
+      pathname: options.pathname || '/index.html',
+      href: options.href || 'http://localhost:3000/index.html',
+      replace(url) {
+        this.replacedTo = url;
+      }
+    },
     addEventListener(type, cb) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(cb);
@@ -59,7 +66,7 @@ function createMockEnvironment() {
     localStorage: createStorage(store.local),
     CustomEvent: MockCustomEvent,
     URLSearchParams,
-    fetch: () => {},
+    fetch: options.fetch || (() => {}),
     console
   };
 
@@ -68,6 +75,7 @@ function createMockEnvironment() {
 
   return {
     Api: context.window.Api,
+    window: context.window,
     getEventCount: () => authChangedEventCount,
     resetCount: () => { authChangedEventCount = 0; }
   };
@@ -116,5 +124,58 @@ test('Api.session event notifications on set, clear, and updateUser', async (t) 
 
     env.Api.session.clear();
     assert.equal(env.getEventCount(), 1, 'Normal clear should fire exactly 1 event');
+  });
+
+  await t.test('403 must_change_password redirects to change-password.html and sets user.mustChangePassword=true', async () => {
+    let mockFetch = async () => ({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        success: false,
+        code: 'must_change_password',
+        message: 'Bạn phải đổi mật khẩu lần đầu trước khi tiếp tục sử dụng hệ thống.'
+      })
+    });
+
+    // 1. Từ trang trong /pages/ (ví dụ customer-dashboard.html)
+    const envInPages = createMockEnvironment({
+      pathname: '/pages/customer-dashboard.html',
+      fetch: mockFetch
+    });
+    envInPages.Api.session.set({ token: 'tok_vet', user: { id: 'u_vet', role: 'vet', mustChangePassword: false } });
+
+    await assert.rejects(
+      async () => envInPages.Api.get('/provider/vets'),
+      (err) => err.status === 403 && err.code === 'must_change_password'
+    );
+    assert.equal(envInPages.Api.session.get().user.mustChangePassword, true);
+    assert.equal(envInPages.window.location.replacedTo, 'change-password.html');
+
+    // 2. Từ trang ngoài / (ví dụ /index.html)
+    const envAtRoot = createMockEnvironment({
+      pathname: '/index.html',
+      fetch: mockFetch
+    });
+    envAtRoot.Api.session.set({ token: 'tok_vet', user: { id: 'u_vet', role: 'vet', mustChangePassword: false } });
+
+    await assert.rejects(
+      async () => envAtRoot.Api.get('/pets'),
+      (err) => err.status === 403 && err.code === 'must_change_password'
+    );
+    assert.equal(envAtRoot.Api.session.get().user.mustChangePassword, true);
+    assert.equal(envAtRoot.window.location.replacedTo, 'pages/change-password.html');
+
+    // 3. Đang ở chính trang change-password.html thì KHÔNG gọi redirect
+    const envOnSamePage = createMockEnvironment({
+      pathname: '/pages/change-password.html',
+      fetch: mockFetch
+    });
+    envOnSamePage.Api.session.set({ token: 'tok_vet', user: { id: 'u_vet', role: 'vet', mustChangePassword: false } });
+
+    await assert.rejects(
+      async () => envOnSamePage.Api.post('/auth/change-password', {}),
+      (err) => err.status === 403 && err.code === 'must_change_password'
+    );
+    assert.equal(envOnSamePage.window.location.replacedTo, undefined);
   });
 });

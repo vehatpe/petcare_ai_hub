@@ -110,6 +110,25 @@
       );
       // An expired or revoked token: drop the session so every page falls back to the signed-out state.
       if (res.status === 401 && err.code === 'unauthenticated' && current) session.clear();
+
+      // Mandatory change password gate: redirect to change-password.html when not already on that page.
+      if (res.status === 403 && err.code === 'must_change_password') {
+        if (current && current.user && !current.user.mustChangePassword) {
+          session.updateUser({ ...current.user, mustChangePassword: true });
+        }
+        const pathname = (window.location && window.location.pathname) || '';
+        const isChangePasswordPage = /(?:^|\/)change-password\.html(?:$|\?)/.test(pathname);
+        if (!isChangePasswordPage) {
+          const inPagesDir = /\/pages\/[^/]*$/.test(pathname);
+          const target = inPagesDir ? 'change-password.html' : 'pages/change-password.html';
+          if (window.location && typeof window.location.replace === 'function') {
+            window.location.replace(target);
+          } else if (window.location) {
+            window.location.href = target;
+          }
+        }
+      }
+
       throw err;
     }
     return payload.data;
