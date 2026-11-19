@@ -66,8 +66,60 @@
       </div>`;
   }
 
+  /* ---------- Role-aware main nav ---------- */
+  function renderMainNav(user) {
+    const nav = document.querySelector('.main-nav');
+    if (!nav) return;
+
+    // Cache initial markup for guest / customer so we can restore on logout/role change
+    if (!nav._defaultNavHtml) {
+      nav._defaultNavHtml = nav.innerHTML;
+    }
+
+    if (!user || user.role === 'customer') {
+      nav.innerHTML = nav._defaultNavHtml;
+      return;
+    }
+
+    if (user.mustChangePassword) {
+      return;
+    }
+
+    const currentFile = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    const isHome = currentFile === '' || currentFile === 'index.html';
+
+    const items = [];
+    items.push({
+      href: AuthService.homeUrl(),
+      text: 'Trang chủ',
+      isActive: isHome
+    });
+
+    if (user.role === 'admin') {
+      items.push({
+        href: url('admin-partners.html'),
+        text: 'Duyệt đối tác',
+        isActive: currentFile === 'admin-partners.html'
+      });
+    } else if (user.role === 'provider') {
+      items.push({
+        href: url('provider-vets.html'),
+        text: 'Quản lý bác sĩ',
+        isActive: currentFile === 'provider-vets.html'
+      });
+    }
+
+    nav.innerHTML = items.map((item) => {
+      const cls = item.isActive ? 'nav-link active' : 'nav-link';
+      const current = item.isActive ? ' aria-current="page"' : '';
+      return `<a href="${esc(item.href)}" class="${cls}"${current}>${esc(item.text)}</a>`;
+    }).join('\n        ');
+  }
+
   function renderHeader() {
     const user = AuthService.currentUser();
+    renderMainNav(user);
+    buildDrawer();
     document.querySelectorAll('[data-auth-slot="header"]').forEach((slot) => {
       slot.innerHTML = user ? userMarkup(user) : guestMarkup();
     });
@@ -256,7 +308,6 @@
 
   window.addEventListener('petcare:auth-changed', renderHeader);
 
-  buildDrawer();
   renderHeader();
   // Re-validate the stored token once per page load; a revoked/expired one signs out (-> auth-changed).
   AuthService.refresh();
