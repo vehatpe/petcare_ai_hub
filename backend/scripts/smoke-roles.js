@@ -90,12 +90,46 @@ async function main() {
   let baselineUsersCount = 0;
   let baselineProvidersCount = 0;
 
+  let server2 = null;
+  let baseUrl2 = '';
+
   try {
     // 0. Capture baselines
     const baseU = await pool.request().query('SELECT COUNT(*) AS cnt FROM dbo.Users');
     baselineUsersCount = baseU.recordset[0].cnt;
     const baseP = await pool.request().query('SELECT COUNT(*) AS cnt FROM dbo.Providers');
     baselineProvidersCount = baseP.recordset[0].cnt;
+
+    // Setup second app with failing logAudit on action === 'vet_created' for atomic rollback test
+    const faultyAdminModel = Object.create(models.admin);
+    faultyAdminModel.logAudit = async (tx, params) => {
+      if (params && params.action === 'vet_created') {
+        throw new Error('Simulated audit logging failure during vet creation');
+      }
+      return models.admin.logAudit(tx, params);
+    };
+    const faultyModels = {
+      ...models,
+      admin: faultyAdminModel
+    };
+    const app2 = createApp({ models: faultyModels, config, ai: dummyAi });
+    server2 = await new Promise((resolve) => {
+      const s = app2.listen(0, () => resolve(s));
+    });
+    baseUrl2 = `http://127.0.0.1:${server2.address().port}/api/v1`;
+
+    async function api2(method, path, { token, body } = {}) {
+      const res = await fetch(`${baseUrl2}${path}`, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined
+      });
+      const json = await res.json().catch(() => ({}));
+      return { status: res.status, ok: res.ok, body: json, headers: res.headers };
+    }
 
     // 1. Seed direct Admin user with random password
     const adminHash = await bcrypt.hash(testAdminPass, 10);
@@ -319,7 +353,46 @@ async function main() {
       `MustChangePassword: ${vetMeAfter.body.data?.user?.mustChangePassword}`
     );
 
-    // 13. Admin disables Provider -> cascade disables Vets and Providers.IsActive=0
+    // 13. Atomic rollback: createVet on server2 fails at logAudit -> 500, no row in Users, no tempPassword, retry on app1 succeeds 201
+    const rollbackVetEmail = `vet_rollback_${runId}@clinic.vn`;
+    const rollbackVetPhone = `096${String(runId).slice(-7)}`;
+    const rollbackRes = await api2('POST', '/provider/vets', {
+      token: prov1Token,
+      body: {
+        fullName: 'Bác Sĩ Rollback Test',
+        email: rollbackVetEmail,
+        phone: rollbackVetPhone
+      }
+    });
+
+    const userCountCheck = await pool.request()
+      .input('email', sql.NVarChar(254), rollbackVetEmail)
+      .query('SELECT COUNT(*) AS cnt FROM dbo.Users WHERE Email = @email');
+    const rowRolledBack = userCountCheck.recordset[0].cnt === 0;
+
+    const noLeakedPassword = !rollbackRes.body?.data?.tempPassword;
+
+    // Retry with identical email on real app1 -> Must succeed (not 409 conflict)
+    const retryRes = await api('POST', '/provider/vets', {
+      token: prov1Token,
+      body: {
+        fullName: 'Bác Sĩ Rollback Retry',
+        email: rollbackVetEmail,
+        phone: rollbackVetPhone
+      }
+    });
+    const retryOk = retryRes.status === 201 && Boolean(retryRes.body.data?.vet?.id);
+    if (retryOk && retryRes.body.data?.vet?.id) {
+      createdUserIds.push(retryRes.body.data.vet.id);
+    }
+
+    record(
+      '13. Atomic rollback: createVet mid-transaction failure rolls back user row, does not leak password, retry succeeds 201',
+      (rollbackRes.status >= 500) && rowRolledBack && noLeakedPassword && retryOk,
+      `Failure status: ${rollbackRes.status}, Rows in DB: ${userCountCheck.recordset[0].cnt}, Leaked tempPassword: ${!noLeakedPassword}, Retry status: ${retryRes.status}`
+    );
+
+    // 14. Admin disables Provider -> cascade disables Vets and Providers.IsActive=0
     const disProvRes = await api('POST', `/admin/users/${prov1UserId}/disable`, {
       token: adminToken,
       body: { reason: 'Kiểm tra đình chỉ hoạt động' }
@@ -332,13 +405,13 @@ async function main() {
       .query('SELECT Status FROM dbo.Users WHERE UserId = @vid');
     const vetTokenAfterDis = await api('GET', '/auth/me', { token: vetNewToken });
     record(
-      '13. Admin disables Provider -> cascades to Vets and Providers.IsActive=0; old tokens blocked 403',
+      '14. Admin disables Provider -> cascades to Vets and Providers.IsActive=0; old tokens blocked 403',
       disProvRes.status === 200 && pCheckAfterDis.recordset[0].IsActive === false &&
       vetCheckAfterDis.recordset[0].Status === 'disabled' && vetTokenAfterDis.status === 403,
       `Provider IsActive: ${pCheckAfterDis.recordset[0].IsActive}, Vet status: ${vetCheckAfterDis.recordset[0].Status}`
     );
 
-    // 14. Admin enables Provider -> Provider active (IsActive=1), Vet remains disabled
+    // 15. Admin enables Provider -> Provider active (IsActive=1), Vet remains disabled
     const enProvRes = await api('POST', `/admin/users/${prov1UserId}/enable`, { token: adminToken });
     const pCheckAfterEn = await pool.request()
       .input('pid', sql.VarChar(50), approvedProviderId)
@@ -347,12 +420,12 @@ async function main() {
       body: { identifier: vetEmail, password: newVetPass }
     });
     record(
-      '14. Admin enables Provider -> Provider active (IsActive=1), Vet remains disabled (individual restore)',
+      '15. Admin enables Provider -> Provider active (IsActive=1), Vet remains disabled (individual restore)',
       enProvRes.status === 200 && pCheckAfterEn.recordset[0].IsActive === true && vetLoginStillDis.status === 403,
       `Provider IsActive: ${pCheckAfterEn.recordset[0].IsActive}, Vet login: ${vetLoginStillDis.status} ${vetLoginStillDis.body.code}`
     );
 
-    // 15. Provider individually enables Vet -> Vet restored to active
+    // 16. Provider individually enables Vet -> Vet restored to active
     const prov1LoginAgain = await api('POST', '/auth/login', {
       body: { identifier: prov1Email, password: prov1Pass }
     });
@@ -363,12 +436,12 @@ async function main() {
       body: { identifier: vetEmail, password: newVetPass }
     });
     record(
-      '15. Provider enables Vet individually -> Vet active again',
+      '16. Provider enables Vet individually -> Vet active again',
       enVetRes.status === 200 && vetLoginRestored.status === 200 && vetLoginRestored.body.data?.user?.status === 'active',
       `Vet status: ${vetLoginRestored.body.data?.user?.status}`
     );
 
-    // 16. Cross-role authorization: Customer cannot access Admin or Provider routes (401 / 403)
+    // 17. Cross-role authorization: Customer cannot access Admin or Provider routes (401 / 403)
     const custEmail = `cust_${runId}@example.com`;
     const custPhone = `095${String(runId).slice(-7)}`;
     const custPass = 'CustPass123!';
@@ -382,18 +455,18 @@ async function main() {
     const custOnProv = await api('GET', '/provider/vets', { token: custToken });
     const noTokenOnAdmin = await api('GET', '/admin/users');
     record(
-      '16. Cross-role access control -> 401 unauth, 403 forbidden for wrong roles',
+      '17. Cross-role access control -> 401 unauth, 403 forbidden for wrong roles',
       noTokenOnAdmin.status === 401 && custOnAdmin.status === 403 && custOnProv.status === 403,
       `NoToken: ${noTokenOnAdmin.status}, CustAdmin: ${custOnAdmin.status}, CustProv: ${custOnProv.status}`
     );
 
-    // 17. AuditLog verification: ensure NO PASSWORDS were ever logged in dbo.AuditLog
+    // 18. AuditLog security check -> ensure NO PASSWORDS were ever logged in dbo.AuditLog
     const auditLogs = await pool.request().query('SELECT Detail FROM dbo.AuditLog');
     const allAuditText = JSON.stringify(auditLogs.recordset.map((r) => r.Detail));
     const leaked = [testAdminPass, prov1Pass, prov2Pass, prov3Pass, vetTempPassword, newVetPass, custPass]
       .some((p) => p && allAuditText.includes(p));
     record(
-      '17. AuditLog security check -> Zero passwords or secrets leaked in Detail column',
+      '18. AuditLog security check -> Zero passwords or secrets leaked in Detail column',
       !leaked,
       `Scanned ${auditLogs.recordset.length} audit log entries`
     );
@@ -429,11 +502,16 @@ async function main() {
       console.log(`[CLEANUP] Users count: ${finalUsersCount} (baseline: ${baselineUsersCount}), Providers count: ${finalProvidersCount} (baseline: ${baselineProvidersCount})`);
       if (!cleanedCleanly) {
         console.error('[CLEANUP WARNING] Database row counts did not return to baseline!');
+        process.exitCode = 1;
       }
     } catch (cleanupErr) {
       console.error('[CLEANUP ERROR]', cleanupErr);
+      process.exitCode = 1;
     }
 
+    if (server2) {
+      await new Promise((r) => server2.close(r));
+    }
     await new Promise((r) => server.close(r));
     await pool.close();
   }
