@@ -370,6 +370,33 @@ test('Landing page states: loading, error, empty, with pets', async (t) => {
     assert.match(pcardHtml, /Cấu trúc hồ sơ, chưa có dữ liệu/);
   });
 
+  await t.test('Role links: admin and provider see actionable links on landing page', () => {
+    // Admin
+    const envAdmin = setupTestEnvironment({ currentUser: { fullName: 'Admin User', role: 'admin' } });
+    envAdmin.triggerDomContentLoaded();
+    const adminHero = envAdmin.dom.getElementById('heroActions').innerHTML;
+    assert.match(adminHero, /pages\/admin-partners\.html/);
+    assert.match(adminHero, /Duyệt đối tác/);
+    const adminPcard = envAdmin.dom.getElementById('pcardContent').innerHTML;
+    assert.match(adminPcard, /pages\/admin-partners\.html/);
+
+    // Provider
+    const envProvider = setupTestEnvironment({ currentUser: { fullName: 'Phòng khám PetCare', role: 'provider' } });
+    envProvider.triggerDomContentLoaded();
+    const providerHero = envProvider.dom.getElementById('heroActions').innerHTML;
+    assert.match(providerHero, /pages\/provider-vets\.html/);
+    assert.match(providerHero, /Quản lý bác sĩ/);
+    const providerPcard = envProvider.dom.getElementById('pcardContent').innerHTML;
+    assert.match(providerPcard, /pages\/provider-vets\.html/);
+
+    // Vet: does not have extra link
+    const envVet = setupTestEnvironment({ currentUser: { fullName: 'BS. Tiến', role: 'vet' } });
+    envVet.triggerDomContentLoaded();
+    const vetHero = envVet.dom.getElementById('heroActions').innerHTML;
+    assert.doesNotMatch(vetHero, /admin-partners\.html/);
+    assert.doesNotMatch(vetHero, /provider-vets\.html/);
+  });
+
   await t.test('landing.js sets authReady in all branches', async (subTest) => {
     await subTest.test('nhánh khách -> authReady được đặt', () => {
       const env = setupTestEnvironment({ currentUser: null });

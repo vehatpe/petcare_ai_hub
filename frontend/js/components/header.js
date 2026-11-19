@@ -56,6 +56,8 @@
             <span class="account-role">${esc(ROLE_LABEL[user.role] || '')}</span>
           </div>
           ${dash ? `<a role="menuitem" href="${url(dash)}">Bảng điều khiển</a>` : ''}
+          ${user.role === 'admin' ? `<a role="menuitem" href="${url('admin-partners.html')}">Duyệt đối tác</a>` : ''}
+          ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-vets.html')}">Quản lý bác sĩ</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('health-records.html')}">Sổ sức khỏe</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('pet-profile.html')}">Thêm thú cưng</a>` : ''}
           <a role="menuitem" href="${url('change-password.html')}">Đổi mật khẩu</a>
@@ -102,6 +104,8 @@
         const dash = DASHBOARD_BY_ROLE[user.role] || (user.role === 'customer' ? 'customer-dashboard.html' : '');
         slot.innerHTML = `
           ${dash ? `<li><a href="${url(dash)}">Bảng điều khiển</a></li>` : ''}
+          ${user.role === 'admin' ? `<li><a href="${url('admin-partners.html')}">Duyệt đối tác</a></li>` : ''}
+          ${user.role === 'provider' ? `<li><a href="${url('provider-vets.html')}">Quản lý bác sĩ</a></li>` : ''}
           ${user.role === 'customer' ? `<li><a href="${url('health-records.html')}">Sổ sức khỏe</a></li>` : ''}
           <li><a href="${url('change-password.html')}">Đổi mật khẩu</a></li>
           <li><button type="button" class="btn-link" data-action="logout">Đăng xuất</button></li>`;
@@ -237,6 +241,8 @@
     slot.innerHTML = `
       <div class="drawer-who"><strong>${esc(user.fullName)}</strong><span>${esc(user.email)}</span></div>
       ${dash ? `<a href="${url(dash)}" class="btn btn-secondary">Bảng điều khiển</a>` : ''}
+      ${user.role === 'admin' ? `<a href="${url('admin-partners.html')}" class="btn btn-secondary">Duyệt đối tác</a>` : ''}
+      ${user.role === 'provider' ? `<a href="${url('provider-vets.html')}" class="btn btn-secondary">Quản lý bác sĩ</a>` : ''}
       <a href="${url('change-password.html')}" class="btn btn-outline">Đổi mật khẩu</a>
       <button type="button" class="btn btn-outline" data-action="logout">Đăng xuất</button>`;
   }
