@@ -13,7 +13,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const AUTH_REASON = 'Đặt lịch gắn với hồ sơ thú cưng của bạn nên cần có tài khoản. Đăng ký miễn phí chỉ mất một phút.';
 
   function card(p, services) {
+    const user = AuthService.currentUser();
+    const isStaff = user && user.role !== 'customer';
     const mine = services.filter((s) => s.providerId === p.id);
+    const actionHtml = (!isStaff && mine.length)
+      ? `<a class="btn btn-primary btn-sm" data-auth-required="${esc(AUTH_REASON)}" href="booking.html?provider=${encodeURIComponent(p.id)}">Đặt lịch tại đây</a>`
+      : '';
+
     return `
       <article class="provider-row">
         <div class="provider-row-head">
@@ -23,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${mine.length
           ? `<ul class="provider-services">${mine.map((s) => `<li><span>${esc(s.name)}</span><span class="provider-services-price">${esc(Fmt.vnd(s.priceVnd))} / ${esc(s.unit)}</span></li>`).join('')}</ul>`
           : '<p class="provider-row-empty">Chưa đăng dịch vụ nào.</p>'}
-        ${mine.length ? `<a class="btn btn-primary btn-sm" data-auth-required="${esc(AUTH_REASON)}" href="booking.html?provider=${encodeURIComponent(p.id)}">Đặt lịch tại đây</a>` : ''}
+        ${actionHtml}
       </article>`;
   }
 

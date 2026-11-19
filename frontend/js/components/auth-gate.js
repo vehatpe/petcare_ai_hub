@@ -56,14 +56,19 @@
     },
 
     /** Static HTML for an inline gate panel (all inputs are developer-supplied strings). */
-    panelHtml({ title, text, next }) {
+    panelHtml({ title, text, next, forStaff = false }) {
+      const actionsHtml = forStaff
+        ? `<a class="btn btn-primary" href="${AuthService.homeUrl()}">Về trang chủ</a>
+           <button type="button" class="btn btn-outline" data-action="logout-to-customer">Đăng xuất để dùng tài khoản chủ nuôi</button>`
+        : `<a class="btn btn-primary" href="${this.loginUrl(next)}">Đăng nhập</a>
+           <a class="btn btn-outline" href="${this.registerUrl(next)}">Tạo tài khoản miễn phí</a>`;
+
       return `
         <div class="gate-panel" role="region" aria-label="${Fmt.esc(title)}">
           <h2 class="gate-panel-title">${Fmt.esc(title)}</h2>
           <p class="gate-panel-text">${Fmt.esc(text)}</p>
           <div class="gate-panel-actions">
-            <a class="btn btn-primary" href="${this.loginUrl(next)}">Đăng nhập</a>
-            <a class="btn btn-outline" href="${this.registerUrl(next)}">Tạo tài khoản miễn phí</a>
+            ${actionsHtml}
           </div>
         </div>`;
     }
@@ -71,6 +76,13 @@
 
   /* 1. Intercept guarded links for guests */
   document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('[data-action="logout-to-customer"]')) {
+      e.preventDefault();
+      AuthService.logout();
+      window.location.href = AuthGate.loginUrl('booking.html');
+      return;
+    }
+
     const link = e.target.closest && e.target.closest('a[data-auth-required]');
     if (!link || AuthService.isLoggedIn()) return;
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;

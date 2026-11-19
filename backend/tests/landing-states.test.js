@@ -653,6 +653,211 @@ test('Landing page states: loading, error, empty, with pets', async (t) => {
     });
   });
 
+  await t.test('services.js and providers.js: hide customer-only booking actions for staff roles', async (subTest) => {
+    const servicesJsPath = path.resolve(__dirname, '../../frontend/js/pages/services.js');
+    const servicesJsCode = fs.readFileSync(servicesJsPath, 'utf8');
+
+    const providersJsPath = path.resolve(__dirname, '../../frontend/js/pages/providers.js');
+    const providersJsCode = fs.readFileSync(providersJsPath, 'utf8');
+
+    const authGateJsPath = path.resolve(__dirname, '../../frontend/js/components/auth-gate.js');
+    const authGateJsCode = fs.readFileSync(authGateJsPath, 'utf8');
+
+    function createMockServicesDom() {
+      const elements = new Map();
+      class SimpleNode {
+        constructor(id = '', tagName = 'div') {
+          this.id = id;
+          this.tagName = tagName.toUpperCase();
+          this._innerHTML = '';
+          this._textContent = '';
+          this.hidden = false;
+        }
+        get innerHTML() { return this._innerHTML; }
+        set innerHTML(val) {
+          this._innerHTML = String(val ?? '');
+          this._textContent = this._innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+        get textContent() { return this._textContent; }
+        set textContent(val) {
+          this._textContent = String(val ?? '');
+          this._innerHTML = this._textContent;
+        }
+        addEventListener() {}
+        querySelectorAll() { return []; }
+      }
+
+      const ledger = new SimpleNode('servicesLedger');
+      const sort = new SimpleNode('sortSelect');
+      sort.value = 'default';
+      const count = new SimpleNode('servicesCount');
+      const note = new SimpleNode('sampleNote');
+      const filters = new SimpleNode('categoryFilters');
+      const search = new SimpleNode('searchInput', 'input');
+      const reset = new SimpleNode('resetFilters', 'button');
+
+      const doc = {
+        getElementById(id) {
+          if (id === 'servicesLedger') return ledger;
+          if (id === 'sortSelect') return sort;
+          if (id === 'servicesCount') return count;
+          if (id === 'sampleNote') return note;
+          if (id === 'categoryFilters') return filters;
+          if (id === 'searchInput') return search;
+          if (id === 'resetFilters') return reset;
+          if (id === 'providersList') return ledger;
+          return null;
+        },
+        querySelectorAll() { return []; },
+        addEventListener(event, cb) {
+          if (event === 'DOMContentLoaded') {
+            this._domCb = cb;
+          }
+        }
+      };
+      return { doc, ledger };
+    }
+
+    const sampleServices = [
+      { id: 's1', category: 'medical', categoryLabel: 'Khám', name: 'Khám tổng quát', priceVnd: 200000, unit: 'lần', providerId: 'p1' }
+    ];
+    const sampleProviders = [
+      { id: 'p1', name: 'Phòng khám Thú Y A', area: 'Quận 1', type: 'clinic' }
+    ];
+
+    function runServicesInVm(user) {
+      const { doc, ledger } = createMockServicesDom();
+      const ctx = vm.createContext({
+        window: {
+          location: { pathname: '/pages/services.html', search: '' },
+          addEventListener() {}
+        },
+        URLSearchParams,
+        document: doc,
+        Fmt: {
+          esc: (s) => String(s ?? ''),
+          vnd: (v) => `${v} đ`
+        },
+        Catalog: {
+          providerLabel: () => 'Phòng khám A',
+          sampleNotice: () => ''
+        },
+        Panel: {
+          load: (target, fetcher, renderer) => {
+            renderer(sampleServices);
+          }
+        },
+        AuthService: {
+          currentUser: () => user,
+          pageUrl: (f) => f,
+          homeUrl: () => '../index.html'
+        }
+      });
+      vm.runInContext(servicesJsCode, ctx);
+      if (doc._domCb) doc._domCb();
+      return ledger;
+    }
+
+    function runProvidersInVm(user) {
+      const { doc, ledger } = createMockServicesDom();
+      const ctx = vm.createContext({
+        window: {
+          location: { pathname: '/pages/providers.html', search: '' },
+          addEventListener() {}
+        },
+        document: doc,
+        Fmt: {
+          esc: (s) => String(s ?? ''),
+          vnd: (v) => `${v} đ`
+        },
+        Catalog: {
+          TYPE_LABEL: { clinic: 'Phòng khám' },
+          sampleNotice: () => ''
+        },
+        Panel: {
+          load: (target, fetcher, renderer) => {
+            renderer([sampleProviders, sampleServices]);
+          }
+        },
+        AuthService: {
+          currentUser: () => user,
+          pageUrl: (f) => f,
+          homeUrl: () => '../index.html'
+        }
+      });
+      vm.runInContext(providersJsCode, ctx);
+      if (doc._domCb) doc._domCb();
+      return ledger;
+    }
+
+    await subTest.test('services: admin/provider/vet KHÔNG có nút Đặt lịch; customer và khách CÓ', () => {
+      const adminLedger = runServicesInVm({ role: 'admin' });
+      assert.equal(adminLedger.innerHTML.includes('Đặt lịch'), false, 'admin must not see Đặt lịch on services');
+
+      const provLedger = runServicesInVm({ role: 'provider' });
+      assert.equal(provLedger.innerHTML.includes('Đặt lịch'), false, 'provider must not see Đặt lịch on services');
+
+      const vetLedger = runServicesInVm({ role: 'vet' });
+      assert.equal(vetLedger.innerHTML.includes('Đặt lịch'), false, 'vet must not see Đặt lịch on services');
+
+      const custLedger = runServicesInVm({ role: 'customer' });
+      assert.ok(custLedger.innerHTML.includes('Đặt lịch'), 'customer sees Đặt lịch on services');
+
+      const guestLedger = runServicesInVm(null);
+      assert.ok(guestLedger.innerHTML.includes('Đặt lịch'), 'guest sees Đặt lịch on services');
+    });
+
+    await subTest.test('providers: admin/provider/vet KHÔNG có nút Đặt lịch tại đây; customer và khách CÓ', () => {
+      const adminList = runProvidersInVm({ role: 'admin' });
+      assert.equal(adminList.innerHTML.includes('Đặt lịch tại đây'), false, 'admin must not see Đặt lịch tại đây');
+
+      const provList = runProvidersInVm({ role: 'provider' });
+      assert.equal(provList.innerHTML.includes('Đặt lịch tại đây'), false, 'provider must not see Đặt lịch tại đây');
+
+      const vetList = runProvidersInVm({ role: 'vet' });
+      assert.equal(vetList.innerHTML.includes('Đặt lịch tại đây'), false, 'vet must not see Đặt lịch tại đây');
+
+      const custList = runProvidersInVm({ role: 'customer' });
+      assert.ok(custList.innerHTML.includes('Đặt lịch tại đây'), 'customer sees Đặt lịch tại đây');
+
+      const guestList = runProvidersInVm(null);
+      assert.ok(guestList.innerHTML.includes('Đặt lịch tại đây'), 'guest sees Đặt lịch tại đây');
+    });
+
+    await subTest.test('AuthGate.panelHtml: forStaff=true render "Về trang chủ" và "Đăng xuất để dùng tài khoản chủ nuôi"', () => {
+      const ctx = vm.createContext({
+        window: {
+          location: { pathname: '/pages/booking.html', search: '' },
+          addEventListener() {}
+        },
+        document: { addEventListener() {}, body: null },
+        Fmt: { esc: (s) => String(s ?? '') },
+        AuthService: {
+          pageUrl: (f) => f,
+          homeUrl: () => '../index.html',
+          isLoggedIn: () => true
+        }
+      });
+      vm.runInContext(authGateJsCode, ctx);
+      const staffPanel = ctx.window.AuthGate.panelHtml({
+        title: 'Chỉ chủ nuôi mới đặt lịch được',
+        text: 'Tài khoản hiện tại không phải tài khoản chủ nuôi.',
+        forStaff: true
+      });
+      assert.ok(staffPanel.includes('Về trang chủ'), 'staff panel must have Về trang chủ');
+      assert.ok(staffPanel.includes('Đăng xuất để dùng tài khoản chủ nuôi'), 'staff panel must have button to logout to customer');
+      assert.equal(staffPanel.includes('Tạo tài khoản miễn phí'), false, 'staff panel must not prompt guest register');
+
+      const guestPanel = ctx.window.AuthGate.panelHtml({
+        title: 'Đăng nhập để đặt lịch',
+        text: 'Lịch hẹn gắn với hồ sơ thú cưng của bạn.',
+        forStaff: false
+      });
+      assert.ok(guestPanel.includes('Đăng nhập'), 'guest panel has Đăng nhập');
+      assert.ok(guestPanel.includes('Tạo tài khoản miễn phí'), 'guest panel has Tạo tài khoản');
+    });
+  });
+
   await t.test('landing.css anti-flicker block covers all four hero/pcard elements', () => {
     const landingCssPath = path.resolve(__dirname, '../../frontend/css/landing.css');
     const landingCssContent = fs.readFileSync(landingCssPath, 'utf8');

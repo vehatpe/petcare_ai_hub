@@ -15,8 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ---------- Gate: guests and non-owners cannot book ---------- */
   if (!user || user.role !== 'customer') {
     gateEl.innerHTML = AuthGate.panelHtml(user
-      ? { title: 'Chỉ chủ nuôi mới đặt lịch được', text: 'Tài khoản hiện tại không phải tài khoản chủ nuôi. Hãy đăng nhập bằng tài khoản chủ nuôi để đặt lịch cho thú cưng.', next: null }
-      : { title: 'Đăng nhập để đặt lịch', text: 'Lịch hẹn gắn với hồ sơ thú cưng của bạn. Đăng nhập hoặc tạo tài khoản miễn phí, khai báo bé cưng rồi đặt lịch trong 4 bước.', next: AuthService.currentAsNext() });
+      ? { title: 'Chỉ chủ nuôi mới đặt lịch được', text: 'Tài khoản hiện tại không phải tài khoản chủ nuôi. Hãy đăng nhập bằng tài khoản chủ nuôi để đặt lịch cho thú cưng.', next: null, forStaff: true }
+      : { title: 'Đăng nhập để đặt lịch', text: 'Lịch hẹn gắn với hồ sơ thú cưng của bạn. Đăng nhập hoặc tạo tài khoản miễn phí, khai báo bé cưng rồi đặt lịch trong 4 bước.', next: AuthService.currentAsNext(), forStaff: false });
     gateEl.hidden = false;
     return;
   }

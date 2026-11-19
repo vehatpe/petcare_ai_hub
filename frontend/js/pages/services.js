@@ -19,7 +19,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const active = new Set();
 
   function row(s) {
+    const user = AuthService.currentUser();
+    const isStaff = user && user.role !== 'customer';
     const emergency = s.category === 'emergency';
+    const actionHtml = isStaff
+      ? ''
+      : `<div class="ledger-action">
+          <a class="btn btn-primary btn-sm" data-auth-required="${esc(AUTH_REASON)}" href="booking.html?service=${encodeURIComponent(s.id)}">Đặt lịch</a>
+        </div>`;
+
     return `
       <article class="ledger-row">
         <div class="ledger-cat"><span class="ledger-cat-label">${esc(s.categoryLabel)}</span></div>
@@ -30,9 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
           ${emergency ? '<p class="ledger-warn">Đặt lịch không phải kênh khẩn cấp. Nếu bé đang nguy kịch, hãy đưa bé đến cơ sở thú y gần nhất ngay.</p>' : ''}
         </div>
         <div class="ledger-price"><strong>${esc(Fmt.vnd(s.priceVnd))}</strong><span>/ ${esc(s.unit)}</span></div>
-        <div class="ledger-action">
-          <a class="btn btn-primary btn-sm" data-auth-required="${esc(AUTH_REASON)}" href="booking.html?service=${encodeURIComponent(s.id)}">Đặt lịch</a>
-        </div>
+        ${actionHtml}
       </article>`;
   }
 
