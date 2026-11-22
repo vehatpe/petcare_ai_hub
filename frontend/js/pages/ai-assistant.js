@@ -13,20 +13,30 @@ document.addEventListener('DOMContentLoaded', () => {
   const hint = document.getElementById('petSelectHint');
   const recentEl = document.getElementById('recentList');
 
-  if (!user) {
+  if (!user || user.role !== 'customer') {
     win.classList.add('is-locked');
     const next = AuthService.currentAsNext();
-    lock.innerHTML = `
-      <h3>Đăng nhập để trò chuyện với Trợ lý AI</h3>
-      <p>Trợ lý trả lời dựa trên hồ sơ thú cưng của bạn, nên cần có tài khoản. Đăng ký miễn phí chỉ mất một phút.</p>
-      <div class="gate-panel-actions">
-        <a class="btn btn-primary" href="${AuthGate.loginUrl(next)}">Đăng nhập</a>
-        <a class="btn btn-outline" href="${AuthGate.registerUrl(next)}">Tạo tài khoản</a>
-      </div>`;
+    if (user && user.role !== 'customer') {
+      lock.innerHTML = `
+        <h3>Chỉ chủ nuôi mới sử dụng Trợ lý AI</h3>
+        <p>Trợ lý AI trả lời dựa trên hồ sơ thú cưng của chủ nuôi. Tài khoản hiện tại không phải tài khoản chủ nuôi.</p>
+        <div class="gate-panel-actions">
+          <a class="btn btn-primary" href="${AuthService.homeUrl()}">Về trang chủ</a>
+          <button type="button" class="btn btn-outline" data-action="logout-to-customer">Đăng xuất để dùng tài khoản chủ nuôi</button>
+        </div>`;
+    } else {
+      lock.innerHTML = `
+        <h3>Đăng nhập để trò chuyện với Trợ lý AI</h3>
+        <p>Trợ lý trả lời dựa trên hồ sơ thú cưng của bạn, nên cần có tài khoản. Đăng ký miễn phí chỉ mất một phút.</p>
+        <div class="gate-panel-actions">
+          <a class="btn btn-primary" href="${AuthGate.loginUrl(next)}">Đăng nhập</a>
+          <a class="btn btn-outline" href="${AuthGate.registerUrl(next)}">Tạo tài khoản</a>
+        </div>`;
+    }
     petSelect.disabled = true;
-    petSelect.innerHTML = '<option>Đăng nhập để chọn hồ sơ</option>';
+    petSelect.innerHTML = '<option>Không khả dụng cho tài khoản này</option>';
     document.getElementById('btnNewChat').disabled = true;
-    recentEl.innerHTML = '<p class="ai-conv-empty">Đăng nhập để lưu câu hỏi của bạn.</p>';
+    recentEl.innerHTML = '<p class="ai-conv-empty">Chỉ khả dụng cho tài khoản chủ nuôi.</p>';
     return;
   }
 

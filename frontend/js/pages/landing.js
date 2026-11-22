@@ -56,7 +56,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const firstName = Fmt.firstName(user.fullName);
       $('heroTitle').textContent = `Xin chào, ${firstName}.`;
       $('heroSub').textContent = 'Bảng điều khiển cho vai trò này đang được xây dựng.';
+
+      let roleSpecificLink = '';
+      let pcardActionLink = '';
+      if (user.role === 'admin') {
+        roleSpecificLink = `<a href="pages/admin-partners.html" class="btn btn-primary btn-lg">Duyệt đối tác</a>`;
+        pcardActionLink = `<a href="pages/admin-partners.html" class="btn btn-primary btn-sm">Duyệt đối tác</a>`;
+      } else if (user.role === 'provider') {
+        roleSpecificLink = `<a href="pages/provider-vets.html" class="btn btn-primary btn-lg">Quản lý bác sĩ</a>`;
+        pcardActionLink = `<a href="pages/provider-vets.html" class="btn btn-primary btn-sm">Quản lý bác sĩ</a>`;
+      }
+
       $('heroActions').innerHTML = `
+        ${roleSpecificLink}
         <a href="pages/services.html" class="btn btn-outline btn-lg" id="heroSecondaryBtn">Xem dịch vụ</a>`;
 
       $('pcardContent').innerHTML = `
@@ -64,13 +76,17 @@ document.addEventListener('DOMContentLoaded', () => {
           <p class="pcard-tag">Bảng điều khiển vai trò</p>
           <h3>Bảng điều khiển đang được xây dựng</h3>
           <p>Hệ thống cho vai trò ${esc(user.role)} sẽ sớm ra mắt.</p>
-          <a href="pages/services.html" class="btn btn-outline btn-sm">Xem dịch vụ</a>
+          <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 12px;">
+            ${pcardActionLink}
+            <a href="pages/services.html" class="btn btn-outline btn-sm">Xem dịch vụ</a>
+          </div>
         </div>`;
 
       $('ctaBannerTitle').textContent = 'Khám phá dịch vụ & cơ sở đối tác.';
       $('ctaBannerSub').textContent = 'Tham khảo các gói chăm sóc y tế, spa và lưu trú đang hoạt động trên hệ thống.';
       $('ctaBannerActions').innerHTML = `
-        <a href="pages/services.html" class="btn btn-primary btn-lg">Xem dịch vụ</a>
+        ${roleSpecificLink}
+        <a href="pages/services.html" class="btn btn-outline-white btn-lg">Xem dịch vụ</a>
         <a href="pages/providers.html" class="btn btn-outline-white btn-lg">Cơ sở & phòng khám</a>`;
       return;
     }
@@ -201,6 +217,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ---------- Services ledger ---------- */
   function row(s) {
+    const user = AuthService.currentUser();
+    const isStaff = user && user.role !== 'customer';
+    const actionHtml = isStaff
+      ? ''
+      : `<div class="ledger-action"><a class="btn btn-primary btn-sm" data-auth-required="${esc(AUTH_REASON)}" href="pages/booking.html?service=${encodeURIComponent(s.id)}">Đặt lịch</a></div>`;
+
     return `
       <article class="ledger-row">
         <div class="ledger-cat"><span class="ledger-cat-label">${esc(s.categoryLabel)}</span></div>
@@ -210,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <p class="ledger-provider">${esc(Catalog.providerLabel(s))}</p>
         </div>
         <div class="ledger-price"><strong>${esc(Fmt.vnd(s.priceVnd))}</strong><span>/ ${esc(s.unit)}</span></div>
-        <div class="ledger-action"><a class="btn btn-primary btn-sm" data-auth-required="${esc(AUTH_REASON)}" href="pages/booking.html?service=${encodeURIComponent(s.id)}">Đặt lịch</a></div>
+        ${actionHtml}
       </article>`;
   }
 

@@ -2,22 +2,28 @@
 const { T, lc, iso, isUniqueViolation } = require('./db');
 const { DuplicateError } = require('../utils/errors');
 
-const COLS = `UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, CreatedAt`;
+const COLS = `UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, CreatedAt, ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason`;
 const map = (r) => r && ({
   id: lc(r.UserId), role: r.Role, status: r.Status, fullName: r.FullName, email: r.Email, phone: r.Phone,
-  passwordHash: r.PasswordHash, orgName: r.OrgName, orgType: r.OrgType, createdAt: iso(r.CreatedAt)
+  passwordHash: r.PasswordHash, orgName: r.OrgName, orgType: r.OrgType, createdAt: iso(r.CreatedAt),
+  providerId: r.ProviderId || null, orgArea: r.OrgArea || null,
+  approvedBy: lc(r.ApprovedBy), approvedAt: iso(r.ApprovedAt),
+  mustChangePassword: Boolean(r.MustChangePassword), rejectReason: r.RejectReason || null
 });
 
 module.exports = (db) => ({
-  async create(u) {
+  async create(u, runner = db) {
     try {
-      await db.query(
-        `INSERT INTO dbo.Users (UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType)
-         VALUES (@id, @role, @status, @fullName, @email, @phone, @hash, @orgName, @orgType)`,
+      await runner.query(
+        `INSERT INTO dbo.Users (UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason)
+         VALUES (@id, @role, @status, @fullName, @email, @phone, @hash, @orgName, @orgType, @providerId, @orgArea, @approvedBy, @approvedAt, @mustChangePassword, @rejectReason)`,
         {
           id: [T.guid, u.id], role: [T.vstr(10), u.role], status: [T.vstr(10), u.status], fullName: [T.str(100), u.fullName],
           email: [T.str(254), u.email], phone: [T.vstr(15), u.phone], hash: [T.vstr(100), u.passwordHash],
-          orgName: [T.str(150), u.orgName], orgType: [T.vstr(10), u.orgType]
+          orgName: [T.str(150), u.orgName], orgType: [T.vstr(10), u.orgType],
+          providerId: [T.vstr(50), u.providerId || null], orgArea: [T.str(100), u.orgArea || null],
+          approvedBy: [T.guid, u.approvedBy || null], approvedAt: [T.dt, u.approvedAt || null],
+          mustChangePassword: [T.bool, u.mustChangePassword ? 1 : 0], rejectReason: [T.str(200), u.rejectReason || null]
         }
       );
     } catch (e) {
@@ -34,5 +40,17 @@ module.exports = (db) => ({
   },
   async findById(id) {
     return map((await db.query(`SELECT ${COLS} FROM dbo.Users WHERE UserId = @id`, { id: [T.guid, id] }))[0]);
+  },
+  async updatePassword(userId, passwordHash, mustChangePassword = false) {
+    await db.query(
+      `UPDATE dbo.Users
+       SET PasswordHash = @hash, MustChangePassword = @mustChangePassword
+       WHERE UserId = @id`,
+      {
+        id: [T.guid, userId],
+        hash: [T.vstr(100), passwordHash],
+        mustChangePassword: [T.bool, mustChangePassword ? 1 : 0]
+      }
+    );
   }
 });

@@ -370,6 +370,33 @@ test('Landing page states: loading, error, empty, with pets', async (t) => {
     assert.match(pcardHtml, /Cấu trúc hồ sơ, chưa có dữ liệu/);
   });
 
+  await t.test('Role links: admin and provider see actionable links on landing page', () => {
+    // Admin
+    const envAdmin = setupTestEnvironment({ currentUser: { fullName: 'Admin User', role: 'admin' } });
+    envAdmin.triggerDomContentLoaded();
+    const adminHero = envAdmin.dom.getElementById('heroActions').innerHTML;
+    assert.match(adminHero, /pages\/admin-partners\.html/);
+    assert.match(adminHero, /Duyệt đối tác/);
+    const adminPcard = envAdmin.dom.getElementById('pcardContent').innerHTML;
+    assert.match(adminPcard, /pages\/admin-partners\.html/);
+
+    // Provider
+    const envProvider = setupTestEnvironment({ currentUser: { fullName: 'Phòng khám PetCare', role: 'provider' } });
+    envProvider.triggerDomContentLoaded();
+    const providerHero = envProvider.dom.getElementById('heroActions').innerHTML;
+    assert.match(providerHero, /pages\/provider-vets\.html/);
+    assert.match(providerHero, /Quản lý bác sĩ/);
+    const providerPcard = envProvider.dom.getElementById('pcardContent').innerHTML;
+    assert.match(providerPcard, /pages\/provider-vets\.html/);
+
+    // Vet: does not have extra link
+    const envVet = setupTestEnvironment({ currentUser: { fullName: 'BS. Tiến', role: 'vet' } });
+    envVet.triggerDomContentLoaded();
+    const vetHero = envVet.dom.getElementById('heroActions').innerHTML;
+    assert.doesNotMatch(vetHero, /admin-partners\.html/);
+    assert.doesNotMatch(vetHero, /provider-vets\.html/);
+  });
+
   await t.test('landing.js sets authReady in all branches', async (subTest) => {
     await subTest.test('nhánh khách -> authReady được đặt', () => {
       const env = setupTestEnvironment({ currentUser: null });
@@ -421,6 +448,413 @@ test('Landing page states: loading, error, empty, with pets', async (t) => {
       env.triggerDomContentLoaded();
       await new Promise((r) => setImmediate(r));
       assert.equal(env.documentElement.dataset.authReady, '1');
+    });
+  });
+
+  await t.test('header.js: role-aware main-nav dynamic rendering', async (subTest) => {
+    const headerJsPath = path.resolve(__dirname, '../../frontend/js/components/header.js');
+    const headerJsCode = fs.readFileSync(headerJsPath, 'utf8');
+
+    function createHeaderDom(pathname = '/pages/booking.html') {
+      const elements = new Map();
+
+      class MockNode {
+        constructor(id = '', tagName = 'div', className = '') {
+          this.id = id;
+          this.tagName = tagName.toUpperCase();
+          this.className = className;
+          this._innerHTML = '';
+          this.attributes = new Map();
+          this.hidden = false;
+        }
+
+        get innerHTML() {
+          return this._innerHTML;
+        }
+
+        set innerHTML(val) {
+          this._innerHTML = String(val ?? '');
+        }
+
+        get textContent() {
+          return this._innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+
+        classList = {
+          contains: (cls) => this.className.split(/\s+/).includes(cls),
+          toggle: (cls, force) => {
+            const set = new Set(this.className.split(/\s+/).filter(Boolean));
+            if (force === undefined) {
+              if (set.has(cls)) set.delete(cls); else set.add(cls);
+            } else if (force) {
+              set.add(cls);
+            } else {
+              set.delete(cls);
+            }
+            this.className = Array.from(set).join(' ');
+          }
+        };
+
+        setAttribute(k, v) { this.attributes.set(k, String(v)); }
+        getAttribute(k) { return this.attributes.has(k) ? this.attributes.get(k) : null; }
+        removeAttribute(k) { this.attributes.delete(k); }
+        addEventListener() {}
+        focus() {}
+
+        querySelector(sel) {
+          if (sel === '#mobileDrawerClose') return new MockNode('mobileDrawerClose', 'button');
+          return null;
+        }
+
+        querySelectorAll(sel) {
+          if (sel === 'a') {
+            const links = [];
+            const re = /<a\s+([^>]*?)>(.*?)<\/a>/gi;
+            let match;
+            while ((match = re.exec(this._innerHTML)) !== null) {
+              const node = new MockNode('', 'a');
+              const attrs = match[1];
+              const hrefMatch = /href="([^"]*)"/.exec(attrs);
+              const classMatch = /class="([^"]*)"/.exec(attrs);
+              if (hrefMatch) node.setAttribute('href', hrefMatch[1]);
+              if (classMatch) node.className = classMatch[1];
+              node.innerHTML = match[2];
+              links.push(node);
+            }
+            return links;
+          }
+          return [];
+        }
+
+        remove() {}
+      }
+
+      const mainNav = new MockNode('', 'nav', 'main-nav');
+      mainNav.innerHTML = `
+        <a href="../index.html" class="nav-link">Trang chủ</a>
+        <a href="services.html" class="nav-link">Dịch vụ Thú cưng</a>
+        <a href="providers.html" class="nav-link">Cơ sở & Phòng khám</a>
+        <a href="booking.html" class="nav-link active" aria-current="page">Đặt lịch hẹn</a>
+        <a href="ai-assistant.html" class="nav-link">Trợ lý AI</a>
+      `;
+
+      const mobileToggle = new MockNode('mobileMenuToggle', 'button', 'mobile-menu-toggle');
+      const headerAccount = new MockNode('', 'div', 'header-account');
+      headerAccount.setAttribute('data-auth-slot', 'header');
+
+      const body = new MockNode('', 'body');
+      body.appendChild = () => {};
+
+      const doc = {
+        querySelector(sel) {
+          if (sel === '.main-nav') return mainNav;
+          if (sel === '#mobileMenuToggle') return mobileToggle;
+          if (sel === '[data-drawer-auth]') return new MockNode('', 'div');
+          return null;
+        },
+        querySelectorAll(sel) {
+          if (sel === '[data-auth-slot="header"]') return [headerAccount];
+          if (sel === '[data-guest-only]' || sel === '[data-user-only]' || sel === '[data-role-only]') return [];
+          if (sel === '[data-auth-slot="footer-account"]') return [];
+          return [];
+        },
+        getElementById(id) {
+          if (id === 'mobileMenuToggle') return mobileToggle;
+          return null;
+        },
+        createElement(tag) { return new MockNode('', tag); },
+        addEventListener() {},
+        body
+      };
+
+      return { doc, mainNav, pathname };
+    }
+
+    function runHeaderInVm(user, pathname = '/pages/booking.html') {
+      const { doc, mainNav } = createHeaderDom(pathname);
+      const inPages = /\/pages\/[^/]*$/.test(pathname);
+
+      const ctx = vm.createContext({
+        window: {
+          location: {
+            pathname,
+            search: '',
+            href: pathname
+          },
+          addEventListener() {},
+          matchMedia: () => ({ addEventListener() {}, matches: false })
+        },
+        document: doc,
+        Fmt: {
+          esc: (s) => String(s ?? ''),
+          initials: (s) => (s ? s.slice(0, 2) : ''),
+          firstName: (s) => (s ? s.split(' ').pop() : '')
+        },
+        AuthService: {
+          currentUser: () => user,
+          pageUrl: (file) => (inPages ? '' : 'pages/') + file,
+          homeUrl: () => (inPages ? '../index.html' : 'index.html'),
+          refresh: () => {}
+        }
+      });
+
+      vm.runInContext(headerJsCode, ctx);
+      return mainNav;
+    }
+
+    await subTest.test('admin -> có Duyệt đối tác, không có Đặt lịch hẹn hay Trợ lý AI', () => {
+      const nav = runHeaderInVm({ fullName: 'Admin User', role: 'admin' }, '/pages/booking.html');
+      const text = nav.textContent;
+      assert.ok(text.includes('Duyệt đối tác'), 'admin nav must include Duyệt đối tác');
+      assert.ok(text.includes('Trang chủ'), 'admin nav must include Trang chủ');
+      assert.equal(text.includes('Đặt lịch hẹn'), false, 'admin nav must not include Đặt lịch hẹn');
+      assert.equal(text.includes('Trợ lý AI'), false, 'admin nav must not include Trợ lý AI');
+      assert.equal(text.includes('Dịch vụ Thú cưng'), false, 'admin nav must not include Dịch vụ Thú cưng');
+    });
+
+    await subTest.test('provider -> có Quản lý bác sĩ, không có Đặt lịch hẹn', () => {
+      const nav = runHeaderInVm({ fullName: 'Clinic Owner', role: 'provider' }, '/pages/booking.html');
+      const text = nav.textContent;
+      assert.ok(text.includes('Quản lý bác sĩ'), 'provider nav must include Quản lý bác sĩ');
+      assert.ok(text.includes('Trang chủ'), 'provider nav must include Trang chủ');
+      assert.equal(text.includes('Đặt lịch hẹn'), false, 'provider nav must not include Đặt lịch hẹn');
+      assert.equal(text.includes('Duyệt đối tác'), false, 'provider nav must not include Duyệt đối tác');
+    });
+
+    await subTest.test('vet -> chỉ có Trang chủ', () => {
+      const nav = runHeaderInVm({ fullName: 'Dr. Vet', role: 'vet' }, '/pages/booking.html');
+      const text = nav.textContent;
+      assert.ok(text.includes('Trang chủ'), 'vet nav must include Trang chủ');
+      assert.equal(text.includes('Đặt lịch hẹn'), false, 'vet nav must not include Đặt lịch hẹn');
+      assert.equal(text.includes('Duyệt đối tác'), false, 'vet nav must not include Duyệt đối tác');
+      assert.equal(text.includes('Quản lý bác sĩ'), false, 'vet nav must not include Quản lý bác sĩ');
+    });
+
+    await subTest.test('customer và guest -> giữ nguyên nav mặc định', () => {
+      const navGuest = runHeaderInVm(null, '/pages/booking.html');
+      assert.ok(navGuest.textContent.includes('Đặt lịch hẹn'), 'guest keeps original nav');
+      assert.ok(navGuest.textContent.includes('Trợ lý AI'), 'guest keeps original nav');
+
+      const navCust = runHeaderInVm({ fullName: 'Customer A', role: 'customer' }, '/pages/booking.html');
+      assert.ok(navCust.textContent.includes('Đặt lịch hẹn'), 'customer keeps original nav');
+      assert.ok(navCust.textContent.includes('Trợ lý AI'), 'customer keeps original nav');
+    });
+
+    await subTest.test('mustChangePassword -> không dựng thêm gì ngoài nav tối thiểu', () => {
+      const nav = runHeaderInVm({ fullName: 'Vet Temp', role: 'vet', mustChangePassword: true }, '/pages/change-password.html');
+      // Không bị đổi thành role nav, giữ nguyên hoặc không thêm nav admin/provider
+      assert.equal(nav.textContent.includes('Duyệt đối tác'), false);
+      assert.equal(nav.textContent.includes('Quản lý bác sĩ'), false);
+    });
+
+    await subTest.test('đánh dấu active đúng theo pathname hiện tại', () => {
+      const navAdmin = runHeaderInVm({ fullName: 'Admin User', role: 'admin' }, '/pages/admin-partners.html');
+      assert.ok(navAdmin.innerHTML.includes('class="nav-link active" aria-current="page">Duyệt đối tác</a>'), 'admin-partners.html is marked active');
+    });
+  });
+
+  await t.test('services.js and providers.js: hide customer-only booking actions for staff roles', async (subTest) => {
+    const servicesJsPath = path.resolve(__dirname, '../../frontend/js/pages/services.js');
+    const servicesJsCode = fs.readFileSync(servicesJsPath, 'utf8');
+
+    const providersJsPath = path.resolve(__dirname, '../../frontend/js/pages/providers.js');
+    const providersJsCode = fs.readFileSync(providersJsPath, 'utf8');
+
+    const authGateJsPath = path.resolve(__dirname, '../../frontend/js/components/auth-gate.js');
+    const authGateJsCode = fs.readFileSync(authGateJsPath, 'utf8');
+
+    function createMockServicesDom() {
+      const elements = new Map();
+      class SimpleNode {
+        constructor(id = '', tagName = 'div') {
+          this.id = id;
+          this.tagName = tagName.toUpperCase();
+          this._innerHTML = '';
+          this._textContent = '';
+          this.hidden = false;
+        }
+        get innerHTML() { return this._innerHTML; }
+        set innerHTML(val) {
+          this._innerHTML = String(val ?? '');
+          this._textContent = this._innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+        get textContent() { return this._textContent; }
+        set textContent(val) {
+          this._textContent = String(val ?? '');
+          this._innerHTML = this._textContent;
+        }
+        addEventListener() {}
+        querySelectorAll() { return []; }
+      }
+
+      const ledger = new SimpleNode('servicesLedger');
+      const sort = new SimpleNode('sortSelect');
+      sort.value = 'default';
+      const count = new SimpleNode('servicesCount');
+      const note = new SimpleNode('sampleNote');
+      const filters = new SimpleNode('categoryFilters');
+      const search = new SimpleNode('searchInput', 'input');
+      const reset = new SimpleNode('resetFilters', 'button');
+
+      const doc = {
+        getElementById(id) {
+          if (id === 'servicesLedger') return ledger;
+          if (id === 'sortSelect') return sort;
+          if (id === 'servicesCount') return count;
+          if (id === 'sampleNote') return note;
+          if (id === 'categoryFilters') return filters;
+          if (id === 'searchInput') return search;
+          if (id === 'resetFilters') return reset;
+          if (id === 'providersList') return ledger;
+          return null;
+        },
+        querySelectorAll() { return []; },
+        addEventListener(event, cb) {
+          if (event === 'DOMContentLoaded') {
+            this._domCb = cb;
+          }
+        }
+      };
+      return { doc, ledger };
+    }
+
+    const sampleServices = [
+      { id: 's1', category: 'medical', categoryLabel: 'Khám', name: 'Khám tổng quát', priceVnd: 200000, unit: 'lần', providerId: 'p1' }
+    ];
+    const sampleProviders = [
+      { id: 'p1', name: 'Phòng khám Thú Y A', area: 'Quận 1', type: 'clinic' }
+    ];
+
+    function runServicesInVm(user) {
+      const { doc, ledger } = createMockServicesDom();
+      const ctx = vm.createContext({
+        window: {
+          location: { pathname: '/pages/services.html', search: '' },
+          addEventListener() {}
+        },
+        URLSearchParams,
+        document: doc,
+        Fmt: {
+          esc: (s) => String(s ?? ''),
+          vnd: (v) => `${v} đ`
+        },
+        Catalog: {
+          providerLabel: () => 'Phòng khám A',
+          sampleNotice: () => ''
+        },
+        Panel: {
+          load: (target, fetcher, renderer) => {
+            renderer(sampleServices);
+          }
+        },
+        AuthService: {
+          currentUser: () => user,
+          pageUrl: (f) => f,
+          homeUrl: () => '../index.html'
+        }
+      });
+      vm.runInContext(servicesJsCode, ctx);
+      if (doc._domCb) doc._domCb();
+      return ledger;
+    }
+
+    function runProvidersInVm(user) {
+      const { doc, ledger } = createMockServicesDom();
+      const ctx = vm.createContext({
+        window: {
+          location: { pathname: '/pages/providers.html', search: '' },
+          addEventListener() {}
+        },
+        document: doc,
+        Fmt: {
+          esc: (s) => String(s ?? ''),
+          vnd: (v) => `${v} đ`
+        },
+        Catalog: {
+          TYPE_LABEL: { clinic: 'Phòng khám' },
+          sampleNotice: () => ''
+        },
+        Panel: {
+          load: (target, fetcher, renderer) => {
+            renderer([sampleProviders, sampleServices]);
+          }
+        },
+        AuthService: {
+          currentUser: () => user,
+          pageUrl: (f) => f,
+          homeUrl: () => '../index.html'
+        }
+      });
+      vm.runInContext(providersJsCode, ctx);
+      if (doc._domCb) doc._domCb();
+      return ledger;
+    }
+
+    await subTest.test('services: admin/provider/vet KHÔNG có nút Đặt lịch; customer và khách CÓ', () => {
+      const adminLedger = runServicesInVm({ role: 'admin' });
+      assert.equal(adminLedger.innerHTML.includes('Đặt lịch'), false, 'admin must not see Đặt lịch on services');
+
+      const provLedger = runServicesInVm({ role: 'provider' });
+      assert.equal(provLedger.innerHTML.includes('Đặt lịch'), false, 'provider must not see Đặt lịch on services');
+
+      const vetLedger = runServicesInVm({ role: 'vet' });
+      assert.equal(vetLedger.innerHTML.includes('Đặt lịch'), false, 'vet must not see Đặt lịch on services');
+
+      const custLedger = runServicesInVm({ role: 'customer' });
+      assert.ok(custLedger.innerHTML.includes('Đặt lịch'), 'customer sees Đặt lịch on services');
+
+      const guestLedger = runServicesInVm(null);
+      assert.ok(guestLedger.innerHTML.includes('Đặt lịch'), 'guest sees Đặt lịch on services');
+    });
+
+    await subTest.test('providers: admin/provider/vet KHÔNG có nút Đặt lịch tại đây; customer và khách CÓ', () => {
+      const adminList = runProvidersInVm({ role: 'admin' });
+      assert.equal(adminList.innerHTML.includes('Đặt lịch tại đây'), false, 'admin must not see Đặt lịch tại đây');
+
+      const provList = runProvidersInVm({ role: 'provider' });
+      assert.equal(provList.innerHTML.includes('Đặt lịch tại đây'), false, 'provider must not see Đặt lịch tại đây');
+
+      const vetList = runProvidersInVm({ role: 'vet' });
+      assert.equal(vetList.innerHTML.includes('Đặt lịch tại đây'), false, 'vet must not see Đặt lịch tại đây');
+
+      const custList = runProvidersInVm({ role: 'customer' });
+      assert.ok(custList.innerHTML.includes('Đặt lịch tại đây'), 'customer sees Đặt lịch tại đây');
+
+      const guestList = runProvidersInVm(null);
+      assert.ok(guestList.innerHTML.includes('Đặt lịch tại đây'), 'guest sees Đặt lịch tại đây');
+    });
+
+    await subTest.test('AuthGate.panelHtml: forStaff=true render "Về trang chủ" và "Đăng xuất để dùng tài khoản chủ nuôi"', () => {
+      const ctx = vm.createContext({
+        window: {
+          location: { pathname: '/pages/booking.html', search: '' },
+          addEventListener() {}
+        },
+        document: { addEventListener() {}, body: null },
+        Fmt: { esc: (s) => String(s ?? '') },
+        AuthService: {
+          pageUrl: (f) => f,
+          homeUrl: () => '../index.html',
+          isLoggedIn: () => true
+        }
+      });
+      vm.runInContext(authGateJsCode, ctx);
+      const staffPanel = ctx.window.AuthGate.panelHtml({
+        title: 'Chỉ chủ nuôi mới đặt lịch được',
+        text: 'Tài khoản hiện tại không phải tài khoản chủ nuôi.',
+        forStaff: true
+      });
+      assert.ok(staffPanel.includes('Về trang chủ'), 'staff panel must have Về trang chủ');
+      assert.ok(staffPanel.includes('Đăng xuất để dùng tài khoản chủ nuôi'), 'staff panel must have button to logout to customer');
+      assert.equal(staffPanel.includes('Tạo tài khoản miễn phí'), false, 'staff panel must not prompt guest register');
+
+      const guestPanel = ctx.window.AuthGate.panelHtml({
+        title: 'Đăng nhập để đặt lịch',
+        text: 'Lịch hẹn gắn với hồ sơ thú cưng của bạn.',
+        forStaff: false
+      });
+      assert.ok(guestPanel.includes('Đăng nhập'), 'guest panel has Đăng nhập');
+      assert.ok(guestPanel.includes('Tạo tài khoản miễn phí'), 'guest panel has Tạo tài khoản');
     });
   });
 

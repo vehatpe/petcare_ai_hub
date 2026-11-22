@@ -19,6 +19,25 @@
   }
 
   function userMarkup(user) {
+    if (user.mustChangePassword) {
+      return `
+        <div class="account-menu">
+          <button type="button" class="account-trigger" id="accountTrigger" aria-haspopup="menu" aria-expanded="false" aria-controls="accountPopover">
+            <span class="account-avatar" aria-hidden="true">${esc(Fmt.initials(user.fullName))}</span>
+            <span class="account-name">${esc(Fmt.firstName(user.fullName))}</span>
+          </button>
+          <div class="account-popover" id="accountPopover" role="menu" aria-labelledby="accountTrigger" hidden>
+            <div class="account-who">
+              <strong>${esc(user.fullName)}</strong>
+              <span>${esc(user.email)}</span>
+              <span class="account-role">${esc(ROLE_LABEL[user.role] || '')}</span>
+            </div>
+            <a role="menuitem" href="${url('change-password.html')}">Đổi mật khẩu</a>
+            <button type="button" role="menuitem" class="account-logout" data-action="logout">Đăng xuất</button>
+          </div>
+        </div>`;
+    }
+
     const dash = DASHBOARD_BY_ROLE[user.role];
     const cta = user.role === 'customer'
       ? `<a href="${url('booking.html')}" class="btn btn-primary btn-sm header-cta">Đặt lịch</a>`
@@ -37,15 +56,70 @@
             <span class="account-role">${esc(ROLE_LABEL[user.role] || '')}</span>
           </div>
           ${dash ? `<a role="menuitem" href="${url(dash)}">Bảng điều khiển</a>` : ''}
+          ${user.role === 'admin' ? `<a role="menuitem" href="${url('admin-partners.html')}">Duyệt đối tác</a>` : ''}
+          ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-vets.html')}">Quản lý bác sĩ</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('health-records.html')}">Sổ sức khỏe</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('pet-profile.html')}">Thêm thú cưng</a>` : ''}
+          <a role="menuitem" href="${url('change-password.html')}">Đổi mật khẩu</a>
           <button type="button" role="menuitem" class="account-logout" data-action="logout">Đăng xuất</button>
         </div>
       </div>`;
   }
 
+  /* ---------- Role-aware main nav ---------- */
+  function renderMainNav(user) {
+    const nav = document.querySelector('.main-nav');
+    if (!nav) return;
+
+    // Cache initial markup for guest / customer so we can restore on logout/role change
+    if (!nav._defaultNavHtml) {
+      nav._defaultNavHtml = nav.innerHTML;
+    }
+
+    if (!user || user.role === 'customer') {
+      nav.innerHTML = nav._defaultNavHtml;
+      return;
+    }
+
+    if (user.mustChangePassword) {
+      return;
+    }
+
+    const currentFile = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    const isHome = currentFile === '' || currentFile === 'index.html';
+
+    const items = [];
+    items.push({
+      href: AuthService.homeUrl(),
+      text: 'Trang chủ',
+      isActive: isHome
+    });
+
+    if (user.role === 'admin') {
+      items.push({
+        href: url('admin-partners.html'),
+        text: 'Duyệt đối tác',
+        isActive: currentFile === 'admin-partners.html'
+      });
+    } else if (user.role === 'provider') {
+      items.push({
+        href: url('provider-vets.html'),
+        text: 'Quản lý bác sĩ',
+        isActive: currentFile === 'provider-vets.html'
+      });
+    }
+
+    nav.innerHTML = items.map((item) => {
+      const cls = item.isActive ? 'nav-link active' : 'nav-link';
+      const current = item.isActive ? ' aria-current="page"' : '';
+      return `<a href="${esc(item.href)}" class="${cls}"${current}>${esc(item.text)}</a>`;
+    }).join('\n        ');
+  }
+
   function renderHeader() {
     const user = AuthService.currentUser();
+    renderMainNav(user);
+    buildDrawer();
     document.querySelectorAll('[data-auth-slot="header"]').forEach((slot) => {
       slot.innerHTML = user ? userMarkup(user) : guestMarkup();
     });
@@ -74,11 +148,18 @@
           <li><a href="${url('login.html')}">Đăng nhập</a></li>
           <li><a href="${url('register.html')}">Đăng ký chủ nuôi</a></li>
           <li><a href="${url('register.html')}?role=provider">Đăng ký cơ sở dịch vụ</a></li>`;
+      } else if (user.mustChangePassword) {
+        slot.innerHTML = `
+          <li><a href="${url('change-password.html')}">Đổi mật khẩu</a></li>
+          <li><button type="button" class="btn-link" data-action="logout">Đăng xuất</button></li>`;
       } else {
         const dash = DASHBOARD_BY_ROLE[user.role] || (user.role === 'customer' ? 'customer-dashboard.html' : '');
         slot.innerHTML = `
           ${dash ? `<li><a href="${url(dash)}">Bảng điều khiển</a></li>` : ''}
+          ${user.role === 'admin' ? `<li><a href="${url('admin-partners.html')}">Duyệt đối tác</a></li>` : ''}
+          ${user.role === 'provider' ? `<li><a href="${url('provider-vets.html')}">Quản lý bác sĩ</a></li>` : ''}
           ${user.role === 'customer' ? `<li><a href="${url('health-records.html')}">Sổ sức khỏe</a></li>` : ''}
+          <li><a href="${url('change-password.html')}">Đổi mật khẩu</a></li>
           <li><button type="button" class="btn-link" data-action="logout">Đăng xuất</button></li>`;
       }
     });
@@ -201,10 +282,20 @@
         <a href="${url('register.html')}" class="btn btn-primary">Đăng ký</a>`;
       return;
     }
+    if (user.mustChangePassword) {
+      slot.innerHTML = `
+        <div class="drawer-who"><strong>${esc(user.fullName)}</strong><span>${esc(user.email)}</span></div>
+        <a href="${url('change-password.html')}" class="btn btn-secondary">Đổi mật khẩu</a>
+        <button type="button" class="btn btn-outline" data-action="logout">Đăng xuất</button>`;
+      return;
+    }
     const dash = DASHBOARD_BY_ROLE[user.role];
     slot.innerHTML = `
       <div class="drawer-who"><strong>${esc(user.fullName)}</strong><span>${esc(user.email)}</span></div>
       ${dash ? `<a href="${url(dash)}" class="btn btn-secondary">Bảng điều khiển</a>` : ''}
+      ${user.role === 'admin' ? `<a href="${url('admin-partners.html')}" class="btn btn-secondary">Duyệt đối tác</a>` : ''}
+      ${user.role === 'provider' ? `<a href="${url('provider-vets.html')}" class="btn btn-secondary">Quản lý bác sĩ</a>` : ''}
+      <a href="${url('change-password.html')}" class="btn btn-outline">Đổi mật khẩu</a>
       <button type="button" class="btn btn-outline" data-action="logout">Đăng xuất</button>`;
   }
 
@@ -217,7 +308,6 @@
 
   window.addEventListener('petcare:auth-changed', renderHeader);
 
-  buildDrawer();
   renderHeader();
   // Re-validate the stored token once per page load; a revoked/expired one signs out (-> auth-changed).
   AuthService.refresh();

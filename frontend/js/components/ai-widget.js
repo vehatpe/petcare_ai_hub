@@ -90,17 +90,28 @@ const AIWidget = {
     if (!popup) return;
 
     const user = AuthService.currentUser();
-    popup.classList.toggle('is-locked', !user);
+    const isStaff = user && user.role !== 'customer';
+    popup.classList.toggle('is-locked', !user || isStaff);
 
-    if (!user) {
+    if (!user || isStaff) {
       const next = AuthService.currentAsNext();
-      lock.innerHTML = `
-        <h3>Đăng nhập để trò chuyện</h3>
-        <p>Trợ lý AI trả lời dựa trên hồ sơ thú cưng của bạn, nên cần có tài khoản. Đăng ký miễn phí chỉ mất một phút.</p>
-        <div class="gate-panel-actions">
-          <a class="btn btn-primary" href="${AuthGate.loginUrl(next)}">Đăng nhập</a>
-          <a class="btn btn-outline" href="${AuthGate.registerUrl(next)}">Tạo tài khoản</a>
-        </div>`;
+      if (isStaff) {
+        lock.innerHTML = `
+          <h3>Chỉ chủ nuôi mới sử dụng Trợ lý AI</h3>
+          <p>Trợ lý AI trả lời dựa trên hồ sơ thú cưng của chủ nuôi. Hãy đăng nhập tài khoản chủ nuôi để trò chuyện.</p>
+          <div class="gate-panel-actions">
+            <a class="btn btn-primary" href="${AuthService.homeUrl()}">Về trang chủ</a>
+            <button type="button" class="btn btn-outline" data-action="logout-to-customer">Đăng xuất</button>
+          </div>`;
+      } else {
+        lock.innerHTML = `
+          <h3>Đăng nhập để trò chuyện</h3>
+          <p>Trợ lý AI trả lời dựa trên hồ sơ thú cưng của bạn, nên cần có tài khoản. Đăng ký miễn phí chỉ mất một phút.</p>
+          <div class="gate-panel-actions">
+            <a class="btn btn-primary" href="${AuthGate.loginUrl(next)}">Đăng nhập</a>
+            <a class="btn btn-outline" href="${AuthGate.registerUrl(next)}">Tạo tài khoản</a>
+          </div>`;
+      }
       this.activePet = null;
       return;
     }

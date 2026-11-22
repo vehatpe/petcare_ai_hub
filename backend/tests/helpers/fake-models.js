@@ -10,7 +10,7 @@ const { DuplicateError, LimitError } = require('../../src/utils/errors');
 const clone = (o) => (o === null || o === undefined ? o : JSON.parse(JSON.stringify(o)));
 
 function createFakeModels() {
-  const s = { users: [], providers: [], services: [], pets: [], metrics: [], vaccs: [], records: [], bookings: [], chunks: [] };
+  const s = { users: [], providers: [], services: [], pets: [], metrics: [], vaccs: [], records: [], bookings: [], chunks: [], auditLogs: [] };
   let seq = 0;
   const tick = () => new Date(Date.UTC(2026, 0, 1, 0, 0, ++seq)).toISOString();
 
@@ -31,16 +31,259 @@ function createFakeModels() {
       isSample: sv.isSample, slotCapacity: sv.slotCapacity };
   };
 
+  const userOut = (u) => {
+    if (!u) return null;
+    return {
+      id: u.id,
+      role: u.role,
+      status: u.status,
+      fullName: u.fullName,
+      email: u.email,
+      phone: u.phone,
+      passwordHash: u.passwordHash,
+      orgName: u.orgName || null,
+      orgType: u.orgType || null,
+      createdAt: u.createdAt || null,
+      providerId: u.providerId || null,
+      orgArea: u.orgArea || null,
+      approvedBy: u.approvedBy || null,
+      approvedAt: u.approvedAt || null,
+      mustChangePassword: Boolean(u.mustChangePassword),
+      rejectReason: u.rejectReason || null
+    };
+  };
+
   const models = {
     users: {
-      async create(u) {
+      async create(u, runner) { // eslint-disable-line no-unused-vars
         if (s.users.some((x) => x.email === u.email)) throw new DuplicateError('email');
         if (s.users.some((x) => x.phone === u.phone)) throw new DuplicateError('phone');
-        s.users.push(clone(u)); return u;
+        const userObj = {
+          ...u,
+          providerId: u.providerId || null,
+          orgArea: u.orgArea || null,
+          approvedBy: u.approvedBy || null,
+          approvedAt: u.approvedAt || null,
+          mustChangePassword: Boolean(u.mustChangePassword),
+          rejectReason: u.rejectReason || null
+        };
+        s.users.push(clone(userObj));
+        return userOut(userObj);
       },
-      async findByEmail(e) { return clone(s.users.find((u) => u.email === e)) || null; },
-      async findByPhone(p) { return clone(s.users.find((u) => u.phone === p)) || null; },
-      async findById(id) { return clone(s.users.find((u) => u.id === id)) || null; }
+      async findByEmail(e) { return userOut(s.users.find((u) => u.email === e)); },
+      async findByPhone(p) { return userOut(s.users.find((u) => u.phone === p)); },
+      async findById(id) { return userOut(s.users.find((u) => u.id === id)); },
+      async updatePassword(userId, passwordHash, mustChangePassword = false) {
+        const u = s.users.find((x) => x.id === userId);
+        if (u) {
+          u.passwordHash = passwordHash;
+          u.mustChangePassword = Boolean(mustChangePassword);
+        }
+      }
+    },
+    audit: {
+      async log({ actorUserId, action, targetType, targetId, detail }) {
+        s.auditLogs.push({
+          auditId: ++seq,
+          actorUserId: actorUserId || null,
+          action,
+          targetType,
+          targetId: String(targetId),
+          detail: detail || null,
+          createdAt: tick()
+        });
+      }
+    },
+    admin: {
+      async listUsers({ status, role, limit = 20, offset = 0 }) {
+        const lim = Math.max(1, Math.min(50, Number(limit) || 20));
+        const off = Math.max(0, Number(offset) || 0);
+
+        let filtered = s.users.slice();
+        if (status) filtered = filtered.filter((u) => u.status === status);
+        if (role) filtered = filtered.filter((u) => u.role === role);
+
+        const total = filtered.length;
+        // Sort by createdAt DESC
+        filtered.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        const paged = filtered.slice(off, off + lim);
+
+        return {
+          users: paged.map((u) => {
+            const out = userOut(u);
+            delete out.passwordHash;
+            return out;
+          }),
+          meta: { limit: lim, offset: off, total }
+        };
+      },
+
+      async transaction(work) {
+        // Sao chụp trạng thái trước transaction
+        const snapshot = {
+          users: clone(s.users),
+          providers: clone(s.providers),
+          services: clone(s.services),
+          pets: clone(s.pets),
+          metrics: clone(s.metrics),
+          vaccs: clone(s.vaccs),
+          records: clone(s.records),
+          bookings: clone(s.bookings),
+          chunks: clone(s.chunks),
+          auditLogs: clone(s.auditLogs),
+          seq
+        };
+        try {
+          // fake tx object pass through
+          const tx = models.admin;
+          const result = await work(tx);
+          return result;
+        } catch (err) {
+          // Khôi phục trạng thái khi callback ném lỗi
+          s.users.length = 0; s.users.push(...snapshot.users);
+          s.providers.length = 0; s.providers.push(...snapshot.providers);
+          s.services.length = 0; s.services.push(...snapshot.services);
+          s.pets.length = 0; s.pets.push(...snapshot.pets);
+          s.metrics.length = 0; s.metrics.push(...snapshot.metrics);
+          s.vaccs.length = 0; s.vaccs.push(...snapshot.vaccs);
+          s.records.length = 0; s.records.push(...snapshot.records);
+          s.bookings.length = 0; s.bookings.push(...snapshot.bookings);
+          s.chunks.length = 0; s.chunks.push(...snapshot.chunks);
+          s.auditLogs.length = 0; s.auditLogs.push(...snapshot.auditLogs);
+          seq = snapshot.seq;
+          throw err;
+        }
+      },
+
+      async getUserForUpdate(tx, userId) {
+        const u = s.users.find((x) => x.id === userId);
+        return userOut(u);
+      },
+
+      async providerExists(tx, providerId) {
+        return s.providers.some((p) => p.id === providerId);
+      },
+
+      async isProviderActive(tx, providerId) {
+        const p = s.providers.find((x) => x.id === providerId);
+        return Boolean(p && p.active !== false);
+      },
+
+      async countActiveAdmins(tx) {
+        return s.users.filter((u) => u.role === 'admin' && u.status === 'active').length;
+      },
+
+      async insertProvider(tx, p) {
+        if (s.providers.some((x) => x.id === p.providerId)) {
+          const err = new Error(`Violation of PRIMARY KEY constraint. Cannot insert duplicate key in object 'dbo.Providers'. The duplicate key value is (${p.providerId}).`);
+          err.number = 2627;
+          throw err;
+        }
+        s.providers.push({
+          id: p.providerId,
+          name: p.name,
+          area: p.area,
+          type: p.type,
+          isSample: Boolean(p.isSample),
+          active: Boolean(p.isActive),
+          createdAt: tick()
+        });
+      },
+
+      async updateUserApproval(tx, { userId, providerId, approvedBy, approvedAt }) {
+        const u = s.users.find((x) => x.id === userId);
+        if (u) {
+          u.providerId = providerId;
+          u.status = 'active';
+          u.approvedBy = approvedBy;
+          u.approvedAt = approvedAt;
+        }
+      },
+
+      async updateUserRejection(tx, { userId, rejectReason }) {
+        const u = s.users.find((x) => x.id === userId);
+        if (u) {
+          u.status = 'rejected';
+          u.rejectReason = rejectReason;
+        }
+      },
+
+      async updateUserStatus(tx, userId, status) {
+        const u = s.users.find((x) => x.id === userId);
+        if (u) {
+          u.status = status;
+        }
+      },
+
+      async disableProviderAndVets(tx, providerId) {
+        const p = s.providers.find((x) => x.id === providerId);
+        if (p) p.active = false;
+        for (const u of s.users) {
+          if (u.providerId === providerId && u.role === 'vet') {
+            u.status = 'disabled';
+          }
+        }
+      },
+
+      async enableProviderOnly(tx, providerId) {
+        const p = s.providers.find((x) => x.id === providerId);
+        if (p) p.active = true;
+      },
+
+      async logAudit(tx, logEntry) {
+        await models.audit.log(logEntry);
+      }
+    },
+    providerMember: {
+      async transaction(work) {
+        return models.admin.transaction(work);
+      },
+      async listVets({ providerId, limit = 20, offset = 0 }) {
+        const lim = Math.max(1, Math.min(50, Number(limit) || 20));
+        const off = Math.max(0, Number(offset) || 0);
+
+        let filtered = s.users.filter((u) => u.role === 'vet' && u.providerId === providerId);
+        const total = filtered.length;
+
+        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        const paged = filtered.slice(off, off + lim).map((u) => ({
+          id: u.id,
+          role: u.role,
+          status: u.status,
+          fullName: u.fullName,
+          email: u.email,
+          phone: u.phone,
+          providerId: u.providerId,
+          mustChangePassword: Boolean(u.mustChangePassword),
+          createdAt: u.createdAt
+        }));
+
+        return {
+          vets: clone(paged),
+          meta: { limit: lim, offset: off, total }
+        };
+      },
+      async getVetForUpdate(tx, vetId) {
+        const u = s.users.find((x) => x.id === vetId && x.role === 'vet');
+        if (!u) return null;
+        return {
+          id: u.id,
+          role: u.role,
+          status: u.status,
+          fullName: u.fullName,
+          email: u.email,
+          phone: u.phone,
+          providerId: u.providerId,
+          mustChangePassword: Boolean(u.mustChangePassword),
+          createdAt: u.createdAt
+        };
+      },
+      async updateVetStatus(tx, vetId, status) {
+        const u = s.users.find((x) => x.id === vetId);
+        if (u) {
+          u.status = status;
+        }
+      }
     },
     catalog: {
       async listProviders() { return s.providers.filter((p) => p.active !== false).map(({ active, ...p }) => clone(p)); }, // eslint-disable-line no-unused-vars

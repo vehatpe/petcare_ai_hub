@@ -105,7 +105,8 @@
         phone: normalizePhone(input.phone),
         password: String(input.password || ''),
         orgName: String(input.orgName || '').trim(),
-        orgType: String(input.orgType || '')
+        orgType: String(input.orgType || ''),
+        orgArea: String(input.orgArea || '').trim()
       };
 
       const errors = {};
@@ -117,6 +118,8 @@
       if (data.role === 'provider') {
         if (data.orgName.length < 2) errors.orgName = 'Vui lòng nhập tên cơ sở.';
         if (!PROVIDER_TYPES.includes(data.orgType)) errors.orgType = 'Vui lòng chọn loại hình cơ sở.';
+        if (!data.orgArea) errors.orgArea = 'Vui lòng nhập khu vực hoạt động của cơ sở.';
+        else if (data.orgArea.length > 100) errors.orgArea = 'Khu vực tối đa 100 ký tự.';
       }
       if (Object.keys(errors).length) {
         throw new AuthError('validation', 'Vui lòng kiểm tra lại các trường được đánh dấu.', errors);
@@ -150,6 +153,40 @@
 
     logout() {
       Api.session.clear();
+    },
+
+    async changePassword({ currentPassword, newPassword, confirmPassword }) {
+      const cur = String(currentPassword || '');
+      const nextPw = String(newPassword || '');
+      const confirm = String(confirmPassword || '');
+      const errors = {};
+
+      if (!cur) errors.currentPassword = 'Vui lòng nhập mật khẩu hiện tại.';
+      const pwCheck = validators.passwordChecks(nextPw);
+      if (!pwCheck.length || !pwCheck.mix || nextPw.length > 72) {
+        errors.newPassword = 'Mật khẩu mới cần ít nhất 8 ký tự, gồm cả chữ và số (tối đa 72 ký tự).';
+      } else if (cur && cur === nextPw) {
+        errors.newPassword = 'Mật khẩu mới phải khác mật khẩu hiện tại.';
+      }
+      if (!confirm) {
+        errors.confirmPassword = 'Vui lòng xác nhận mật khẩu mới.';
+      } else if (nextPw && confirm !== nextPw) {
+        errors.confirmPassword = 'Mật khẩu xác nhận không khớp.';
+      }
+
+      if (Object.keys(errors).length) {
+        throw new AuthError('validation', 'Vui lòng kiểm tra lại thông tin đổi mật khẩu.', errors);
+      }
+
+      try {
+        const res = await Api.post('/auth/change-password', { currentPassword: cur, newPassword: nextPw });
+        if (res.user) {
+          Api.session.updateUser(res.user);
+        }
+        return res.user;
+      } catch (err) {
+        throw toAuthError(err);
+      }
     }
   };
 

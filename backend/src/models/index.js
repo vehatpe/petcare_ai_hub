@@ -12,11 +12,14 @@ async function createSqlModels(dbConfig) {
   const db = createDb(pool);
   const models = {
     users: require('./user.model')(db),
+    admin: require('./admin.model')(db),
+    providerMember: require('./provider-member.model')(db),
     catalog: require('./catalog.model')(db),
     pets: require('./pet.model')(db),
     health: require('./health.model')(db),
     bookings: require('./booking.model')(db),
     knowledge: require('./knowledge.model')(db),
+    audit: require('./audit.model')(db),
     async ping() {
       const r = await pool.request().query('SELECT 1 AS ok;');
       return r.recordset?.[0]?.ok === 1;
