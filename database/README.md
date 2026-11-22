@@ -73,6 +73,20 @@ SELECT ProviderId, Name, Area FROM dbo.Providers;
 - `Users`: non-clustered filtered index `IX_Users_ProviderId` (WHERE `ProviderId IS NOT NULL`).
 - `AuditLog`: bảng ghi vết kiểm toán quản trị (`AuditId`, `ActorUserId`, `Action`, `TargetType`, `TargetId`, `Detail`, `CreatedAt`) và index `IX_AuditLog_CreatedAt`. `Detail` không bao giờ chứa mật khẩu/token.
 
+### Quy trình duyệt đối tác (Provider) & Ý nghĩa các trạng thái
+
+1. **Khách hàng (`customer`):** Đăng ký công khai, nhận trạng thái `active` ngay và có thể đăng nhập tức thì.
+2. **Đối tác (`provider`):** Đăng ký công khai với thông tin cơ sở (`orgName`, `orgType`, `orgArea`), nhận trạng thái `pending`.
+   - Khi ở trạng thái `pending`, tài khoản không thể đăng nhập (API trả mã lỗi `403 pending` chỉ sau khi xác thực đúng mật khẩu).
+   - **Admin duyệt (`POST /api/v1/admin/users/:id/approve`):** Tạo bản ghi mới trong bảng `Providers` (tự sinh slug duy nhất từ tên cơ sở, `IsActive = 1`), gán `Users.ProviderId`, chuyển trạng thái sang `active`, ghi nhận `ApprovedBy`, `ApprovedAt` và `AuditLog` trong cùng một transaction. Lúc này đối tác có thể đăng nhập và tạo bác sĩ.
+   - **Admin từ chối (`POST /api/v1/admin/users/:id/reject`):** Chuyển trạng thái sang `rejected`, lưu lý do vào `RejectReason` (tối đa 200 ký tự) và ghi `AuditLog`.
+   - **Từ chối là kết thúc:** Tài khoản đã bị từ chối (`rejected`) không thể tự kích hoạt lại hay nộp lại yêu cầu từ tài khoản đó. Người dùng phải đăng ký bằng email/SĐT khác hoặc quản trị viên phải xử lý thủ công ở cơ sở dữ liệu.
+3. **Ý nghĩa các trạng thái (`Status`):**
+   - `pending`: Chờ quản trị viên xem xét và duyệt (áp dụng cho đối tác đăng ký mới).
+   - `active`: Đang hoạt động bình thường, có quyền truy cập các chức năng tương ứng vai trò.
+   - `disabled`: Bị khóa tạm thời bởi quản trị viên (hoặc bị khóa liên đới khi cơ sở Provider chủ quản bị khóa). Mở khóa khôi phục về `active`.
+   - `rejected`: Bị từ chối duyệt tham gia hệ thống (kết thúc vòng đời).
+
 ### Tạo tài khoản Quản trị viên (Admin)
 
 Admin chỉ được khởi tạo qua script dòng lệnh `scripts/create-admin.js`, không tạo qua form đăng ký công khai:
