@@ -90,7 +90,16 @@ async function main() {
 
     // 2. GET /services/:id/slots
     const targetService = servicesRes.body.data[0];
-    const testDate = '2026-11-20';
+    function ymdInTz(offsetDays, tz) {
+      const d = new Date(Date.now() + offsetDays * 86400000);
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(d);
+    }
+    const testDate = ymdInTz(7, config.timezone);
     const slotsRes = await api('GET', `/services/${targetService.id}/slots?date=${testDate}`);
     record(
       '2. GET /services/:id/slots',

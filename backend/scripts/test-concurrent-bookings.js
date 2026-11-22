@@ -17,7 +17,16 @@ async function main() {
 
   const testUserId = crypto.randomUUID();
   const testPetId = crypto.randomUUID();
-  const testDate = '2026-12-25';
+  function ymdInTz(offsetDays, tz) {
+    const d = new Date(Date.now() + offsetDays * 86400000);
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(d);
+  }
+  const testDate = ymdInTz(7, config.timezone);
   const testTime = '10:30';
 
   try {
