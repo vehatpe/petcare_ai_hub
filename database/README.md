@@ -35,7 +35,8 @@ npm run migrate         # Chạy các script schema và migration mới nhất
 npm run migrate -- --seed # Chạy kèm script seed minh họa
 ```
 - Tự động bỏ qua các file migration đã áp dụng trước đó (idempotent).
-- Các migration tăng tiến tiếp theo được đặt trong thư mục `database/migrations/` (ví dụ `003_....sql`, `004_....sql`).
+- Các migration tăng tiến tiếp theo được đặt trong thư mục `database/migrations/` (ví dụ `003_....sql`, `004_....sql`, `005_....sql`, `006_Provider_Profile_Legal.sql`).
+  - `006_Provider_Profile_Legal.sql`: Thêm `OrgLicenseNo`, `OrgTaxCode` vào `Users` (lưu tạm thông tin pháp lý tùy chọn khi đăng ký provider); thêm `Address`, `Phone`, `Description`, `LicenseNo`, `TaxCode`, `UpdatedAt` vào `Providers` để quản lý hồ sơ cơ sở.
 
 ## Đã kiểm chứng trên SQL Server 2022 thật
 Toàn bộ các script tạo schema (`001_Create_Schema.sql`), tri thức RAG (`002_Create_AI_Knowledge.sql`) và dữ liệu mẫu (`001_Seed_Providers_And_Services.sql`) đã được thực thi và kiểm chứng thành công trên Microsoft SQL Server 2022 (RTM) thật và container Docker `mcr.microsoft.com/mssql/server:2022-latest`. Mọi cú pháp T-SQL, kiểu dữ liệu (`UNIQUEIDENTIFIER`, `DATETIME2(3)`, `NVARCHAR(MAX)` JSON check constraint), chỉ mục có điều kiện (`UX_Bookings_Pet_Slot`), và câu lệnh `MERGE` đều hoạt động trơn tru không phát sinh lỗi.
