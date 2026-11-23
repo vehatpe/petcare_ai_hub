@@ -2,6 +2,18 @@
 const { wrap, ok } = require('../utils/http');
 
 module.exports = ({ providerService }) => ({
+  getProfile: wrap(async (req, res) => {
+    const data = await providerService.getProfile(req.user);
+    res.setHeader('Cache-Control', 'no-store');
+    ok(res, data);
+  }),
+
+  updateProfile: wrap(async (req, res) => {
+    const data = await providerService.updateProfile(req.user, req.body);
+    res.setHeader('Cache-Control', 'no-store');
+    ok(res, data, 'Cập nhật hồ sơ cơ sở thành công.');
+  }),
+
   createVet: wrap(async (req, res) => {
     const data = await providerService.createVet(req.user, req.body);
     res.setHeader('Cache-Control', 'no-store');

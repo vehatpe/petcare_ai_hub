@@ -72,5 +72,73 @@ module.exports = (db) => ({
 
   async transaction(work) {
     return db.transaction(work);
+  },
+
+  async getProviderProfile(providerId, runner = db) {
+    const rows = await runner.query(
+      `SELECT ProviderId, Name, Area, Type, Address, Phone, Description, LicenseNo, TaxCode, IsActive, IsSample, UpdatedAt
+       FROM dbo.Providers
+       WHERE ProviderId = @id`,
+      { id: [T.vstr(50), providerId] }
+    );
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      id: r.ProviderId,
+      name: r.Name,
+      area: r.Area,
+      type: r.Type,
+      address: r.Address || null,
+      phone: r.Phone || null,
+      description: r.Description || null,
+      licenseNo: r.LicenseNo || null,
+      taxCode: r.TaxCode || null,
+      isActive: Boolean(r.IsActive),
+      isSample: Boolean(r.IsSample),
+      updatedAt: iso(r.UpdatedAt)
+    };
+  },
+
+  async getProviderForUpdate(tx, providerId) {
+    const rows = await tx.query(
+      `SELECT ProviderId, Name, Area, Type, Address, Phone, Description, LicenseNo, TaxCode, IsActive, IsSample, UpdatedAt
+       FROM dbo.Providers WITH (UPDLOCK, HOLDLOCK)
+       WHERE ProviderId = @id`,
+      { id: [T.vstr(50), providerId] }
+    );
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      id: r.ProviderId,
+      name: r.Name,
+      area: r.Area,
+      type: r.Type,
+      address: r.Address || null,
+      phone: r.Phone || null,
+      description: r.Description || null,
+      licenseNo: r.LicenseNo || null,
+      taxCode: r.TaxCode || null,
+      isActive: Boolean(r.IsActive),
+      isSample: Boolean(r.IsSample),
+      updatedAt: iso(r.UpdatedAt)
+    };
+  },
+
+  async updateProviderProfile(tx, providerId, fields, updatedAt) {
+    await tx.query(
+      `UPDATE dbo.Providers
+       SET Address = @address, Phone = @phone, Description = @description,
+           LicenseNo = @licenseNo, TaxCode = @taxCode, UpdatedAt = @updatedAt
+       WHERE ProviderId = @id`,
+      {
+        id: [T.vstr(50), providerId],
+        address: [T.str(200), fields.address],
+        phone: [T.vstr(20), fields.phone],
+        description: [T.str(500), fields.description],
+        licenseNo: [T.str(50), fields.licenseNo],
+        taxCode: [T.vstr(20), fields.taxCode],
+        updatedAt: [T.dt, updatedAt]
+      }
+    );
   }
 });

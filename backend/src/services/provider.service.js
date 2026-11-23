@@ -51,6 +51,174 @@ function createProviderService({ models, config, clock = () => new Date() }) {
   const dupError = (field) => conflict(DUP_MSG[field][0], { [field]: DUP_MSG[field][1] }, 'duplicate');
 
   return {
+    async getProfile(actorUser) {
+      if (actorUser.role !== 'provider') {
+        throw forbidden('Chỉ đối tác (provider) mới có quyền truy cập hồ sơ cơ sở.');
+      }
+      if (!actorUser.providerId) {
+        throw notFound('Tài khoản đối tác chưa được liên kết với cơ sở nào.');
+      }
+      const profile = await memberModel.getProviderProfile(actorUser.providerId);
+      if (!profile) {
+        throw notFound('Không tìm thấy cơ sở đối tác.');
+      }
+      return profile;
+    },
+
+    async updateProfile(actorUser, input = {}) {
+      if (actorUser.role !== 'provider') {
+        throw forbidden('Chỉ đối tác (provider) mới có quyền cập nhật hồ sơ cơ sở.');
+      }
+      if (!actorUser.providerId) {
+        throw notFound('Tài khoản đối tác chưa được liên kết với cơ sở nào.');
+      }
+
+      // Kiểm tra name, area, type không được gửi lên
+      if (input.name !== undefined || input.area !== undefined || input.type !== undefined) {
+        const errors = {};
+        if (input.name !== undefined) errors.name = 'Tên, khu vực và loại hình cơ sở do quản trị viên quản lý.';
+        if (input.area !== undefined) errors.area = 'Tên, khu vực và loại hình cơ sở do quản trị viên quản lý.';
+        if (input.type !== undefined) errors.type = 'Tên, khu vực và loại hình cơ sở do quản trị viên quản lý.';
+        throw validation('Tên, khu vực và loại hình cơ sở do quản trị viên quản lý.', errors);
+      }
+
+      // Validate address, phone, description, licenseNo, taxCode TRƯỚC transaction
+      const errors = {};
+      const fieldsToUpdate = {};
+      const changedFieldNames = [];
+
+      if ('address' in input) {
+        if (input.address === null || String(input.address).trim() === '') {
+          fieldsToUpdate.address = null;
+        } else {
+          const addr = String(input.address).trim();
+          if (addr.length > 200) {
+            errors.address = 'Địa chỉ cơ sở tối đa 200 ký tự.';
+          } else {
+            fieldsToUpdate.address = addr;
+          }
+        }
+        changedFieldNames.push('address');
+      }
+
+      if ('phone' in input) {
+        if (input.phone === null || String(input.phone).trim() === '') {
+          fieldsToUpdate.phone = null;
+        } else {
+          const normPhone = normalizePhone(input.phone);
+          if (!normPhone) {
+            errors.phone = 'Số điện thoại Việt Nam gồm 10 số, ví dụ: 0912 345 678.';
+          } else {
+            fieldsToUpdate.phone = normPhone;
+          }
+        }
+        changedFieldNames.push('phone');
+      }
+
+      if ('description' in input) {
+        if (input.description === null || String(input.description).trim() === '') {
+          fieldsToUpdate.description = null;
+        } else {
+          const desc = String(input.description).trim();
+          if (desc.length > 500) {
+            errors.description = 'Mô tả cơ sở tối đa 500 ký tự.';
+          } else {
+            fieldsToUpdate.description = desc;
+          }
+        }
+        changedFieldNames.push('description');
+      }
+
+      if ('licenseNo' in input) {
+        if (input.licenseNo === null || String(input.licenseNo).trim() === '') {
+          fieldsToUpdate.licenseNo = null;
+        } else {
+          const rawLic = String(input.licenseNo).trim();
+          if (rawLic.length > 50) {
+            errors.licenseNo = 'Số giấy phép hành nghề tối đa 50 ký tự.';
+          } else if (!/^[A-Za-z0-9\s/.\-]+$/.test(rawLic)) {
+            errors.licenseNo = 'Số giấy phép chỉ gồm chữ, số, khoảng trắng và các ký tự / - .';
+          } else {
+            fieldsToUpdate.licenseNo = rawLic;
+          }
+        }
+        changedFieldNames.push('licenseNo');
+      }
+
+      if ('taxCode' in input) {
+        if (input.taxCode === null || String(input.taxCode).trim() === '') {
+          fieldsToUpdate.taxCode = null;
+        } else {
+          const compactTax = String(input.taxCode).trim().replace(/[\s\-]/g, '');
+          if (!/^\d{10}$|^\d{13}$/.test(compactTax)) {
+            errors.taxCode = 'Mã số thuế phải gồm 10 hoặc 13 chữ số.';
+          } else {
+            fieldsToUpdate.taxCode = compactTax;
+          }
+        }
+        changedFieldNames.push('taxCode');
+      }
+
+      if (Object.keys(errors).length > 0) {
+        throw validation('Dữ liệu hồ sơ cơ sở chưa hợp lệ.', errors);
+      }
+
+      const updatedAt = clock().toISOString();
+
+      return memberModel.transaction(async (tx) => {
+        // Kiểm tra user active
+        if (actorUser.status !== 'active') {
+          throw forbidden('Chỉ đối tác đang hoạt động (active) mới có quyền cập nhật hồ sơ cơ sở.');
+        }
+
+        const provider = await memberModel.getProviderForUpdate(tx, actorUser.providerId);
+        if (!provider) {
+          throw notFound('Không tìm thấy cơ sở đối tác.');
+        }
+
+        if (!provider.isActive) {
+          throw forbidden('Cơ sở đối tác đã bị khóa hoặc ngừng hoạt động.');
+        }
+
+        if (provider.isSample) {
+          throw forbidden('Không thể chỉnh sửa cơ sở dữ liệu mẫu.');
+        }
+
+        const merged = {
+          address: 'address' in fieldsToUpdate ? fieldsToUpdate.address : provider.address,
+          phone: 'phone' in fieldsToUpdate ? fieldsToUpdate.phone : provider.phone,
+          description: 'description' in fieldsToUpdate ? fieldsToUpdate.description : provider.description,
+          licenseNo: 'licenseNo' in fieldsToUpdate ? fieldsToUpdate.licenseNo : provider.licenseNo,
+          taxCode: 'taxCode' in fieldsToUpdate ? fieldsToUpdate.taxCode : provider.taxCode
+        };
+
+        await memberModel.updateProviderProfile(tx, actorUser.providerId, merged, updatedAt);
+
+        await adminModel.logAudit(tx, {
+          actorUserId: actorUser.id,
+          action: 'provider_profile_updated',
+          targetType: 'provider',
+          targetId: actorUser.providerId,
+          detail: JSON.stringify({ fields: changedFieldNames })
+        });
+
+        return {
+          id: provider.id,
+          name: provider.name,
+          area: provider.area,
+          type: provider.type,
+          address: merged.address,
+          phone: merged.phone,
+          description: merged.description,
+          licenseNo: merged.licenseNo,
+          taxCode: merged.taxCode,
+          isActive: provider.isActive,
+          isSample: provider.isSample,
+          updatedAt
+        };
+      });
+    },
+
     async createVet(actorUser, input = {}) {
       let targetProviderId;
       if (actorUser.role === 'admin') {

@@ -322,6 +322,53 @@ function createFakeModels() {
             u.tokenVersion = (u.tokenVersion || 0) + 1;
           }
         }
+      },
+      async getProviderProfile(providerId) {
+        const p = s.providers.find((x) => x.id === providerId);
+        if (!p) return null;
+        return {
+          id: p.id,
+          name: p.name,
+          area: p.area,
+          type: p.type,
+          address: p.address || null,
+          phone: p.phone || null,
+          description: p.description || null,
+          licenseNo: p.licenseNo || null,
+          taxCode: p.taxCode || null,
+          isActive: p.active !== false,
+          isSample: Boolean(p.isSample),
+          updatedAt: p.updatedAt || null
+        };
+      },
+      async getProviderForUpdate(tx, providerId) {
+        const p = s.providers.find((x) => x.id === providerId);
+        if (!p) return null;
+        return {
+          id: p.id,
+          name: p.name,
+          area: p.area,
+          type: p.type,
+          address: p.address || null,
+          phone: p.phone || null,
+          description: p.description || null,
+          licenseNo: p.licenseNo || null,
+          taxCode: p.taxCode || null,
+          isActive: p.active !== false,
+          isSample: Boolean(p.isSample),
+          updatedAt: p.updatedAt || null
+        };
+      },
+      async updateProviderProfile(tx, providerId, fields, updatedAt) {
+        const p = s.providers.find((x) => x.id === providerId);
+        if (p) {
+          p.address = fields.address;
+          p.phone = fields.phone;
+          p.description = fields.description;
+          p.licenseNo = fields.licenseNo;
+          p.taxCode = fields.taxCode;
+          p.updatedAt = updatedAt;
+        }
       }
     },
     catalog: {
