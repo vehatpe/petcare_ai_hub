@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="../js/components/motion-boot.js"></script>
+  <title>Quản lý tài khoản - PetCare AI Hub</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/pages.css">
+  <link rel="stylesheet" href="../css/dashboard.css">
+  <script src="../js/components/motion.js" defer></script>
+</head>
+<body data-page-auth="admin">
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="../index.html" class="brand-logo">
+        <div class="logo-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 2a4 4 0 0 0-4 4c0 1.6 1 3 2.5 3.7A5 5 0 0 0 6 14v1a5 5 0 0 0 5 5h2a5 5 0 0 0 5-5v-1a5 5 0 0 0-4.5-4.3C15 9 16 7.6 16 6a4 4 0 0 0-4-4Z"></path></svg>
+        </div>
+        <span>PetCare AI Hub</span>
+      </a>
+      <nav class="main-nav" aria-label="Điều hướng chính">
+        <a href="../index.html" class="nav-link">Trang chủ</a>
+        <a href="admin-partners.html" class="nav-link">Duyệt đối tác</a>
+        <a href="admin-users.html" class="nav-link active">Quản lý tài khoản</a>
+      </nav>
+      <div class="header-actions">
+        <div class="header-account" data-auth-slot="header"></div>
+        <button type="button" class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Mở menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-header-banner">
+      <div class="container">
+        <h1 class="page-title">Quản lý tài khoản người dùng</h1>
+        <p class="page-subtitle">Danh sách người dùng, phân quyền vai trò và kiểm soát khóa / mở khóa tài khoản toàn hệ thống.</p>
+      </div>
+    </section>
+
+    <div class="container" style="padding-bottom: 72px;">
+      <!-- Filter and search controls -->
+      <section class="dash-section" aria-labelledby="usersHeading">
+        <div class="dash-section-head" style="flex-wrap: wrap; gap: 16px;">
+          <h2 id="usersHeading">Tất cả tài khoản (<span id="userTotal">0</span>)</h2>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <button type="button" class="btn btn-outline btn-sm" id="refreshBtn">Làm mới</button>
+          </div>
+        </div>
+
+        <div class="filter-bar" style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; align-items: center;">
+          <div style="flex: 1; min-width: 220px;">
+            <input type="search" id="searchInput" class="form-control" placeholder="Tìm theo tên, email, SĐT…" aria-label="Tìm kiếm người dùng" style="width: 100%;">
+          </div>
+          <div>
+            <select id="roleFilter" class="form-control" aria-label="Lọc theo vai trò">
+              <option value="">Tất cả vai trò</option>
+              <option value="customer">Chủ nuôi</option>
+              <option value="provider">Đối tác</option>
+              <option value="vet">Bác sĩ</option>
+              <option value="admin">Quản trị</option>
+            </select>
+          </div>
+          <div>
+            <select id="statusFilter" class="form-control" aria-label="Lọc theo trạng thái">
+              <option value="">Tất cả trạng thái</option>
+              <option value="pending">Chờ duyệt</option>
+              <option value="active">Hoạt động</option>
+              <option value="disabled">Đã khóa</option>
+              <option value="rejected">Bị từ chối</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="userListContainer"></div>
+
+        <div class="load-more-wrap" id="loadMoreWrap" style="text-align: center; margin-top: 24px;" hidden>
+          <button type="button" class="btn btn-outline" id="loadMoreBtn">Tải thêm</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="brand-logo">
+            <div class="logo-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 2a4 4 0 0 0-4 4c0 1.6 1 3 2.5 3.7A5 5 0 0 0 6 14v1a5 5 0 0 0 5 5h2a5 5 0 0 0 5-5v-1a5 5 0 0 0-4.5-4.3C15 9 16 7.6 16 6a4 4 0 0 0-4-4Z"></path></svg>
+            </div>
+            <span>PetCare AI Hub</span>
+          </div>
+          <p class="footer-tagline">Nền tảng quản trị và kết nối y tế thú cưng tiêu chuẩn cao.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Tài khoản</h5>
+          <ul class="footer-links" data-auth-slot="footer-account"></ul>
+        </div>
+        <div class="footer-col">
+          <h5>Quản trị</h5>
+          <ul class="footer-links">
+            <li><a href="admin-partners.html">Duyệt đối tác</a></li>
+            <li><a href="admin-users.html">Quản lý tài khoản</a></li>
+            <li><a href="../index.html">Trang chủ</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Khuyến nghị Y tế</h5>
+          <div class="medical-disclaimer-card">
+            <strong>Cảnh báo an toàn:</strong> AI chỉ đóng vai trò tư vấn & sàng lọc ban đầu, không thay thế chẩn đoán lâm sàng của Bác sĩ thú y chuyên môn.
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div>&copy; 2026 PetCare AI Hub. All rights reserved.</div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../js/utils/format.js"></script>
+  <script src="../js/components/toast.js"></script>
+  <script src="../js/components/panel.js"></script>
+  <script src="../js/components/dialog.js"></script>
+  <script src="../js/config/api.config.js"></script>
+  <script src="../js/services/auth.service.js"></script>
+  <script src="../js/services/catalog.service.js"></script>
+  <script src="../js/components/auth-gate.js"></script>
+  <script src="../js/components/header.js"></script>
+  <script src="../js/pages/admin-users.js"></script>
+</body>
+</html>

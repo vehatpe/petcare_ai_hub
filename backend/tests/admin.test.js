@@ -65,6 +65,11 @@ test('Admin API: access control, partner approval, rejection, and account disabl
       assert.equal(u.tokenVersion, undefined, 'tokenVersion must never be leaked');
       assert.equal(u.TokenVersion, undefined, 'TokenVersion must never be leaked');
     }
+
+    // Filter by query q
+    const rSearch = await app.call('GET', '/admin/users?q=nguyen', { token: adminToken });
+    assert.equal(rSearch.status, 200);
+    assert.ok(Array.isArray(rSearch.data.users));
   });
 
   await t.test('approve provider: creates Providers entry, updates ProviderId/status/approvedBy/At, writes AuditLog', async () => {

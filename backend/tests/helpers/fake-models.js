@@ -98,13 +98,21 @@ function createFakeModels() {
       }
     },
     admin: {
-      async listUsers({ status, role, limit = 20, offset = 0 }) {
+      async listUsers({ status, role, q, limit = 20, offset = 0 }) {
         const lim = Math.max(1, Math.min(50, Number(limit) || 20));
         const off = Math.max(0, Number(offset) || 0);
+        const search = q ? String(q).trim().toLowerCase().slice(0, 100) : null;
 
         let filtered = s.users.slice();
         if (status) filtered = filtered.filter((u) => u.status === status);
         if (role) filtered = filtered.filter((u) => u.role === role);
+        if (search) {
+          filtered = filtered.filter((u) =>
+            (u.fullName && u.fullName.toLowerCase().includes(search)) ||
+            (u.email && u.email.toLowerCase().includes(search)) ||
+            (u.phone && u.phone.includes(search))
+          );
+        }
 
         const total = filtered.length;
         // Sort by createdAt DESC

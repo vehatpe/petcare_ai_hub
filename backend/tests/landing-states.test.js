@@ -556,6 +556,8 @@ test('Landing page states: loading, error, empty, with pets', async (t) => {
           if (sel === '[data-auth-slot="header"]') return [headerAccount];
           if (sel === '[data-guest-only]' || sel === '[data-user-only]' || sel === '[data-role-only]') return [];
           if (sel === '[data-auth-slot="footer-account"]') return [];
+          if (sel === '.bento2-booking') return [];
+          if (sel === 'footer a[href*="booking.html"]') return [];
           return [];
         },
         getElementById(id) {
@@ -602,10 +604,11 @@ test('Landing page states: loading, error, empty, with pets', async (t) => {
       return mainNav;
     }
 
-    await subTest.test('admin -> có Duyệt đối tác, không có Đặt lịch hẹn hay Trợ lý AI', () => {
+    await subTest.test('admin -> có Duyệt đối tác, Quản lý tài khoản, không có Đặt lịch hẹn hay Trợ lý AI', () => {
       const nav = runHeaderInVm({ fullName: 'Admin User', role: 'admin' }, '/pages/booking.html');
       const text = nav.textContent;
       assert.ok(text.includes('Duyệt đối tác'), 'admin nav must include Duyệt đối tác');
+      assert.ok(text.includes('Quản lý tài khoản'), 'admin nav must include Quản lý tài khoản');
       assert.ok(text.includes('Trang chủ'), 'admin nav must include Trang chủ');
       assert.equal(text.includes('Đặt lịch hẹn'), false, 'admin nav must not include Đặt lịch hẹn');
       assert.equal(text.includes('Trợ lý AI'), false, 'admin nav must not include Trợ lý AI');
@@ -662,6 +665,9 @@ test('Landing page states: loading, error, empty, with pets', async (t) => {
 
     const authGateJsPath = path.resolve(__dirname, '../../frontend/js/components/auth-gate.js');
     const authGateJsCode = fs.readFileSync(authGateJsPath, 'utf8');
+
+    const headerJsPath = path.resolve(__dirname, '../../frontend/js/components/header.js');
+    const headerJsCode = fs.readFileSync(headerJsPath, 'utf8');
 
     function createMockServicesDom() {
       const elements = new Map();
@@ -805,6 +811,89 @@ test('Landing page states: loading, error, empty, with pets', async (t) => {
 
       const guestLedger = runServicesInVm(null);
       assert.ok(guestLedger.innerHTML.includes('Đặt lịch'), 'guest sees Đặt lịch on services');
+    });
+
+    await subTest.test('header.js: hides footer booking links and bento booking for staff, shows for customer and guest', () => {
+      class TestEl {
+        constructor() {
+          this.hidden = false;
+          this.attributes = new Map();
+        }
+        setAttribute(k, v) { this.attributes.set(k, String(v)); }
+        getAttribute(k) { return this.attributes.get(k); }
+        remove() {}
+      }
+
+      const bentoNode = new TestEl();
+      const bookingLi = new TestEl();
+      const bookingLink = new TestEl();
+      bookingLink.setAttribute('href', 'pages/booking.html');
+      bookingLink.closest = (sel) => (sel === 'li' ? bookingLi : null);
+
+      function runFooterCheck(userRole) {
+        bentoNode.hidden = false;
+        bookingLi.hidden = false;
+        bookingLink.hidden = false;
+
+        const doc = {
+          querySelector(sel) {
+            if (sel === '.main-nav') return new TestEl();
+            if (sel === '#mobileMenuToggle') return new TestEl();
+            return null;
+          },
+          querySelectorAll(sel) {
+            if (sel === '.bento2-booking') return [bentoNode];
+            if (sel === 'footer a[href*="booking.html"]') return [bookingLink];
+            if (sel === '[data-auth-slot="header"]') return [new TestEl()];
+            return [];
+          },
+          getElementById() { return null; },
+          createElement() { return new TestEl(); },
+          addEventListener() {},
+          body: new TestEl()
+        };
+
+        const ctx = vm.createContext({
+          window: {
+            location: { pathname: '/index.html', search: '', href: '/index.html' },
+            addEventListener() {},
+            matchMedia: () => ({ addEventListener() {}, matches: false })
+          },
+          document: doc,
+          Fmt: { esc: (s) => String(s ?? ''), initials: () => '', firstName: () => '' },
+          AuthService: {
+            currentUser: () => (userRole ? { fullName: 'Test User', role: userRole } : null),
+            pageUrl: (f) => f,
+            homeUrl: () => 'index.html',
+            refresh: () => {}
+          }
+        });
+
+        vm.runInContext(headerJsCode, ctx);
+        return { bentoHidden: bentoNode.hidden, linkHidden: bookingLi.hidden };
+      }
+
+      // Staff roles: hidden
+      const adminRes = runFooterCheck('admin');
+      assert.equal(adminRes.bentoHidden, true, 'admin hides bento booking');
+      assert.equal(adminRes.linkHidden, true, 'admin hides footer booking link');
+
+      const provRes = runFooterCheck('provider');
+      assert.equal(provRes.bentoHidden, true, 'provider hides bento booking');
+      assert.equal(provRes.linkHidden, true, 'provider hides footer booking link');
+
+      const vetRes = runFooterCheck('vet');
+      assert.equal(vetRes.bentoHidden, true, 'vet hides bento booking');
+      assert.equal(vetRes.linkHidden, true, 'vet hides footer booking link');
+
+      // Customer and guest: visible
+      const custRes = runFooterCheck('customer');
+      assert.equal(custRes.bentoHidden, false, 'customer sees bento booking');
+      assert.equal(custRes.linkHidden, false, 'customer sees footer booking link');
+
+      const guestRes = runFooterCheck(null);
+      assert.equal(guestRes.bentoHidden, false, 'guest sees bento booking');
+      assert.equal(guestRes.linkHidden, false, 'guest sees footer booking link');
     });
 
     await subTest.test('providers: admin/provider/vet KHÔNG có nút Đặt lịch tại đây; customer và khách CÓ', () => {

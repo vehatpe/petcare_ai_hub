@@ -44,6 +44,7 @@ function createAdminService({ models, config, clock = () => new Date() }) {
       return adminModel.listUsers({
         status: query.status ? String(query.status).trim() : undefined,
         role: query.role ? String(query.role).trim() : undefined,
+        q: query.q ? String(query.q).trim() : undefined,
         limit: query.limit,
         offset: query.offset
       });

@@ -24,9 +24,10 @@ const mapUser = (r) => r && ({
 });
 
 module.exports = (db) => ({
-  async listUsers({ status, role, limit = 20, offset = 0 }) {
+  async listUsers({ status, role, q, limit = 20, offset = 0 }) {
     const lim = Math.max(1, Math.min(50, Number(limit) || 20));
     const off = Math.max(0, Number(offset) || 0);
+    const search = q ? String(q).trim().slice(0, 100) : null;
 
     const whereClauses = [];
     const params = {
@@ -41,6 +42,10 @@ module.exports = (db) => ({
     if (role) {
       whereClauses.push('u.Role = @role');
       params.role = [T.vstr(10), role];
+    }
+    if (search) {
+      whereClauses.push(`(u.FullName LIKE @like ESCAPE '\\' OR u.Email LIKE @like ESCAPE '\\' OR u.Phone LIKE @like ESCAPE '\\')`);
+      params.like = [T.str(110), '%' + search.replace(/[\\%_[]/g, (m) => '\\' + m) + '%'];
     }
 
     const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';

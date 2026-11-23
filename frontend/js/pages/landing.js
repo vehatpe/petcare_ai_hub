@@ -60,8 +60,12 @@ document.addEventListener('DOMContentLoaded', () => {
       let roleSpecificLink = '';
       let pcardActionLink = '';
       if (user.role === 'admin') {
-        roleSpecificLink = `<a href="pages/admin-partners.html" class="btn btn-primary btn-lg">Duyệt đối tác</a>`;
-        pcardActionLink = `<a href="pages/admin-partners.html" class="btn btn-primary btn-sm">Duyệt đối tác</a>`;
+        roleSpecificLink = `
+          <a href="pages/admin-partners.html" class="btn btn-primary btn-lg">Duyệt đối tác</a>
+          <a href="pages/admin-users.html" class="btn btn-outline btn-lg">Quản lý tài khoản</a>`;
+        pcardActionLink = `
+          <a href="pages/admin-partners.html" class="btn btn-primary btn-sm">Duyệt đối tác</a>
+          <a href="pages/admin-users.html" class="btn btn-outline btn-sm">Quản lý tài khoản</a>`;
       } else if (user.role === 'provider') {
         roleSpecificLink = `<a href="pages/provider-vets.html" class="btn btn-primary btn-lg">Quản lý bác sĩ</a>`;
         pcardActionLink = `<a href="pages/provider-vets.html" class="btn btn-primary btn-sm">Quản lý bác sĩ</a>`;
