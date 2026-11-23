@@ -491,6 +491,12 @@ function createFakeModels() {
     },
     async addStaff(role, { id, email, phone, passwordHash, fullName = 'Bác sĩ Test' }) {
       await models.users.create({ id, role, status: 'active', fullName, email, phone, passwordHash, orgName: null, orgType: null, createdAt: tick() });
+    },
+    async queryAuditLogs(filter = {}) {
+      let logs = s.auditLogs.slice();
+      if (filter.action) logs = logs.filter((l) => l.action === filter.action);
+      if (filter.targetType) logs = logs.filter((l) => l.targetType === filter.targetType);
+      return clone(logs);
     }
   };
   return { models, testHelpers };

@@ -167,7 +167,9 @@ async function main() {
         password: prov1Pass,
         orgName: `Bệnh Viện Thú Y Alpha ${runId}`,
         orgType: 'clinic',
-        orgArea: 'Quận 1, TP.HCM'
+        orgArea: 'Quận 1, TP.HCM',
+        licenseNo: 'GPHN-SMOKE/01',
+        taxCode: '0312-345-678'
       }
     });
     record(
@@ -222,14 +224,16 @@ async function main() {
     // 6. Direct SQL verification of Providers and AuditLog
     const provDbCheck = await pool.request()
       .input('pid', sql.VarChar(50), approvedProviderId)
-      .query('SELECT ProviderId, Name, Area, IsActive FROM dbo.Providers WHERE ProviderId = @pid');
+      .query('SELECT ProviderId, Name, Area, IsActive, LicenseNo, TaxCode FROM dbo.Providers WHERE ProviderId = @pid');
     const auditDbCheck = await pool.request()
       .input('targetId', sql.VarChar(50), prov1UserId)
       .query("SELECT Action, TargetType, Detail FROM dbo.AuditLog WHERE TargetId = @targetId AND Action = 'approve_provider'");
     record(
-      '6. DB check: Providers row created & AuditLog approve_provider recorded',
-      provDbCheck.recordset.length === 1 && provDbCheck.recordset[0].IsActive === true && auditDbCheck.recordset.length === 1,
-      `ProviderId: ${approvedProviderId}, Audit action: ${auditDbCheck.recordset[0]?.Action}`
+      '6. DB check: Providers row created & AuditLog approve_provider recorded with LicenseNo/TaxCode',
+      provDbCheck.recordset.length === 1 && provDbCheck.recordset[0].IsActive === true &&
+      provDbCheck.recordset[0].LicenseNo === 'GPHN-SMOKE/01' && provDbCheck.recordset[0].TaxCode === '0312345678' &&
+      auditDbCheck.recordset.length === 1,
+      `ProviderId: ${approvedProviderId}, LicenseNo: ${provDbCheck.recordset[0]?.LicenseNo}, TaxCode: ${provDbCheck.recordset[0]?.TaxCode}`
     );
 
     // 7. Provider login after approval -> 200 OK
@@ -242,6 +246,49 @@ async function main() {
       `Provider ID: ${prov1LoginRes.body.data?.user?.providerId}`
     );
     const prov1Token = prov1LoginRes.body.data?.token;
+
+    // 7b (S9). Provider Profile: GET & PUT /provider/profile, public /providers check
+    const getProfRes = await api('GET', '/provider/profile', { token: prov1Token });
+    const getProfOk = getProfRes.status === 200 &&
+      getProfRes.body.data?.licenseNo === 'GPHN-SMOKE/01' &&
+      getProfRes.body.data?.taxCode === '0312345678' &&
+      getProfRes.headers.get('cache-control')?.includes('no-store');
+
+    const putProfRes = await api('PUT', '/provider/profile', {
+      token: prov1Token,
+      body: {
+        address: 'Số 99 Đường Thú Y, Phường Tân Định, Quận 1',
+        phone: '0909 888 777',
+        description: 'Bệnh viện thú y Alpha chuyên khoa sâu.'
+      }
+    });
+
+    const provDbAfterPut = await pool.request()
+      .input('pid', sql.VarChar(50), approvedProviderId)
+      .query('SELECT Address, Phone, Description, LicenseNo, TaxCode, UpdatedAt FROM dbo.Providers WHERE ProviderId = @pid');
+    const rowP = provDbAfterPut.recordset[0];
+    const putProfOk = putProfRes.status === 200 &&
+      putProfRes.body.data?.address === 'Số 99 Đường Thú Y, Phường Tân Định, Quận 1' &&
+      putProfRes.body.data?.phone === '0909888777' &&
+      putProfRes.headers.get('cache-control')?.includes('no-store') &&
+      rowP.Address === 'Số 99 Đường Thú Y, Phường Tân Định, Quận 1' &&
+      rowP.Phone === '0909888777' &&
+      rowP.LicenseNo === 'GPHN-SMOKE/01' &&
+      Boolean(rowP.UpdatedAt);
+
+    const publicProvsRes = await api('GET', '/providers');
+    const myPublicProv = publicProvsRes.body.data?.find((p) => p.id === approvedProviderId);
+    const publicNoLegal = myPublicProv &&
+      myPublicProv.address === 'Số 99 Đường Thú Y, Phường Tân Định, Quận 1' &&
+      myPublicProv.phone === '0909888777' &&
+      myPublicProv.licenseNo === undefined &&
+      myPublicProv.taxCode === undefined;
+
+    record(
+      '7b. S9 Provider Profile: GET/PUT /provider/profile on real DB & public /providers never leaks legal info',
+      getProfOk && putProfOk && publicNoLegal,
+      `PUT status: ${putProfRes.status}, DB Address: ${rowP?.Address}, Public legal masked: ${publicNoLegal}`
+    );
 
     // 8. Register second provider with duplicate orgName -> slug with numeric suffix (-2)
     const prov2Email = `prov2_${runId}@clinic.vn`;
@@ -413,11 +460,20 @@ async function main() {
       .input('vid', sql.UniqueIdentifier, vetUserId)
       .query('SELECT Status FROM dbo.Users WHERE UserId = @vid');
     const vetTokenAfterDis = await api('GET', '/auth/me', { token: vetNewToken });
+
+    // S9: Disabled provider cannot PUT /provider/profile
+    const putProfAfterDis = await api('PUT', '/provider/profile', {
+      token: prov1Token,
+      body: { address: 'Địa chỉ cố tình sửa khi bị khóa' }
+    });
+    const putBlockedOnDis = putProfAfterDis.status === 403;
+
     record(
-      '14. Admin disables Provider -> cascades to Vets and Providers.IsActive=0; old tokens blocked 403',
+      '14. Admin disables Provider -> cascades to Vets and Providers.IsActive=0; old tokens blocked 403; profile update rejected',
       disProvRes.status === 200 && pCheckAfterDis.recordset[0].IsActive === false &&
-      vetCheckAfterDis.recordset[0].Status === 'disabled' && vetTokenAfterDis.status === 403,
-      `Provider IsActive: ${pCheckAfterDis.recordset[0].IsActive}, Vet status: ${vetCheckAfterDis.recordset[0].Status}`
+      vetCheckAfterDis.recordset[0].Status === 'disabled' && vetTokenAfterDis.status === 403 &&
+      putBlockedOnDis,
+      `Provider IsActive: ${pCheckAfterDis.recordset[0].IsActive}, Vet status: ${vetCheckAfterDis.recordset[0].Status}, Profile PUT: ${putProfAfterDis.status}`
     );
 
     // 15. Admin enables Provider -> Provider active (IsActive=1), Vet remains disabled
@@ -486,8 +542,11 @@ async function main() {
   } finally {
     console.log('\n--- CLEANING UP C1 TEST DATA ON REAL SQL SERVER ---');
     try {
-      // 1. Delete Vets and other created users, handling foreign keys carefully
-      // Set ApprovedBy = NULL on Users first so we can delete testAdmin without FK_Users_ApprovedBy violation
+      // 0. Delete AuditLogs referencing created Providers or Users first to prevent FK/orphan issues
+      if (createdProviderIds.length > 0) {
+        const pidList = createdProviderIds.map((id) => `'${id}'`).join(',');
+        await pool.request().query(`DELETE FROM dbo.AuditLog WHERE TargetId IN (${pidList}) OR Detail LIKE '%${createdProviderIds[0]}%'`);
+      }
       if (createdUserIds.length > 0) {
         const idList = createdUserIds.map((id) => `'${id}'`).join(',');
         await pool.request().query(`UPDATE dbo.Users SET ApprovedBy = NULL WHERE UserId IN (${idList}) OR ApprovedBy = '${testAdminId}'`);
@@ -499,7 +558,6 @@ async function main() {
       // 2. Delete created Providers rows
       if (createdProviderIds.length > 0) {
         const pidList = createdProviderIds.map((id) => `'${id}'`).join(',');
-        await pool.request().query(`DELETE FROM dbo.AuditLog WHERE TargetId IN (${pidList})`);
         await pool.request().query(`DELETE FROM dbo.Providers WHERE ProviderId IN (${pidList})`);
         console.log(`[CLEANUP] Deleted ${createdProviderIds.length} test provider(s).`);
       }

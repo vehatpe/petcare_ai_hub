@@ -2,7 +2,7 @@
 const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const { notFound, conflict, validation, forbidden, AppError, DuplicateError } = require('../utils/errors');
-const { validateVetInput } = require('../utils/validators');
+const { validateVetInput, normalizePhone } = require('../utils/validators');
 
 const DUP_MSG = {
   email: ['Email này đã được đăng ký.', 'Email này đã có tài khoản. Hãy dùng email khác.'],
@@ -192,15 +192,25 @@ function createProviderService({ models, config, clock = () => new Date() }) {
           taxCode: 'taxCode' in fieldsToUpdate ? fieldsToUpdate.taxCode : provider.taxCode
         };
 
-        await memberModel.updateProviderProfile(tx, actorUser.providerId, merged, updatedAt);
+        try {
+          await memberModel.updateProviderProfile(tx, actorUser.providerId, merged, updatedAt);
+        } catch (e) {
+          console.error('DEBUG updateProviderProfile error:', e);
+          throw e;
+        }
 
-        await adminModel.logAudit(tx, {
-          actorUserId: actorUser.id,
-          action: 'provider_profile_updated',
-          targetType: 'provider',
-          targetId: actorUser.providerId,
-          detail: JSON.stringify({ fields: changedFieldNames })
-        });
+        try {
+          await adminModel.logAudit(tx, {
+            actorUserId: actorUser.id,
+            action: 'provider_profile_updated',
+            targetType: 'provider',
+            targetId: actorUser.providerId,
+            detail: JSON.stringify({ fields: changedFieldNames })
+          });
+        } catch (e) {
+          console.error('DEBUG logAudit error:', e);
+          throw e;
+        }
 
         return {
           id: provider.id,

@@ -19,14 +19,18 @@ async function startTestApp({ now = '2026-06-10T03:00:00Z', ai, env = {} } = {})
   const server = await new Promise((resolve) => { const s = app.listen(0, () => resolve(s)); });
   const base = `http://127.0.0.1:${server.address().port}/api/v1`;
 
-  async function call(method, path, { token, body, raw } = {}) {
+  async function call(method, path, { token, body, raw, headers = {} } = {}) {
     const res = await fetch(base + path, {
       method,
-      headers: { ...(body !== undefined || raw ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: {
+        ...(body !== undefined || raw ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers
+      },
       body: raw !== undefined ? raw : body !== undefined ? JSON.stringify(body) : undefined
     });
     const json = await res.json();
-    return { status: res.status, body: json, data: json.data, headers: res.headers };
+    return { status: res.status, body: json, data: json.data, headers: res.headers, message: json.message };
   }
   let n = 0;
   async function registerCustomer(over = {}) {
