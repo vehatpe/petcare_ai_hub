@@ -40,10 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const STATUS_BADGE = {
-    active: 'status-active',
-    pending: 'status-pending',
-    disabled: 'status-disabled',
-    rejected: 'status-rejected'
+    active: 'badge-success',
+    pending: 'badge-warning',
+    disabled: 'badge-danger',
+    rejected: 'badge-dark'
   };
 
   function promptDisableUser(targetUser) {
@@ -123,13 +123,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const isSelf = String(u.id).toLowerCase() === String(user.id).toLowerCase();
     const roleText = ROLE_LABEL[u.role] || u.role;
     const statusText = STATUS_LABEL[u.status] || u.status;
-    const badgeClass = STATUS_BADGE[u.status] || 'status-pending';
+    const badgeClass = STATUS_BADGE[u.status] || 'badge-warning';
+    const createdAtText = u.createdAt ? Fmt.dateShort(u.createdAt) : '—';
 
     let facilityInfo = '';
     if (u.role === 'provider' && u.orgName) {
-      facilityInfo = `<div class="dash-item-meta"><span>Cơ sở: <strong>${esc(u.orgName)}</strong> (${esc(u.orgArea || 'Chưa có khu vực')})</span></div>`;
+      facilityInfo = `<p class="pet-summary"><strong>Cơ sở:</strong> ${esc(u.orgName)} (${esc(u.orgArea || 'Chưa có khu vực')})</p>`;
     } else if (u.role === 'vet' && u.providerId) {
-      facilityInfo = `<div class="dash-item-meta"><span>Mã cơ sở: <strong>${esc(u.providerId)}</strong></span></div>`;
+      facilityInfo = `<p class="pet-summary"><strong>Mã cơ sở:</strong> ${esc(u.providerId)}</p>`;
     }
 
     let actionButtons = '';
@@ -141,31 +142,34 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (u.status === 'pending') {
         actionButtons = `<a href="admin-partners.html" class="btn btn-outline btn-sm">Xử lý ở Duyệt đối tác</a>`;
       } else if (u.status === 'rejected') {
-        actionButtons = `<span class="text-muted" style="font-size: 0.8125rem;">${u.rejectReason ? 'Lý do: ' + esc(u.rejectReason) : 'Đã bị từ chối'}</span>`;
+        actionButtons = `<span class="pet-summary">${u.rejectReason ? 'Lý do: ' + esc(u.rejectReason) : 'Đã bị từ chối'}</span>`;
       }
     } else {
-      actionButtons = `<span class="badge" style="background: var(--color-bg-subtle, #f1f5f9); color: var(--color-text-muted, #64748b); font-size: 0.75rem; padding: 4px 8px; border-radius: 4px;">Tài khoản của bạn</span>`;
+      actionButtons = `<span class="badge badge-dark">Tài khoản của bạn</span>`;
     }
 
     return `
-      <article class="dash-item" data-id="${esc(u.id)}" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px; border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 12px; background: var(--color-card-bg, #fff);">
-        <div style="flex: 1; min-width: 0;">
+      <li class="pet-row" data-id="${esc(u.id)}">
+        <div class="pet-avatar" aria-hidden="true" style="font-size: 1.25rem; font-weight: 700; background: var(--color-mint-light, #eaf5e9); color: var(--color-dark-forest);">
+          ${esc(Fmt.initials(u.fullName))}
+        </div>
+        <div class="pet-main">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
-            <h3 style="font-size: 1rem; margin: 0; font-weight: 600;">${esc(u.fullName)}</h3>
-            <span class="badge badge-role" style="font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; background: #e0f2fe; color: #0369a1;">${esc(roleText)}</span>
-            <span class="badge ${badgeClass}" style="font-size: 0.75rem; padding: 2px 8px; border-radius: 4px;">${esc(statusText)}</span>
+            <h3 class="pet-name" style="margin: 0;">${esc(u.fullName)}</h3>
+            <span class="badge badge-mint">${esc(roleText)}</span>
+            <span class="badge ${badgeClass}">${esc(statusText)}</span>
           </div>
-          <div class="dash-item-meta" style="font-size: 0.875rem; color: var(--color-text-muted); display: flex; gap: 12px; flex-wrap: wrap;">
-            <span>Email: <strong>${esc(u.email)}</strong></span>
-            <span>SĐT: <strong>${esc(u.phone)}</strong></span>
-            <span>Tạo ngày: ${esc(Fmt.dateShort(u.createdAt))}</span>
-          </div>
+          <p class="pet-summary" style="margin-bottom: 4px;">
+            <strong>Email:</strong> ${esc(u.email)} ·
+            <strong>SĐT:</strong> ${esc(u.phone)} ·
+            <strong>Tạo ngày:</strong> ${esc(createdAtText)}
+          </p>
           ${facilityInfo}
         </div>
-        <div class="dash-item-actions" style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+        <div class="pet-actions" style="align-items: center;">
           ${actionButtons}
         </div>
-      </article>`;
+      </li>`;
   }
 
   function getFilterQuery() {
@@ -191,7 +195,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    listEl.innerHTML = users.map(renderUserCard).join('');
+    listEl.innerHTML = `
+      <ul class="pet-list" style="list-style: none; padding: 0; margin: 0;">
+        ${users.map(renderUserCard).join('')}
+      </ul>`;
     loadMoreWrap.hidden = users.length >= currentTotal;
   }
 
