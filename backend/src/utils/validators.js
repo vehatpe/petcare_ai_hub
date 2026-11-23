@@ -257,7 +257,132 @@ function validateBooking(input, now) {
   return { errors, value: { petId: petId.toLowerCase(), serviceId, date, time, notes } };
 }
 
+const SERVICE_CATEGORIES = [
+  { id: 'medical', labels: ['Khám & điều trị', 'Tiêm chủng', 'Phòng bệnh', 'Phẫu thuật'] },
+  { id: 'grooming', labels: ['Spa & làm đẹp', 'Cắt tỉa lông', 'Tắm & vệ sinh'] },
+  { id: 'hotel', labels: ['Lưu trú', 'Trông giữ theo giờ'] },
+  { id: 'emergency', labels: ['Cấp cứu 24/7', 'Hồi sức cấp cứu'] }
+];
+
+const SERVICE_LIMITS = {
+  priceMaxVnd: 100000000,
+  capacityMax: 50,
+  nameMax: 200,
+  unitMax: 30,
+  descriptionMax: 500,
+  maxServicesPerProvider: 50
+};
+
+function getServiceOptions() {
+  return {
+    categories: SERVICE_CATEGORIES.map((c) => ({ id: c.id, labels: [...c.labels] })),
+    priceMaxVnd: SERVICE_LIMITS.priceMaxVnd,
+    capacityMax: SERVICE_LIMITS.capacityMax,
+    nameMax: SERVICE_LIMITS.nameMax,
+    unitMax: SERVICE_LIMITS.unitMax
+  };
+}
+
+function validateServiceInput(input = {}, isUpdate = false) {
+  const errors = {};
+  const value = {};
+
+  // name: 3-200 chars (trim)
+  if (input.name !== undefined || !isUpdate) {
+    const rawName = str(input.name).trim();
+    if (!rawName) {
+      errors.name = 'Vui lòng nhập tên dịch vụ.';
+    } else if (rawName.length < 3) {
+      errors.name = 'Tên dịch vụ tối thiểu 3 ký tự.';
+    } else if (rawName.length > SERVICE_LIMITS.nameMax) {
+      errors.name = `Tên dịch vụ tối đa ${SERVICE_LIMITS.nameMax} ký tự.`;
+    } else {
+      value.name = rawName;
+    }
+  }
+
+  // description: <= 500 chars (optional, default '')
+  if (input.description !== undefined) {
+    const rawDesc = str(input.description).trim();
+    if (rawDesc.length > SERVICE_LIMITS.descriptionMax) {
+      errors.description = `Mô tả dịch vụ tối đa ${SERVICE_LIMITS.descriptionMax} ký tự.`;
+    } else {
+      value.description = rawDesc;
+    }
+  } else if (!isUpdate) {
+    value.description = '';
+  }
+
+  // category: medical | grooming | hotel | emergency
+  let catDef = null;
+  if (input.category !== undefined || !isUpdate) {
+    const rawCat = str(input.category).trim();
+    catDef = SERVICE_CATEGORIES.find((c) => c.id === rawCat);
+    if (!catDef) {
+      errors.category = 'Danh mục không hợp lệ (chỉ chấp nhận: medical, grooming, hotel, emergency).';
+    } else {
+      value.category = rawCat;
+    }
+  }
+
+  // categoryLabel: thuộc danh mục tương ứng, nếu thiếu thì mặc định nhãn đầu của danh mục
+  if (input.categoryLabel !== undefined) {
+    const rawLabel = str(input.categoryLabel).trim();
+    if (catDef) {
+      if (!catDef.labels.includes(rawLabel)) {
+        errors.categoryLabel = `Nhãn danh mục không hợp lệ cho ${catDef.id}. Các nhãn hợp lệ: ${catDef.labels.join(', ')}.`;
+      } else {
+        value.categoryLabel = rawLabel;
+      }
+    } else if (!isUpdate || input.category !== undefined) {
+      // nếu category lỗi, không thể gán nhãn
+    } else {
+      // isUpdate nhưng không đổi category, cần validate đối chiếu sau hoặc kiểm tra nhãn thuộc bất kỳ category nào
+      value.categoryLabel = rawLabel;
+    }
+  } else if (!isUpdate && catDef) {
+    value.categoryLabel = catDef.labels[0];
+  }
+
+  // priceVnd: integer 0 - 100,000,000
+  if (input.priceVnd !== undefined || !isUpdate) {
+    const rawPrice = Number(input.priceVnd);
+    if (!Number.isInteger(rawPrice) || rawPrice < 0 || rawPrice > SERVICE_LIMITS.priceMaxVnd) {
+      errors.priceVnd = `Giá dịch vụ phải là số nguyên từ 0 đến ${SERVICE_LIMITS.priceMaxVnd.toLocaleString('vi-VN')} đ.`;
+    } else {
+      value.priceVnd = rawPrice;
+    }
+  }
+
+  // unit: 1-30 chars
+  if (input.unit !== undefined || !isUpdate) {
+    const rawUnit = str(input.unit).trim();
+    if (!rawUnit) {
+      errors.unit = 'Vui lòng nhập đơn vị tính (ví dụ: lượt khám, ngày, liệu trình).';
+    } else if (rawUnit.length > SERVICE_LIMITS.unitMax) {
+      errors.unit = `Đơn vị tính tối đa ${SERVICE_LIMITS.unitMax} ký tự.`;
+    } else {
+      value.unit = rawUnit;
+    }
+  }
+
+  // slotCapacity: integer 1 - 50 (default 3 if creating and not provided)
+  if (input.slotCapacity !== undefined) {
+    const rawCap = Number(input.slotCapacity);
+    if (!Number.isInteger(rawCap) || rawCap < 1 || rawCap > SERVICE_LIMITS.capacityMax) {
+      errors.slotCapacity = `Sức chứa mỗi khung giờ phải là số nguyên từ 1 đến ${SERVICE_LIMITS.capacityMax}.`;
+    } else {
+      value.slotCapacity = rawCap;
+    }
+  } else if (!isUpdate) {
+    value.slotCapacity = 3;
+  }
+
+  return { errors, value };
+}
+
 module.exports = {
   EMAIL_RE, TIME_SLOTS, PROVIDER_TYPES, isUuid, normalizePhone, parseLegalInfo, parseLegalField, validateRegister, validateVetInput, validateChangePassword, validatePet,
-  validateWeight, validateVaccination, validateMedicalRecord, validateBooking
+  validateWeight, validateVaccination, validateMedicalRecord, validateBooking,
+  SERVICE_CATEGORIES, SERVICE_LIMITS, getServiceOptions, validateServiceInput
 };

@@ -380,6 +380,101 @@ function createFakeModels() {
           p.taxCode = fields.taxCode;
           p.updatedAt = updatedAt;
         }
+      },
+      async listServices({ providerId, limit = 50, offset = 0 }) {
+        const lim = Math.max(1, Math.min(100, Number(limit) || 50));
+        const off = Math.max(0, Number(offset) || 0);
+
+        let filtered = s.services.filter((x) => x.providerId === providerId);
+        const total = filtered.length;
+
+        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        const paged = filtered.slice(off, off + lim).map((x) => ({
+          id: x.id,
+          providerId: x.providerId,
+          category: x.category,
+          categoryLabel: x.categoryLabel,
+          name: x.name,
+          description: x.description || '',
+          priceVnd: x.priceVnd,
+          unit: x.unit,
+          slotCapacity: x.slotCapacity,
+          isActive: x.active !== false,
+          isSample: Boolean(x.isSample),
+          createdAt: x.createdAt
+        }));
+
+        return {
+          services: clone(paged),
+          meta: { limit: lim, offset: off, total }
+        };
+      },
+      async countServices(tx, providerId) {
+        return s.services.filter((x) => x.providerId === providerId).length;
+      },
+      async getServiceForUpdate(tx, serviceId) {
+        const x = s.services.find((sv) => sv.id === serviceId);
+        if (!x) return null;
+        return {
+          id: x.id,
+          providerId: x.providerId,
+          category: x.category,
+          categoryLabel: x.categoryLabel,
+          name: x.name,
+          description: x.description || '',
+          priceVnd: x.priceVnd,
+          unit: x.unit,
+          slotCapacity: x.slotCapacity,
+          isActive: x.active !== false,
+          isSample: Boolean(x.isSample),
+          createdAt: x.createdAt
+        };
+      },
+      async findServiceByName(tx, providerId, name, excludeServiceId = null) {
+        const trimmed = (name || '').trim().toLowerCase();
+        const found = s.services.find((x) =>
+          x.providerId === providerId &&
+          (x.name || '').trim().toLowerCase() === trimmed &&
+          (!excludeServiceId || x.id !== excludeServiceId)
+        );
+        return found ? { ServiceId: found.id, Name: found.name } : null;
+      },
+      async serviceIdExists(tx, serviceId) {
+        return s.services.some((x) => x.id === serviceId);
+      },
+      async createService(tx, service) {
+        s.services.push({
+          id: service.id,
+          providerId: service.providerId,
+          category: service.category,
+          categoryLabel: service.categoryLabel,
+          name: service.name,
+          description: service.description || '',
+          priceVnd: service.priceVnd,
+          unit: service.unit,
+          slotCapacity: service.slotCapacity,
+          active: Boolean(service.isActive),
+          isSample: Boolean(service.isSample),
+          createdAt: service.createdAt instanceof Date ? service.createdAt.toISOString() : service.createdAt || tick()
+        });
+      },
+      async updateService(tx, serviceId, fields) {
+        const x = s.services.find((sv) => sv.id === serviceId);
+        if (x) {
+          x.name = fields.name;
+          x.description = fields.description;
+          x.category = fields.category;
+          x.categoryLabel = fields.categoryLabel;
+          x.priceVnd = fields.priceVnd;
+          x.unit = fields.unit;
+          x.slotCapacity = fields.slotCapacity;
+        }
+      },
+      async setServiceActive(tx, serviceId, isActive) {
+        const x = s.services.find((sv) => sv.id === serviceId);
+        if (x) {
+          x.active = Boolean(isActive);
+        }
       }
     },
     catalog: {
@@ -397,11 +492,21 @@ function createFakeModels() {
       },
       async listServices({ category, providerId, q }) {
         return s.services.filter((x) => x.active !== false)
+          .filter((x) => {
+            const p = s.providers.find((prov) => prov.id === x.providerId);
+            return p && p.active !== false;
+          })
           .filter((x) => (!category || x.category === category) && (!providerId || x.providerId === providerId))
           .filter((x) => !q || x.name.toLowerCase().includes(q.toLowerCase()))
           .map(svcOut);
       },
-      async getService(id) { const x = s.services.find((v) => v.id === id && v.active !== false); return x ? svcOut(x) : null; }
+      async getService(id) {
+        const x = s.services.find((v) => v.id === id && v.active !== false);
+        if (!x) return null;
+        const p = s.providers.find((prov) => prov.id === x.providerId);
+        if (!p || p.active === false) return null;
+        return svcOut(x);
+      }
     },
     pets: {
       async listByOwner(o) { return s.pets.filter((p) => p.ownerId === o).map(petOut); },

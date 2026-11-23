@@ -2,12 +2,55 @@
 const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const { notFound, conflict, validation, forbidden, AppError, DuplicateError } = require('../utils/errors');
-const { validateVetInput, normalizePhone, parseLegalField } = require('../utils/validators');
+const {
+  validateVetInput,
+  normalizePhone,
+  parseLegalField,
+  getServiceOptions,
+  validateServiceInput,
+  SERVICE_CATEGORIES,
+  SERVICE_LIMITS
+} = require('../utils/validators');
 
 const DUP_MSG = {
   email: ['Email này đã được đăng ký.', 'Email này đã có tài khoản. Hãy dùng email khác.'],
   phone: ['Số điện thoại này đã được đăng ký.', 'Số điện thoại này đã có tài khoản. Hãy dùng số khác.']
 };
+
+/**
+ * Sinh slug không dấu cho tên dịch vụ:
+ * - NFD bỏ dấu
+ * - đ/Đ -> d
+ * - ký tự ngoài [a-z0-9] thành '-'
+ * - gộp '-' liền nhau, bỏ '-' đầu cuối
+ */
+function slugifyServiceName(name) {
+  if (!name) return 'dich-vu';
+  let s = String(name).trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return s || 'dich-vu';
+}
+
+/**
+ * Ghép candidate ServiceId: <providerId>-<slug-tên> rút gọn để tổng <= maxLen (50 ký tự).
+ * Trùng thì thêm hậu tố số (-2, -3...).
+ */
+function makeServiceCandidateId(providerId, slug, suffixNum, maxLen = 50) {
+  const prefix = `${providerId}-`;
+  const suffix = suffixNum > 1 ? `-${suffixNum}` : '';
+  const allowedSlugLen = maxLen - prefix.length - suffix.length;
+  if (allowedSlugLen <= 0) {
+    const fallbackPrefix = providerId.slice(0, Math.max(1, maxLen - suffix.length - 2)) + '-';
+    return `${fallbackPrefix}${suffix.replace(/^-/, '')}`;
+  }
+  const trimmedSlug = slug.slice(0, allowedSlugLen).replace(/-+$/, '');
+  return `${prefix}${trimmedSlug}${suffix}`;
+}
 
 /**
  * Sinh mật khẩu tạm ngẫu nhiên:
@@ -49,6 +92,18 @@ function createProviderService({ models, config, clock = () => new Date() }) {
   const userModel = models.users;
 
   const dupError = (field) => conflict(DUP_MSG[field][0], { [field]: DUP_MSG[field][1] }, 'duplicate');
+
+  function assertActiveProvider(actorUser) {
+    if (actorUser.role !== 'provider') {
+      throw forbidden('Chỉ đối tác (provider) mới có quyền thực hiện thao tác này.');
+    }
+    if (actorUser.status !== 'active') {
+      throw forbidden('Tài khoản đối tác chưa được kích hoạt hoặc đang bị khóa.');
+    }
+    if (!actorUser.providerId) {
+      throw notFound('Tài khoản đối tác chưa được liên kết với cơ sở nào.');
+    }
+  }
 
   return {
     async getProfile(actorUser) {
@@ -412,8 +467,260 @@ function createProviderService({ models, config, clock = () => new Date() }) {
 
         return { id: vetId, status: 'active' };
       });
+    },
+
+    // --- Services Management (Session S10) ---
+    async listServices(actorUser, query = {}) {
+      assertActiveProvider(actorUser);
+      const limit = query.limit;
+      const offset = query.offset;
+      const result = await memberModel.listServices({ providerId: actorUser.providerId, limit, offset });
+      return {
+        services: result.services,
+        meta: result.meta,
+        options: getServiceOptions()
+      };
+    },
+
+    async createService(actorUser, input = {}) {
+      assertActiveProvider(actorUser);
+
+      // Validate input trước khi mở transaction
+      const { errors, value } = validateServiceInput(input, false);
+      if (Object.keys(errors).length > 0) {
+        throw validation('Dữ liệu dịch vụ chưa hợp lệ.', errors);
+      }
+
+      const slug = slugifyServiceName(value.name);
+
+      return memberModel.transaction(async (tx) => {
+        // Khóa dòng Providers của cơ sở (UPDLOCK, HOLDLOCK) và kiểm IsActive = 1
+        const prov = await memberModel.getProviderForUpdate(tx, actorUser.providerId);
+        if (!prov) {
+          throw notFound('Không tìm thấy cơ sở đối tác.');
+        }
+        if (prov.isSample) {
+          throw forbidden('Dữ liệu mẫu không thuộc ai và không thể tạo dịch vụ.');
+        }
+        if (!prov.isActive) {
+          throw conflict('Cơ sở đang bị khóa hoặc ngưng hoạt động; không thể tạo dịch vụ mới.');
+        }
+
+        // Tối đa 50 dịch vụ mỗi cơ sở
+        const count = await memberModel.countServices(tx, actorUser.providerId);
+        if (count >= SERVICE_LIMITS.maxServicesPerProvider) {
+          throw conflict(`Mỗi cơ sở chỉ được tạo tối đa ${SERVICE_LIMITS.maxServicesPerProvider} dịch vụ.`);
+        }
+
+        // Kiểm trùng tên dịch vụ trong cùng cơ sở (không phân biệt hoa thường, kể cả dịch vụ ẩn)
+        const dupName = await memberModel.findServiceByName(tx, actorUser.providerId, value.name);
+        if (dupName) {
+          throw conflict('Tên dịch vụ này đã tồn tại trong cơ sở của bạn.', { name: 'Tên dịch vụ đã tồn tại.' }, 'duplicate');
+        }
+
+        // Sinh ServiceId duy nhất: <providerId>-<slug-tên> rút gọn để tổng <= 50 ký tự; trùng thì thêm hậu tố số
+        let candidateId = '';
+        let suffixNum = 1;
+        while (true) {
+          candidateId = makeServiceCandidateId(actorUser.providerId, slug, suffixNum, 50);
+          const exists = await memberModel.serviceIdExists(tx, candidateId);
+          if (!exists) break;
+          suffixNum++;
+        }
+
+        const now = clock();
+        const service = {
+          id: candidateId,
+          providerId: actorUser.providerId,
+          category: value.category,
+          categoryLabel: value.categoryLabel,
+          name: value.name,
+          description: value.description || '',
+          priceVnd: value.priceVnd,
+          unit: value.unit,
+          slotCapacity: value.slotCapacity,
+          isActive: true,
+          isSample: false,
+          createdAt: now
+        };
+
+        await memberModel.createService(tx, service);
+
+        // AuditLog: action = 'service_created', TargetType = 'service'
+        // Detail chỉ chứa id dịch vụ và TÊN các trường đã tạo, không chứa giá/mô tả
+        await adminModel.logAudit(tx, {
+          actorUserId: actorUser.id,
+          action: 'service_created',
+          targetType: 'service',
+          targetId: candidateId,
+          detail: JSON.stringify({ serviceId: candidateId, fields: ['name', 'category', 'categoryLabel', 'priceVnd', 'unit', 'slotCapacity', 'description'] })
+        });
+
+        return {
+          id: service.id,
+          providerId: service.providerId,
+          category: service.category,
+          categoryLabel: service.categoryLabel,
+          name: service.name,
+          description: service.description,
+          priceVnd: service.priceVnd,
+          unit: service.unit,
+          slotCapacity: service.slotCapacity,
+          isActive: service.isActive,
+          isSample: service.isSample,
+          createdAt: now.toISOString()
+        };
+      });
+    },
+
+    async updateService(actorUser, serviceId, input = {}) {
+      assertActiveProvider(actorUser);
+
+      // Validate input trước khi mở transaction (isUpdate = true)
+      const { errors, value } = validateServiceInput(input, true);
+      if (Object.keys(errors).length > 0) {
+        throw validation('Dữ liệu dịch vụ chưa hợp lệ.', errors);
+      }
+
+      return memberModel.transaction(async (tx) => {
+        // Khóa Providers của cơ sở
+        const prov = await memberModel.getProviderForUpdate(tx, actorUser.providerId);
+        if (!prov) throw notFound('Không tìm thấy cơ sở đối tác.');
+        if (prov.isSample) throw forbidden('Dữ liệu mẫu không thể chỉnh sửa.');
+        if (!prov.isActive) {
+          throw conflict('Cơ sở đang bị khóa hoặc ngưng hoạt động; không thể chỉnh sửa dịch vụ.');
+        }
+
+        // Lấy dịch vụ với UPDLOCK, HOLDLOCK
+        const svc = await memberModel.getServiceForUpdate(tx, serviceId);
+        if (!svc || svc.providerId !== actorUser.providerId || svc.isSample) {
+          throw notFound('Không tìm thấy dịch vụ này.');
+        }
+
+        // Kiểm trùng tên nếu có đổi tên
+        const newName = value.name !== undefined ? value.name : svc.name;
+        if (value.name !== undefined && value.name.toLowerCase() !== svc.name.toLowerCase()) {
+          const dupName = await memberModel.findServiceByName(tx, actorUser.providerId, newName, serviceId);
+          if (dupName) {
+            throw conflict('Tên dịch vụ này đã tồn tại trong cơ sở của bạn.', { name: 'Tên dịch vụ đã tồn tại.' }, 'duplicate');
+          }
+        }
+
+        // Validate lại category & categoryLabel tương thích
+        const newCategory = value.category !== undefined ? value.category : svc.category;
+        const catDef = SERVICE_CATEGORIES.find((c) => c.id === newCategory);
+        let newLabel = value.categoryLabel !== undefined ? value.categoryLabel : svc.categoryLabel;
+        if (value.category !== undefined && value.categoryLabel === undefined) {
+          // Nếu đổi category mà không gửi categoryLabel, mặc định nhãn đầu
+          newLabel = catDef ? catDef.labels[0] : newLabel;
+        } else if (catDef && !catDef.labels.includes(newLabel)) {
+          throw validation('Nhãn danh mục không khớp với danh mục đã chọn.', {
+            categoryLabel: `Nhãn hợp lệ: ${catDef.labels.join(', ')}.`
+          });
+        }
+
+        const merged = {
+          name: newName,
+          description: value.description !== undefined ? value.description : svc.description,
+          category: newCategory,
+          categoryLabel: newLabel,
+          priceVnd: value.priceVnd !== undefined ? value.priceVnd : svc.priceVnd,
+          unit: value.unit !== undefined ? value.unit : svc.unit,
+          slotCapacity: value.slotCapacity !== undefined ? value.slotCapacity : svc.slotCapacity
+        };
+
+        await memberModel.updateService(tx, serviceId, merged);
+
+        // AuditLog: action = 'service_updated', TargetType = 'service'
+        // Detail chỉ chứa id dịch vụ và TÊN các trường đã đổi, không chứa giá/mô tả
+        const changedFields = Object.keys(input).filter((k) => ['name', 'description', 'category', 'categoryLabel', 'priceVnd', 'unit', 'slotCapacity'].includes(k));
+        await adminModel.logAudit(tx, {
+          actorUserId: actorUser.id,
+          action: 'service_updated',
+          targetType: 'service',
+          targetId: serviceId,
+          detail: JSON.stringify({ serviceId, changedFields })
+        });
+
+        return {
+          id: svc.id,
+          providerId: svc.providerId,
+          ...merged,
+          isActive: svc.isActive,
+          isSample: svc.isSample,
+          createdAt: svc.createdAt
+        };
+      });
+    },
+
+    async disableService(actorUser, serviceId) {
+      assertActiveProvider(actorUser);
+
+      return memberModel.transaction(async (tx) => {
+        const prov = await memberModel.getProviderForUpdate(tx, actorUser.providerId);
+        if (!prov) throw notFound('Không tìm thấy cơ sở đối tác.');
+        if (prov.isSample) throw forbidden('Dữ liệu mẫu không thể chỉnh sửa.');
+        if (!prov.isActive) {
+          throw conflict('Cơ sở đang bị khóa hoặc ngưng hoạt động; không thể chỉnh sửa dịch vụ.');
+        }
+
+        const svc = await memberModel.getServiceForUpdate(tx, serviceId);
+        if (!svc || svc.providerId !== actorUser.providerId || svc.isSample) {
+          throw notFound('Không tìm thấy dịch vụ này.');
+        }
+
+        if (!svc.isActive) {
+          throw conflict('Dịch vụ này đã ở trạng thái ngưng hoạt động.');
+        }
+
+        await memberModel.setServiceActive(tx, serviceId, false);
+
+        await adminModel.logAudit(tx, {
+          actorUserId: actorUser.id,
+          action: 'service_disabled',
+          targetType: 'service',
+          targetId: serviceId,
+          detail: JSON.stringify({ serviceId })
+        });
+
+        return { id: serviceId, isActive: false };
+      });
+    },
+
+    async enableService(actorUser, serviceId) {
+      assertActiveProvider(actorUser);
+
+      return memberModel.transaction(async (tx) => {
+        const prov = await memberModel.getProviderForUpdate(tx, actorUser.providerId);
+        if (!prov) throw notFound('Không tìm thấy cơ sở đối tác.');
+        if (prov.isSample) throw forbidden('Dữ liệu mẫu không thể chỉnh sửa.');
+        if (!prov.isActive) {
+          throw conflict('Cơ sở đang bị khóa hoặc ngưng hoạt động; không thể chỉnh sửa dịch vụ.');
+        }
+
+        const svc = await memberModel.getServiceForUpdate(tx, serviceId);
+        if (!svc || svc.providerId !== actorUser.providerId || svc.isSample) {
+          throw notFound('Không tìm thấy dịch vụ này.');
+        }
+
+        if (svc.isActive) {
+          throw conflict('Dịch vụ này đã ở trạng thái đang hoạt động.');
+        }
+
+        await memberModel.setServiceActive(tx, serviceId, true);
+
+        await adminModel.logAudit(tx, {
+          actorUserId: actorUser.id,
+          action: 'service_enabled',
+          targetType: 'service',
+          targetId: serviceId,
+          detail: JSON.stringify({ serviceId })
+        });
+
+        return { id: serviceId, isActive: true };
+      });
     }
   };
 }
 
-module.exports = { createProviderService, generateTempPassword };
+module.exports = { createProviderService, generateTempPassword, slugifyServiceName, makeServiceCandidateId };

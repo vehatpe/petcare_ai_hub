@@ -26,6 +26,7 @@ sqlcmd -S localhost -U sa -P "<mật khẩu>" -C -b -i database/seeds/001_Seed_P
 - `Bookings.PetId` là `ON DELETE SET NULL`; lịch hẹn giữ ảnh chụp `PetName/ServiceName/ProviderLabel/PriceVnd`. `Bookings.UserId` và `Medical_Records.VetId` cố ý để `NO ACTION` (tránh lỗi "multiple cascade paths"); chưa có chức năng xóa user.
 - Cột `Medical_Records.PlanText` (không phải `Plan`, vì `PLAN` là từ khóa dành riêng của T-SQL).
 - Mô tả dịch vụ (`Services.Description`) để trống vì bản mẫu không có mô tả; không bịa thêm.
+- **Quy tắc không xóa cứng dịch vụ (Session S10):** Dịch vụ không bao giờ bị xóa cứng khỏi cơ sở dữ liệu (không có route DELETE). Khi ngừng cung cấp, hệ thống đặt `Services.IsActive = 0`. Dịch vụ ẩn sẽ không xuất hiện trên danh mục công khai (`GET /services`), không nhận lịch hẹn mới (`POST /bookings` từ chối), nhưng toàn bộ lịch sử lịch hẹn đã đặt trước đó vẫn được bảo toàn nguyên vẹn và Provider có thể kích hoạt lại (`enable`) bất kỳ lúc nào.
 
 ## Cơ chế Migration tự động
 Dự án sử dụng cơ chế migration có phiên bản qua bảng `dbo.SchemaVersions` và script `backend/scripts/migrate.js`:

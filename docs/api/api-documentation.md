@@ -97,6 +97,17 @@ Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài k
 | GET | `/provider/profile` | – | 200 `{ id, name, area, type, address, phone, description, licenseNo, taxCode, isActive, isSample, updatedAt }`. 401 nếu chưa đăng nhập, 403 nếu không phải provider. |
 | PUT | `/provider/profile` | `{ address?, phone?, description?, licenseNo?, taxCode? }` | 200 `{ id, name, area, type, address, phone, description, licenseNo, taxCode, isActive, isSample, updatedAt }`. Khóa vắng mặt giữ nguyên giá trị cũ; `null` hoặc chuỗi rỗng xóa giá trị (về null). Nếu body chứa `name`, `area` hoặc `type` → 422 "Tên, khu vực và loại hình cơ sở do quản trị viên quản lý.". Thực thi trong transaction kèm khóa dòng `UPDLOCK, HOLDLOCK`. Từ chối khi cơ sở `IsActive = 0` hoặc user không `active` (403). Ghi `AuditLog` với `action='provider_profile_updated'` và `Detail` chỉ chứa danh sách tên các trường đã đổi (không ghi giá trị). Dữ liệu mẫu (`IsSample = 1`) bị từ chối sửa (403). |
 
+## Quản lý Dịch vụ Cơ sở (Provider)
+Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài khoản có role `provider` đang hoạt động (`status = active`, cơ sở `IsActive = 1`). `ProviderId` luôn lấy từ token người gọi. Không hỗ trợ xóa cứng (không có route DELETE). Dịch vụ cơ sở khác hoặc dữ liệu mẫu (`IsSample = 1`) trả về `404`.
+
+| Method | Path | Query / Body | Kết quả & Quy tắc |
+|---|---|---|---|
+| GET | `/provider/services` | Query: `limit`, `offset` | 200 `{ services: Service[], meta: { limit, offset, total }, options: { categories: [{ id, labels: [...] }], priceMaxVnd, capacityMax, nameMax, unitMax } }`. Trả về cả dịch vụ đang ẩn (`isActive: false`) của chính cơ sở. `options` chứa hằng số backend phục vụ dựng biểu mẫu frontend. |
+| POST | `/provider/services` | Body: `{ name, category, categoryLabel?, priceVnd, unit, slotCapacity?, description? }` | 201 `Service`. Server tự sinh `ServiceId` dạng `<providerId>-<slug-tên>` (rút gọn ≤ 50 ký tự; trùng thêm số `-2`, `-3`). Mặc định `IsSample = 0`, `IsActive = 1`. Kiểm tra: `name` 3–200 ký tự (trim); không trùng tên (không phân biệt hoa thường) với dịch vụ khác của cùng cơ sở, kể cả dịch vụ đang ẩn → 409 `duplicate`; `category` ∈ `medical | grooming | hotel | emergency`; `categoryLabel` phải thuộc nhãn của danh mục (thiếu mặc định nhãn đầu); `priceVnd` số nguyên 0 đến 100.000.000; `unit` 1–30 ký tự; `slotCapacity` 1–50 (mặc định 3); `description` ≤ 500 ký tự. Tối đa 50 dịch vụ/cơ sở → 409. Ghi AuditLog `service_created` (TargetType: `service`). |
+| PUT | `/provider/services/:id` | Body: `{ name?, category?, categoryLabel?, priceVnd?, unit?, slotCapacity?, description? }` | 200 `Service`. Sửa thông tin dịch vụ. Không đổi được `ProviderId`. Kiểm tra trùng tên và tính tương thích của danh mục & nhãn. Ghi AuditLog `service_updated` (Detail chỉ lưu id và danh sách tên trường đã đổi). |
+| POST | `/provider/services/:id/disable` | – | 200 `{ id, isActive: false }`. Ngừng cung cấp dịch vụ: ẩn khỏi trang công khai, không nhận lịch mới, lịch cũ giữ nguyên. Trùng trạng thái (đã tắt) → 409 conflict. Ghi AuditLog `service_disabled`. |
+| POST | `/provider/services/:id/enable` | – | 200 `{ id, isActive: true }`. Kích hoạt lại dịch vụ. Trùng trạng thái (đã bật) → 409 conflict. Ghi AuditLog `service_enabled`. |
+
 ## Quản lý Bác sĩ Cơ sở (Provider & Admin)
 Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài khoản có role `provider` (đang `active`) hoặc `admin`.
 
