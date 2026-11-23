@@ -26,9 +26,13 @@ function createFakeModels() {
   const bookingOut = (b) => { if (!b) return null; const { ownerId, ...rest } = b; return clone(rest); }; // eslint-disable-line no-unused-vars
   const svcOut = (sv) => {
     const p = s.providers.find((x) => x.id === sv.providerId);
-    return { id: sv.id, category: sv.category, categoryLabel: sv.categoryLabel, providerId: sv.providerId, providerName: p.name,
-      providerArea: p.area, name: sv.name, description: sv.description || '', priceVnd: sv.priceVnd, unit: sv.unit,
-      isSample: sv.isSample, slotCapacity: sv.slotCapacity };
+    return {
+      id: sv.id, category: sv.category, categoryLabel: sv.categoryLabel, providerId: sv.providerId,
+      providerName: p.name, providerArea: p.area,
+      providerAddress: p.address || null, providerPhone: p.phone || null, providerDescription: p.description || null,
+      name: sv.name, description: sv.description || '', priceVnd: sv.priceVnd, unit: sv.unit,
+      isSample: sv.isSample, slotCapacity: sv.slotCapacity
+    };
   };
 
   const userOut = (u) => {
@@ -372,7 +376,18 @@ function createFakeModels() {
       }
     },
     catalog: {
-      async listProviders() { return s.providers.filter((p) => p.active !== false).map(({ active, ...p }) => clone(p)); }, // eslint-disable-line no-unused-vars
+      async listProviders() {
+        return s.providers.filter((p) => p.active !== false).map((p) => ({
+          id: p.id,
+          name: p.name,
+          area: p.area,
+          type: p.type,
+          address: p.address || null,
+          phone: p.phone || null,
+          description: p.description || null,
+          isSample: Boolean(p.isSample)
+        }));
+      },
       async listServices({ category, providerId, q }) {
         return s.services.filter((x) => x.active !== false)
           .filter((x) => (!category || x.category === category) && (!providerId || x.providerId === providerId))
