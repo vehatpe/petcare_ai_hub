@@ -23,35 +23,39 @@ function normalizePhone(raw) {
   return compact.replace(/^\+?84/, '0');
 }
 
+function parseLegalField(fieldName, val, errors) {
+  if (val === undefined) return undefined;
+  if (val === null) return null;
+  const raw = str(val).trim();
+  if (raw === '') return null;
+
+  if (fieldName === 'licenseNo') {
+    if (raw.length > 50) {
+      errors.licenseNo = 'Số giấy phép hành nghề tối đa 50 ký tự.';
+      return null;
+    }
+    if (!LICENSE_RE.test(raw)) {
+      errors.licenseNo = 'Số giấy phép chỉ gồm chữ, số, khoảng trắng và các ký tự / - .';
+      return null;
+    }
+    return raw;
+  }
+
+  if (fieldName === 'taxCode') {
+    const compactTax = raw.replace(/[\s\-]/g, '');
+    if (!/^\d{10}$|^\d{13}$/.test(compactTax)) {
+      errors.taxCode = 'Mã số thuế phải gồm 10 hoặc 13 chữ số.';
+      return null;
+    }
+    return compactTax;
+  }
+
+  return raw;
+}
+
 function parseLegalInfo(input, errors) {
-  let licenseNo = null;
-  let taxCode = null;
-
-  if (input.licenseNo !== undefined && input.licenseNo !== null) {
-    const rawLic = str(input.licenseNo).trim();
-    if (rawLic !== '') {
-      if (rawLic.length > 50) {
-        errors.licenseNo = 'Số giấy phép hành nghề tối đa 50 ký tự.';
-      } else if (!LICENSE_RE.test(rawLic)) {
-        errors.licenseNo = 'Số giấy phép chỉ gồm chữ, số, khoảng trắng và các ký tự / - .';
-      } else {
-        licenseNo = rawLic;
-      }
-    }
-  }
-
-  if (input.taxCode !== undefined && input.taxCode !== null) {
-    const rawTax = str(input.taxCode).trim();
-    if (rawTax !== '') {
-      const compactTax = rawTax.replace(/[\s\-]/g, '');
-      if (!/^\d{10}$|^\d{13}$/.test(compactTax)) {
-        errors.taxCode = 'Mã số thuế phải gồm 10 hoặc 13 chữ số.';
-      } else {
-        taxCode = compactTax;
-      }
-    }
-  }
-
+  const licenseNo = parseLegalField('licenseNo', input.licenseNo, errors) ?? null;
+  const taxCode = parseLegalField('taxCode', input.taxCode, errors) ?? null;
   return { licenseNo, taxCode };
 }
 
@@ -254,6 +258,6 @@ function validateBooking(input, now) {
 }
 
 module.exports = {
-  EMAIL_RE, TIME_SLOTS, PROVIDER_TYPES, isUuid, normalizePhone, parseLegalInfo, validateRegister, validateVetInput, validateChangePassword, validatePet,
+  EMAIL_RE, TIME_SLOTS, PROVIDER_TYPES, isUuid, normalizePhone, parseLegalInfo, parseLegalField, validateRegister, validateVetInput, validateChangePassword, validatePet,
   validateWeight, validateVaccination, validateMedicalRecord, validateBooking
 };

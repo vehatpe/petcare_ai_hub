@@ -221,7 +221,27 @@ test('S9: Provider Profile and Legal Info (Unit / DB giả)', async (t) => {
     // Absent fields kept
     assert.equal(resOk.data.licenseNo, 'GPHN-S9/2026');
     assert.equal(resOk.data.taxCode, '0312345678');
-    assert.ok(resOk.data.updatedAt);
+    const firstUpdatedAt = resOk.data.updatedAt;
+    assert.ok(firstUpdatedAt);
+
+    // Sending identical values or empty body: no update, updatedAt unchanged
+    const resSame = await app.call('PUT', '/provider/profile', {
+      headers: { authorization: `Bearer ${providerToken}` },
+      body: {
+        address: '123 Nguyễn Thị Minh Khai, P. Bến Thành, Q.1',
+        phone: '0909 111 222',
+        description: 'Phòng khám thú y hiện đại, tận tâm.'
+      }
+    });
+    assert.equal(resSame.status, 200);
+    assert.equal(resSame.data.updatedAt, firstUpdatedAt);
+
+    const resEmpty = await app.call('PUT', '/provider/profile', {
+      headers: { authorization: `Bearer ${providerToken}` },
+      body: {}
+    });
+    assert.equal(resEmpty.status, 200);
+    assert.equal(resEmpty.data.updatedAt, firstUpdatedAt);
 
     // Clear description and licenseNo with null / empty
     const resClear = await app.call('PUT', '/provider/profile', {
@@ -239,19 +259,56 @@ test('S9: Provider Profile and Legal Info (Unit / DB giả)', async (t) => {
     assert.equal(resClear.data.phone, '0909111222');
   });
 
-  await t.test('AuditLog records provider_profile_updated with only field names', async () => {
+  await t.test('AuditLog records provider_profile_updated with only actually changed field names', async () => {
     const rawLogs = await app.testHelpers.queryAuditLogs({ action: 'provider_profile_updated' });
     assert.ok(rawLogs.length > 0);
-    const lastLog = rawLogs[rawLogs.length - 1];
-    const detail = JSON.parse(lastLog.detail);
-    assert.ok(Array.isArray(detail.fields));
-    // Must contain field names like 'description', 'licenseNo'
-    assert.ok(detail.fields.includes('description'));
-    assert.ok(detail.fields.includes('licenseNo'));
-    // Detail must NEVER contain actual values (like phone numbers or addresses)
-    assert.equal(detail.description, undefined);
-    assert.equal(detail.address, undefined);
-    assert.equal(detail.licenseNo, undefined);
+    // Exactly 2 audit logs recorded from the 2 effective PUTs above (resOk with 3 fields, and resClear with 2 fields).
+    // resSame and resEmpty must NOT produce any audit logs!
+    assert.equal(rawLogs.length, 2);
+
+    const firstLog = JSON.parse(rawLogs[0].detail);
+    assert.deepEqual(firstLog.fields.sort(), ['address', 'description', 'phone'].sort());
+
+    const secondLog = JSON.parse(rawLogs[1].detail);
+    assert.deepEqual(secondLog.fields.sort(), ['description', 'licenseNo'].sort());
+
+    // Single field change test
+    await app.call('PUT', '/provider/profile', {
+      headers: { authorization: `Bearer ${providerToken}` },
+      body: { description: 'Chỉ đổi mô tả' }
+    });
+    const logsAfterSingle = await app.testHelpers.queryAuditLogs({ action: 'provider_profile_updated' });
+    assert.equal(logsAfterSingle.length, 3);
+    const thirdLog = JSON.parse(logsAfterSingle[2].detail);
+    assert.deepEqual(thirdLog.fields, ['description']);
+    assert.equal(thirdLog.description, undefined);
+  });
+
+  await t.test('Admin view of provider legal info after deletion (licenseNo: null)', async () => {
+    // Current state of provider: licenseNo is null, taxCode is '0312345678'
+    const listRes = await app.call('GET', '/admin/users?role=provider', {
+      headers: { authorization: `Bearer ${adminToken}` }
+    });
+    assert.equal(listRes.status, 200);
+    const u = listRes.data.users.find((x) => x.id === providerUser.id);
+    assert.ok(u);
+    assert.equal(u.licenseNo, null);
+    assert.equal(u.taxCode, '0312345678');
+    assert.equal(u.hasLegalInfo, true);
+
+    // Now clear taxCode as well
+    await app.call('PUT', '/provider/profile', {
+      headers: { authorization: `Bearer ${providerToken}` },
+      body: { taxCode: null }
+    });
+    const listRes2 = await app.call('GET', '/admin/users?role=provider', {
+      headers: { authorization: `Bearer ${adminToken}` }
+    });
+    const u2 = listRes2.data.users.find((x) => x.id === providerUser.id);
+    assert.ok(u2);
+    assert.equal(u2.licenseNo, null);
+    assert.equal(u2.taxCode, null);
+    assert.equal(u2.hasLegalInfo, false);
   });
 
   await t.test('public APIs (GET /providers, GET /services) NEVER leak legal info', async () => {

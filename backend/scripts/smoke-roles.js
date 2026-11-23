@@ -284,10 +284,22 @@ async function main() {
       myPublicProv.licenseNo === undefined &&
       myPublicProv.taxCode === undefined;
 
+    // S9.1: Provider deletes licenseNo (null) -> Admin sees licenseNo: null on real SQL Server
+    const putClearLicRes = await api('PUT', '/provider/profile', {
+      token: prov1Token,
+      body: { licenseNo: null }
+    });
+    const adminViewUsers = await api('GET', '/admin/users?role=provider', { token: adminToken });
+    const targetProvUser = adminViewUsers.body.data?.users?.find((u) => u.id === prov1UserId);
+    const adminSeesNullLic = targetProvUser &&
+      targetProvUser.licenseNo === null &&
+      targetProvUser.taxCode === '0312345678' &&
+      targetProvUser.hasLegalInfo === true;
+
     record(
-      '7b. S9 Provider Profile: GET/PUT /provider/profile on real DB & public /providers never leaks legal info',
-      getProfOk && putProfOk && publicNoLegal,
-      `PUT status: ${putProfRes.status}, DB Address: ${rowP?.Address}, Public legal masked: ${publicNoLegal}`
+      '7b. S9 Provider Profile: GET/PUT /provider/profile on real DB & public /providers never leaks legal info & Admin sees deleted licenseNo as null',
+      getProfOk && putProfOk && publicNoLegal && putClearLicRes.status === 200 && adminSeesNullLic,
+      `PUT status: ${putProfRes.status}, DB Address: ${rowP?.Address}, Public legal masked: ${publicNoLegal}, Admin licenseNo: ${targetProvUser?.licenseNo}`
     );
 
     // 8. Register second provider with duplicate orgName -> slug with numeric suffix (-2)

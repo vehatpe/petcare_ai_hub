@@ -2,7 +2,7 @@
 const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const { notFound, conflict, validation, forbidden, AppError, DuplicateError } = require('../utils/errors');
-const { validateVetInput, normalizePhone } = require('../utils/validators');
+const { validateVetInput, normalizePhone, parseLegalField } = require('../utils/validators');
 
 const DUP_MSG = {
   email: ['Email này đã được đăng ký.', 'Email này đã có tài khoản. Hãy dùng email khác.'],
@@ -85,7 +85,6 @@ function createProviderService({ models, config, clock = () => new Date() }) {
       // Validate address, phone, description, licenseNo, taxCode TRƯỚC transaction
       const errors = {};
       const fieldsToUpdate = {};
-      const changedFieldNames = [];
 
       if ('address' in input) {
         if (input.address === null || String(input.address).trim() === '') {
@@ -98,7 +97,6 @@ function createProviderService({ models, config, clock = () => new Date() }) {
             fieldsToUpdate.address = addr;
           }
         }
-        changedFieldNames.push('address');
       }
 
       if ('phone' in input) {
@@ -112,7 +110,6 @@ function createProviderService({ models, config, clock = () => new Date() }) {
             fieldsToUpdate.phone = normPhone;
           }
         }
-        changedFieldNames.push('phone');
       }
 
       if ('description' in input) {
@@ -126,44 +123,19 @@ function createProviderService({ models, config, clock = () => new Date() }) {
             fieldsToUpdate.description = desc;
           }
         }
-        changedFieldNames.push('description');
       }
 
       if ('licenseNo' in input) {
-        if (input.licenseNo === null || String(input.licenseNo).trim() === '') {
-          fieldsToUpdate.licenseNo = null;
-        } else {
-          const rawLic = String(input.licenseNo).trim();
-          if (rawLic.length > 50) {
-            errors.licenseNo = 'Số giấy phép hành nghề tối đa 50 ký tự.';
-          } else if (!/^[A-Za-z0-9\s/.\-]+$/.test(rawLic)) {
-            errors.licenseNo = 'Số giấy phép chỉ gồm chữ, số, khoảng trắng và các ký tự / - .';
-          } else {
-            fieldsToUpdate.licenseNo = rawLic;
-          }
-        }
-        changedFieldNames.push('licenseNo');
+        fieldsToUpdate.licenseNo = parseLegalField('licenseNo', input.licenseNo, errors);
       }
 
       if ('taxCode' in input) {
-        if (input.taxCode === null || String(input.taxCode).trim() === '') {
-          fieldsToUpdate.taxCode = null;
-        } else {
-          const compactTax = String(input.taxCode).trim().replace(/[\s\-]/g, '');
-          if (!/^\d{10}$|^\d{13}$/.test(compactTax)) {
-            errors.taxCode = 'Mã số thuế phải gồm 10 hoặc 13 chữ số.';
-          } else {
-            fieldsToUpdate.taxCode = compactTax;
-          }
-        }
-        changedFieldNames.push('taxCode');
+        fieldsToUpdate.taxCode = parseLegalField('taxCode', input.taxCode, errors);
       }
 
       if (Object.keys(errors).length > 0) {
         throw validation('Dữ liệu hồ sơ cơ sở chưa hợp lệ.', errors);
       }
-
-      const updatedAt = clock().toISOString();
 
       return memberModel.transaction(async (tx) => {
         // Kiểm tra user active
@@ -192,25 +164,46 @@ function createProviderService({ models, config, clock = () => new Date() }) {
           taxCode: 'taxCode' in fieldsToUpdate ? fieldsToUpdate.taxCode : provider.taxCode
         };
 
-        try {
-          await memberModel.updateProviderProfile(tx, actorUser.providerId, merged, updatedAt);
-        } catch (e) {
-          console.error('DEBUG updateProviderProfile error:', e);
-          throw e;
+        // Tìm các trường thật sự thay đổi giá trị
+        const diffFields = [];
+        for (const k of ['address', 'phone', 'description', 'licenseNo', 'taxCode']) {
+          if (k in fieldsToUpdate) {
+            const oldVal = provider[k] ?? null;
+            const newVal = fieldsToUpdate[k] ?? null;
+            if (oldVal !== newVal) {
+              diffFields.push(k);
+            }
+          }
         }
 
-        try {
-          await adminModel.logAudit(tx, {
-            actorUserId: actorUser.id,
-            action: 'provider_profile_updated',
-            targetType: 'provider',
-            targetId: actorUser.providerId,
-            detail: JSON.stringify({ fields: changedFieldNames })
-          });
-        } catch (e) {
-          console.error('DEBUG logAudit error:', e);
-          throw e;
+        if (diffFields.length === 0) {
+          return {
+            id: provider.id,
+            name: provider.name,
+            area: provider.area,
+            type: provider.type,
+            address: provider.address,
+            phone: provider.phone,
+            description: provider.description,
+            licenseNo: provider.licenseNo,
+            taxCode: provider.taxCode,
+            isActive: provider.isActive,
+            isSample: provider.isSample,
+            updatedAt: provider.updatedAt
+          };
         }
+
+        const updatedAt = clock().toISOString();
+
+        await memberModel.updateProviderProfile(tx, actorUser.providerId, merged, updatedAt);
+
+        await adminModel.logAudit(tx, {
+          actorUserId: actorUser.id,
+          action: 'provider_profile_updated',
+          targetType: 'provider',
+          targetId: actorUser.providerId,
+          detail: JSON.stringify({ fields: diffFields })
+        });
 
         return {
           id: provider.id,

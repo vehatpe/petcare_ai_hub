@@ -135,9 +135,16 @@ function createFakeModels() {
             delete out.orgLicenseNo;
             delete out.orgTaxCode;
             if (u.role === 'provider') {
-              const prov = u.providerId ? s.providers.find((p) => p.id === u.providerId) : null;
-              const licenseNo = prov && prov.licenseNo ? prov.licenseNo : (u.orgLicenseNo || null);
-              const taxCode = prov && prov.taxCode ? prov.taxCode : (u.orgTaxCode || null);
+              let licenseNo = null;
+              let taxCode = null;
+              if (u.providerId) {
+                const prov = s.providers.find((p) => p.id === u.providerId);
+                licenseNo = prov && prov.licenseNo ? prov.licenseNo : null;
+                taxCode = prov && prov.taxCode ? prov.taxCode : null;
+              } else {
+                licenseNo = u.orgLicenseNo || null;
+                taxCode = u.orgTaxCode || null;
+              }
               out.licenseNo = licenseNo;
               out.taxCode = taxCode;
               out.hasLegalInfo = Boolean(licenseNo || taxCode);

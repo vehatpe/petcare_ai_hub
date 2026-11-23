@@ -9,8 +9,18 @@ const USER_COLS = `u.UserId, u.Role, u.Status, u.FullName, u.Email, u.Phone, u.O
 const mapUser = (r) => {
   if (!r) return null;
   const isProv = r.Role === 'provider';
-  const licenseNo = isProv ? (r.ProvLicenseNo !== undefined && r.ProvLicenseNo !== null ? r.ProvLicenseNo : (r.OrgLicenseNo || null)) : undefined;
-  const taxCode = isProv ? (r.ProvTaxCode !== undefined && r.ProvTaxCode !== null ? r.ProvTaxCode : (r.OrgTaxCode || null)) : undefined;
+  let licenseNo;
+  let taxCode;
+
+  if (isProv) {
+    if (r.ProviderId) {
+      licenseNo = r.ProvLicenseNo || null;
+      taxCode = r.ProvTaxCode || null;
+    } else {
+      licenseNo = r.OrgLicenseNo || null;
+      taxCode = r.OrgTaxCode || null;
+    }
+  }
 
   const out = {
     id: lc(r.UserId),
