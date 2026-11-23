@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ---------- Services ledger ---------- */
   function row(s) {
     const user = AuthService.currentUser();
-    const isStaff = user && user.role !== 'customer';
+    const isStaff = Boolean(user && user.role !== 'customer');
     const actionHtml = isStaff
       ? ''
       : `<div class="ledger-action"><a class="btn btn-primary btn-sm" data-auth-required="${esc(AUTH_REASON)}" href="pages/booking.html?service=${encodeURIComponent(s.id)}">Đặt lịch</a></div>`;

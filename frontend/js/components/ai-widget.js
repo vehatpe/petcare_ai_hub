@@ -90,7 +90,7 @@ const AIWidget = {
     if (!popup) return;
 
     const user = AuthService.currentUser();
-    const isStaff = user && user.role !== 'customer';
+    const isStaff = Boolean(user && user.role !== 'customer');
     popup.classList.toggle('is-locked', !user || isStaff);
 
     if (!user || isStaff) {

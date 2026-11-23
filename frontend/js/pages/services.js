@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function row(s) {
     const user = AuthService.currentUser();
-    const isStaff = user && user.role !== 'customer';
+    const isStaff = Boolean(user && user.role !== 'customer');
     const emergency = s.category === 'emergency';
     const actionHtml = isStaff
       ? ''

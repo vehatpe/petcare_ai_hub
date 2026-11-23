@@ -149,7 +149,7 @@
 
   function renderFooterAuth(user) {
     // Hide booking footer links and bento booking section for staff roles (admin, provider, vet)
-    const isStaff = user && user.role !== 'customer';
+    const isStaff = Boolean(user && user.role !== 'customer');
 
     // Bento booking card on landing page
     document.querySelectorAll('.bento2-booking').forEach((el) => {

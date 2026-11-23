@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function card(p, services) {
     const user = AuthService.currentUser();
-    const isStaff = user && user.role !== 'customer';
+    const isStaff = Boolean(user && user.role !== 'customer');
     const mine = services.filter((s) => s.providerId === p.id);
     const actionHtml = (!isStaff && mine.length)
       ? `<a class="btn btn-primary btn-sm" data-auth-required="${esc(AUTH_REASON)}" href="booking.html?provider=${encodeURIComponent(p.id)}">Đặt lịch tại đây</a>`
