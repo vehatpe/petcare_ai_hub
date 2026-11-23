@@ -33,7 +33,11 @@ function createAuthService({ models, config, clock = () => new Date() }) {
   const dummyHash = bcrypt.hashSync('not-a-real-password-1', config.bcryptCost);
 
   const sign = (user, remember) =>
-    jwt.sign({ role: user.role }, config.jwtSecret, { algorithm: 'HS256', subject: user.id, expiresIn: remember ? '30d' : '1d' });
+    jwt.sign(
+      { role: user.role, tv: user.tokenVersion !== undefined && user.tokenVersion !== null ? Number(user.tokenVersion) : 0 },
+      config.jwtSecret,
+      { algorithm: 'HS256', subject: user.id, expiresIn: remember ? '30d' : '1d' }
+    );
 
   const dupError = (field) => conflict(DUP_MSG[field][0], { [field]: DUP_MSG[field][1] }, 'duplicate');
 
@@ -114,7 +118,8 @@ function createAuthService({ models, config, clock = () => new Date() }) {
       await models.users.updatePassword(userId, newHash, false);
 
       const updatedUser = await models.users.findById(userId);
-      return { user: toPublicUser(updatedUser) };
+      const newToken = sign(updatedUser, false);
+      return { user: toPublicUser(updatedUser), token: newToken };
     }
   };
 }

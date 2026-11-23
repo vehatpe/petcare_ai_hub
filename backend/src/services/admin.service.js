@@ -198,7 +198,7 @@ function createAdminService({ models, config, clock = () => new Date() }) {
           }
         }
 
-        await adminModel.updateUserStatus(tx, userId, 'disabled');
+        await adminModel.updateUserStatus(tx, userId, 'disabled', true);
 
         if (user.role === 'provider' && user.providerId) {
           await adminModel.disableProviderAndVets(tx, user.providerId);

@@ -51,7 +51,7 @@ Các tầng rate limiter được tách riêng:
 | POST | `/auth/register` | `{role:"customer"|"provider", fullName, email, phone, password, orgName?, orgType?, orgArea?}` | 201 `{user, token}` (customer) hoặc `{user, token:null}` (provider, status `pending`). Với provider: bắt buộc `orgName` (≤ 150 ký tự), `orgType` (clinic/spa/hotel/emergency) và `orgArea` (≤ 100 ký tự). vet/admin không tự đăng ký (role khác → 422). |
 | POST | `/auth/login` | `{identifier, password, remember?}` | 200 `{user, token}`; sai thông tin/không tồn tại → `401 credentials` (thông báo chung). Sau khi mật khẩu đúng: nếu `pending` → `403 pending`, nếu `rejected` → `403 rejected` (kèm `RejectReason` nếu có), nếu `disabled` → `403 disabled`. Phản hồi 200 kèm `providerId`, `orgArea` và `mustChangePassword`. |
 | GET | `/auth/me` | – | 200 `{user}`; 401 nếu token sai/hết hạn. Phản hồi kèm `providerId`, `orgArea` và `mustChangePassword`. |
-| POST | `/auth/change-password` | `{currentPassword, newPassword}` | 200 `{user}`; yêu cầu đăng nhập. Mật khẩu mới thỏa mãn độ phức tạp (≥ 8 ký tự, có chữ và số, tối đa 72 ký tự) và phải khác mật khẩu hiện tại (trùng → 422). Sai mật khẩu cũ → 422 kèm `errors.currentPassword`. Sau khi đổi thành công, `MustChangePassword = 0`. |
+| POST | `/auth/change-password` | `{currentPassword, newPassword}` | 200 `{user, token}`; yêu cầu đăng nhập. Mật khẩu mới thỏa mãn độ phức tạp (≥ 8 ký tự, có chữ và số, tối đa 72 ký tự) và phải khác mật khẩu hiện tại (trùng → 422). Sai mật khẩu cũ → 422 kèm `errors.currentPassword`. Sau khi đổi thành công, `MustChangePassword = 0`, tăng `TokenVersion` làm vô hiệu hóa token cũ, và trả kèm `token` mới có hiệu lực ngay. |
 
 Validation giống frontend: email hợp lệ; SĐT VN `^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$` (chuẩn hóa về `0xxxxxxxxx`); mật khẩu ≥ 8 ký tự gồm chữ và số; provider cần `orgName` ≥ 2 ký tự, `orgType` ∈ clinic|spa|hotel|emergency, và `orgArea` ≤ 100 ký tự. Email/SĐT trùng → 409 `duplicate` kèm `errors.email`/`errors.phone`.
 Mật khẩu băm bằng bcrypt (cost ≥ 10). Giới hạn tốc độ cho `/auth/*`.
@@ -68,7 +68,15 @@ Khi tài khoản có cờ `mustChangePassword: true` (đặc biệt là bác sĩ
   }
   ```
 - **Ngoại lệ:** Chỉ `GET /api/v1/auth/me` và `POST /api/v1/auth/change-password` được phép đi qua.
-- **Lưu ý bảo mật JWT:** JWT cũ đã cấp vẫn có hiệu lực cho đến khi hết hạn (token không trạng thái). Trạng thái `MustChangePassword` được xác thực trực tiếp tại tầng middleware mỗi lượt gọi API, và token cũ sẽ không còn bị chặn một khi cờ trong DB được gỡ về 0. Cân nhắc thu hồi phiên chủ động khi triển khai refresh token trong các giai đoạn sau.
+- **Vô hiệu hóa phiên đăng nhập cũ (Token Revocation qua `TokenVersion`):** Mỗi token JWT mang claim `tv` đại diện cho phiên bản token của tài khoản. Khi người dùng đổi mật khẩu hoặc bị khóa tài khoản, `TokenVersion` trong DB được tăng thêm 1. Các yêu cầu mang token cũ mang `tv` lệch với giá trị trong DB sẽ bị từ chối ngay lập tức với mã `401` và mã lỗi `token_revoked`:
+  ```json
+  {
+    "success": false,
+    "data": null,
+    "code": "token_revoked",
+    "message": "Phiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại."
+  }
+  ```
 
 ## Quản trị hệ thống (Admin)
 Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài khoản có role `admin`. Không bao giờ trả `PasswordHash`.

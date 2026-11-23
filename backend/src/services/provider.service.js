@@ -192,7 +192,7 @@ function createProviderService({ models, config, clock = () => new Date() }) {
           throw conflict('Chỉ có thể khóa bác sĩ đang hoạt động (active).');
         }
 
-        await memberModel.updateVetStatus(tx, vetId, 'disabled');
+        await memberModel.updateVetStatus(tx, vetId, 'disabled', true);
 
         await adminModel.logAudit(tx, {
           actorUserId: actorUser.id,

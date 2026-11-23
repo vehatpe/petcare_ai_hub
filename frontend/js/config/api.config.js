@@ -61,6 +61,15 @@
       try { store.setItem(SESSION_KEY, JSON.stringify({ token: current.token, user })); } catch (_) { /* ignore */ }
       notify();
     },
+    /** Update the cached token without changing where the session is stored. */
+    updateToken(token) {
+      const current = this.get();
+      if (!current || !token) return;
+      if (current.token === token) return;
+      const store = readFrom(sessionStorage) ? sessionStorage : localStorage;
+      try { store.setItem(SESSION_KEY, JSON.stringify({ token, user: current.user })); } catch (_) { /* ignore */ }
+      notify();
+    },
     clear(silent) {
       try { sessionStorage.removeItem(SESSION_KEY); } catch (_) { /* ignore */ }
       try { localStorage.removeItem(SESSION_KEY); } catch (_) { /* ignore */ }
@@ -109,7 +118,7 @@
         payload && payload.errors
       );
       // An expired or revoked token: drop the session so every page falls back to the signed-out state.
-      if (res.status === 401 && err.code === 'unauthenticated' && current) session.clear();
+      if (res.status === 401 && (err.code === 'unauthenticated' || err.code === 'token_revoked') && current) session.clear();
 
       // Mandatory change password gate: redirect to change-password.html when not already on that page.
       if (res.status === 403 && err.code === 'must_change_password') {

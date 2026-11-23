@@ -76,12 +76,17 @@ module.exports = (db) => ({
   async getUserForUpdate(tx, userId) {
     const rows = await tx.query(
       `SELECT UserId, Role, Status, FullName, Email, Phone, OrgName, OrgType, CreatedAt,
-              ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason
+              ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason, TokenVersion
        FROM dbo.Users WITH (UPDLOCK, HOLDLOCK)
        WHERE UserId = @id`,
       { id: [T.guid, userId] }
     );
-    return mapUser(rows[0]);
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      ...mapUser(r),
+      tokenVersion: r.TokenVersion !== undefined && r.TokenVersion !== null ? Number(r.TokenVersion) : 0
+    };
   },
 
   async providerExists(tx, providerId) {
@@ -148,11 +153,18 @@ module.exports = (db) => ({
     );
   },
 
-  async updateUserStatus(tx, userId, status) {
-    await tx.query(
-      `UPDATE dbo.Users SET Status = @status WHERE UserId = @id`,
-      { id: [T.guid, userId], status: [T.vstr(10), status] }
-    );
+  async updateUserStatus(tx, userId, status, incrementTokenVersion = false) {
+    if (incrementTokenVersion) {
+      await tx.query(
+        `UPDATE dbo.Users SET Status = @status, TokenVersion = TokenVersion + 1 WHERE UserId = @id`,
+        { id: [T.guid, userId], status: [T.vstr(10), status] }
+      );
+    } else {
+      await tx.query(
+        `UPDATE dbo.Users SET Status = @status WHERE UserId = @id`,
+        { id: [T.guid, userId], status: [T.vstr(10), status] }
+      );
+    }
   },
 
   async disableProviderAndVets(tx, providerId) {
@@ -161,7 +173,7 @@ module.exports = (db) => ({
       { providerId: [T.vstr(50), providerId] }
     );
     await tx.query(
-      `UPDATE dbo.Users SET Status = 'disabled' WHERE ProviderId = @providerId AND Role = 'vet'`,
+      `UPDATE dbo.Users SET Status = 'disabled', TokenVersion = TokenVersion + 1 WHERE ProviderId = @providerId AND Role = 'vet'`,
       { providerId: [T.vstr(50), providerId] }
     );
   },

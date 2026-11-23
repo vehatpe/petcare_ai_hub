@@ -17,6 +17,9 @@ function createAuth({ models, config }) {
       const user = await models.users.findById(payload.sub);
       if (!user) throw unauthenticated('Tài khoản không còn tồn tại. Vui lòng đăng nhập lại.');
       if (user.status !== 'active') throw new AppError(403, 'disabled', 'Tài khoản này hiện không thể sử dụng. Vui lòng liên hệ hotline để được hỗ trợ.');
+      if ((payload.tv ?? 0) !== (user.tokenVersion ?? 0)) {
+        throw new AppError(401, 'token_revoked', 'Phiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại.');
+      }
       if (user.mustChangePassword) {
         // Cổng must_change_password: chỉ cho phép GET /auth/me và POST /auth/change-password
         const path = req.path || req.originalUrl || '';

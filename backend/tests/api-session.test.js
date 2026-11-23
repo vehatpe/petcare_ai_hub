@@ -178,4 +178,50 @@ test('Api.session event notifications on set, clear, and updateUser', async (t) 
     );
     assert.equal(envOnSamePage.window.location.replacedTo, undefined);
   });
+
+  await t.test('updateToken updates cached token and preserves storage location (localStorage vs sessionStorage)', () => {
+    // 1. In sessionStorage (remember=false)
+    const envSession = createMockEnvironment();
+    envSession.Api.session.set({ token: 'tok_old_session', user: { id: 'u1' } }, false);
+    envSession.resetCount();
+    envSession.Api.session.updateToken('tok_new_session');
+    assert.equal(envSession.Api.session.get().token, 'tok_new_session');
+    assert.equal(envSession.Api.session.get().user.id, 'u1');
+    assert.equal(envSession.getEventCount(), 1, 'updateToken should fire event');
+
+    // 2. In localStorage (remember=true)
+    const envLocal = createMockEnvironment();
+    envLocal.Api.session.set({ token: 'tok_old_local', user: { id: 'u2' } }, true);
+    envLocal.resetCount();
+    envLocal.Api.session.updateToken('tok_new_local');
+    assert.equal(envLocal.Api.session.get().token, 'tok_new_local');
+    assert.equal(envLocal.Api.session.get().user.id, 'u2');
+    assert.equal(envLocal.getEventCount(), 1);
+
+    // 3. Unchanged token fires 0 events
+    envLocal.resetCount();
+    envLocal.Api.session.updateToken('tok_new_local');
+    assert.equal(envLocal.getEventCount(), 0);
+  });
+
+  await t.test('401 token_revoked clears session', async () => {
+    const mockRevokedFetch = async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({
+        success: false,
+        code: 'token_revoked',
+        message: 'Phiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại.'
+      })
+    });
+    const env = createMockEnvironment({ fetch: mockRevokedFetch });
+    env.Api.session.set({ token: 'revoked_tok', user: { id: 'u3' } });
+    assert.ok(env.Api.session.get());
+
+    await assert.rejects(
+      async () => env.Api.get('/auth/me'),
+      (err) => err.status === 401 && err.code === 'token_revoked'
+    );
+    assert.equal(env.Api.session.get(), null, 'Session must be cleared on 401 token_revoked');
+  });
 });

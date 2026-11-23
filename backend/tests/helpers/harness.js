@@ -43,7 +43,7 @@ async function startTestApp({ now = '2026-06-10T03:00:00Z', ai, env = {} } = {})
     const r = await call('POST', '/auth/login', { body: { identifier: `${role}@clinic.vn`, password: 'matkhau123' } });
     return { token: r.data.token, user: r.data.user };
   }
-  return { call, registerCustomer, createPet, validPet, loginStaff, clock, testHelpers, models, close: () => new Promise((r) => server.close(r)) };
+  return { call, registerCustomer, createPet, validPet, loginStaff, clock, testHelpers, models, config, close: () => new Promise((r) => server.close(r)) };
 }
 
 module.exports = { startTestApp };

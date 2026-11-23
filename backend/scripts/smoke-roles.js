@@ -336,21 +336,30 @@ async function main() {
       `Blocked route: ${vetBlockedCall.status} ${vetBlockedCall.body.code}, Me route: ${vetMeCall.status}`
     );
 
-    // 12. Vet changes password -> MustChangePassword=0, app accessible
+    // 12. Vet changes password -> MustChangePassword=0, app accessible, old token revoked (401 token_revoked)
     const newVetPass = `VetNewPass_${crypto.randomBytes(6).toString('hex')}!`;
     const changePassRes = await api('POST', '/auth/change-password', {
       token: vetToken,
       body: { currentPassword: vetTempPassword, newPassword: newVetPass }
     });
+    const returnedNewToken = changePassRes.body.data?.token;
+
+    // Token cũ trước đổi mật khẩu bị vô hiệu hóa ngay (401 token_revoked)
+    const oldTokenCheck = await api('GET', '/auth/me', { token: vetToken });
+    const newTokenCheck = await api('GET', '/auth/me', { token: returnedNewToken });
+
     const vetLoginNew = await api('POST', '/auth/login', {
       body: { identifier: vetEmail, password: newVetPass }
     });
     const vetNewToken = vetLoginNew.body.data?.token;
     const vetMeAfter = await api('GET', '/auth/me', { token: vetNewToken });
     record(
-      '12. Vet changes password -> MustChangePassword cleared to false, can login and use system',
-      changePassRes.status === 200 && vetLoginNew.status === 200 && vetMeAfter.body.data?.user?.mustChangePassword === false,
-      `MustChangePassword: ${vetMeAfter.body.data?.user?.mustChangePassword}`
+      '12. Vet changes password -> MustChangePassword cleared, old token 401 token_revoked, returned token and re-login work',
+      changePassRes.status === 200 && Boolean(returnedNewToken) &&
+      oldTokenCheck.status === 401 && oldTokenCheck.body.code === 'token_revoked' &&
+      newTokenCheck.status === 200 && newTokenCheck.body.data?.user?.mustChangePassword === false &&
+      vetLoginNew.status === 200 && vetMeAfter.body.data?.user?.mustChangePassword === false,
+      `OldToken: ${oldTokenCheck.status} ${oldTokenCheck.body.code}, NewToken: ${newTokenCheck.status}`
     );
 
     // 13. Atomic rollback: createVet on server2 fails at logAudit -> 500, no row in Users, no tempPassword, retry on app1 succeeds 201
@@ -419,10 +428,13 @@ async function main() {
     const vetLoginStillDis = await api('POST', '/auth/login', {
       body: { identifier: vetEmail, password: newVetPass }
     });
+    // Token cũ của provider trước khi bị khóa phải bị chặn 401 token_revoked
+    const prov1OldTokenBlocked = await api('GET', '/auth/me', { token: prov1Token });
     record(
-      '15. Admin enables Provider -> Provider active (IsActive=1), Vet remains disabled (individual restore)',
-      enProvRes.status === 200 && pCheckAfterEn.recordset[0].IsActive === true && vetLoginStillDis.status === 403,
-      `Provider IsActive: ${pCheckAfterEn.recordset[0].IsActive}, Vet login: ${vetLoginStillDis.status} ${vetLoginStillDis.body.code}`
+      '15. Admin enables Provider -> Provider active, Vet remains disabled; old provider token revoked (401 token_revoked)',
+      enProvRes.status === 200 && pCheckAfterEn.recordset[0].IsActive === true && vetLoginStillDis.status === 403 &&
+      prov1OldTokenBlocked.status === 401 && prov1OldTokenBlocked.body.code === 'token_revoked',
+      `Provider IsActive: ${pCheckAfterEn.recordset[0].IsActive}, Old Prov Token: ${prov1OldTokenBlocked.status} ${prov1OldTokenBlocked.body.code}`
     );
 
     // 16. Provider individually enables Vet -> Vet restored to active

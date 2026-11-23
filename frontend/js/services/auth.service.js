@@ -180,6 +180,9 @@
 
       try {
         const res = await Api.post('/auth/change-password', { currentPassword: cur, newPassword: nextPw });
+        if (res.token) {
+          Api.session.updateToken(res.token);
+        }
         if (res.user) {
           Api.session.updateUser(res.user);
         }

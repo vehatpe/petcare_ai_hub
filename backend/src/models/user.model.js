@@ -2,13 +2,14 @@
 const { T, lc, iso, isUniqueViolation } = require('./db');
 const { DuplicateError } = require('../utils/errors');
 
-const COLS = `UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, CreatedAt, ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason`;
+const COLS = `UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, CreatedAt, ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason, TokenVersion`;
 const map = (r) => r && ({
   id: lc(r.UserId), role: r.Role, status: r.Status, fullName: r.FullName, email: r.Email, phone: r.Phone,
   passwordHash: r.PasswordHash, orgName: r.OrgName, orgType: r.OrgType, createdAt: iso(r.CreatedAt),
   providerId: r.ProviderId || null, orgArea: r.OrgArea || null,
   approvedBy: lc(r.ApprovedBy), approvedAt: iso(r.ApprovedAt),
-  mustChangePassword: Boolean(r.MustChangePassword), rejectReason: r.RejectReason || null
+  mustChangePassword: Boolean(r.MustChangePassword), rejectReason: r.RejectReason || null,
+  tokenVersion: r.TokenVersion !== undefined && r.TokenVersion !== null ? Number(r.TokenVersion) : 0
 });
 
 module.exports = (db) => ({
@@ -44,7 +45,7 @@ module.exports = (db) => ({
   async updatePassword(userId, passwordHash, mustChangePassword = false) {
     await db.query(
       `UPDATE dbo.Users
-       SET PasswordHash = @hash, MustChangePassword = @mustChangePassword
+       SET PasswordHash = @hash, MustChangePassword = @mustChangePassword, TokenVersion = TokenVersion + 1
        WHERE UserId = @id`,
       {
         id: [T.guid, userId],

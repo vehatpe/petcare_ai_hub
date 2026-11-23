@@ -49,7 +49,8 @@ function createFakeModels() {
       approvedBy: u.approvedBy || null,
       approvedAt: u.approvedAt || null,
       mustChangePassword: Boolean(u.mustChangePassword),
-      rejectReason: u.rejectReason || null
+      rejectReason: u.rejectReason || null,
+      tokenVersion: u.tokenVersion !== undefined && u.tokenVersion !== null ? Number(u.tokenVersion) : 0
     };
   };
 
@@ -65,7 +66,8 @@ function createFakeModels() {
           approvedBy: u.approvedBy || null,
           approvedAt: u.approvedAt || null,
           mustChangePassword: Boolean(u.mustChangePassword),
-          rejectReason: u.rejectReason || null
+          rejectReason: u.rejectReason || null,
+          tokenVersion: u.tokenVersion !== undefined && u.tokenVersion !== null ? Number(u.tokenVersion) : 0
         };
         s.users.push(clone(userObj));
         return userOut(userObj);
@@ -78,6 +80,7 @@ function createFakeModels() {
         if (u) {
           u.passwordHash = passwordHash;
           u.mustChangePassword = Boolean(mustChangePassword);
+          u.tokenVersion = (u.tokenVersion || 0) + 1;
         }
       }
     },
@@ -112,6 +115,7 @@ function createFakeModels() {
           users: paged.map((u) => {
             const out = userOut(u);
             delete out.passwordHash;
+            delete out.tokenVersion;
             return out;
           }),
           meta: { limit: lim, offset: off, total }
@@ -208,10 +212,13 @@ function createFakeModels() {
         }
       },
 
-      async updateUserStatus(tx, userId, status) {
+      async updateUserStatus(tx, userId, status, incrementTokenVersion = false) {
         const u = s.users.find((x) => x.id === userId);
         if (u) {
           u.status = status;
+          if (incrementTokenVersion) {
+            u.tokenVersion = (u.tokenVersion || 0) + 1;
+          }
         }
       },
 
@@ -221,6 +228,7 @@ function createFakeModels() {
         for (const u of s.users) {
           if (u.providerId === providerId && u.role === 'vet') {
             u.status = 'disabled';
+            u.tokenVersion = (u.tokenVersion || 0) + 1;
           }
         }
       },
@@ -278,10 +286,13 @@ function createFakeModels() {
           createdAt: u.createdAt
         };
       },
-      async updateVetStatus(tx, vetId, status) {
+      async updateVetStatus(tx, vetId, status, incrementTokenVersion = false) {
         const u = s.users.find((x) => x.id === vetId);
         if (u) {
           u.status = status;
+          if (incrementTokenVersion) {
+            u.tokenVersion = (u.tokenVersion || 0) + 1;
+          }
         }
       }
     },

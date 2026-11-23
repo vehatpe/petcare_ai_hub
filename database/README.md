@@ -73,6 +73,12 @@ SELECT ProviderId, Name, Area FROM dbo.Providers;
 - `Users`: non-clustered filtered index `IX_Users_ProviderId` (WHERE `ProviderId IS NOT NULL`).
 - `AuditLog`: bảng ghi vết kiểm toán quản trị (`AuditId`, `ActorUserId`, `Action`, `TargetType`, `TargetId`, `Detail`, `CreatedAt`) và index `IX_AuditLog_CreatedAt`. `Detail` không bao giờ chứa mật khẩu/token.
 
+## Migration 005: Vô hiệu hóa token cũ bằng TokenVersion
+
+`migrations/005_Users_TokenVersion.sql` (chạy lại được):
+- `Users`: thêm cột `TokenVersion INT NOT NULL DEFAULT 0` (ràng buộc mặc định `DF_Users_TokenVersion`).
+- Mọi token JWT mang claim `tv` tương ứng `user.tokenVersion`. Khi đổi mật khẩu hoặc bị khóa tài khoản (bao gồm cả cascade khóa vet khi provider bị khóa), `TokenVersion` tăng `+1` làm toàn bộ phiên cũ lập tức bị vô hiệu hóa (`401 token_revoked`).
+
 ### Quy trình duyệt đối tác (Provider) & Ý nghĩa các trạng thái
 
 1. **Khách hàng (`customer`):** Đăng ký công khai, nhận trạng thái `active` ngay và có thể đăng nhập tức thì.
