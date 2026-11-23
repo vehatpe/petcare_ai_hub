@@ -50,7 +50,9 @@ function createFakeModels() {
       approvedAt: u.approvedAt || null,
       mustChangePassword: Boolean(u.mustChangePassword),
       rejectReason: u.rejectReason || null,
-      tokenVersion: u.tokenVersion !== undefined && u.tokenVersion !== null ? Number(u.tokenVersion) : 0
+      tokenVersion: u.tokenVersion !== undefined && u.tokenVersion !== null ? Number(u.tokenVersion) : 0,
+      orgLicenseNo: u.orgLicenseNo || null,
+      orgTaxCode: u.orgTaxCode || null
     };
   };
 
@@ -67,7 +69,9 @@ function createFakeModels() {
           approvedAt: u.approvedAt || null,
           mustChangePassword: Boolean(u.mustChangePassword),
           rejectReason: u.rejectReason || null,
-          tokenVersion: u.tokenVersion !== undefined && u.tokenVersion !== null ? Number(u.tokenVersion) : 0
+          tokenVersion: u.tokenVersion !== undefined && u.tokenVersion !== null ? Number(u.tokenVersion) : 0,
+          orgLicenseNo: u.orgLicenseNo || null,
+          orgTaxCode: u.orgTaxCode || null
         };
         s.users.push(clone(userObj));
         return userOut(userObj);
@@ -124,6 +128,16 @@ function createFakeModels() {
             const out = userOut(u);
             delete out.passwordHash;
             delete out.tokenVersion;
+            delete out.orgLicenseNo;
+            delete out.orgTaxCode;
+            if (u.role === 'provider') {
+              const prov = u.providerId ? s.providers.find((p) => p.id === u.providerId) : null;
+              const licenseNo = prov && prov.licenseNo ? prov.licenseNo : (u.orgLicenseNo || null);
+              const taxCode = prov && prov.taxCode ? prov.taxCode : (u.orgTaxCode || null);
+              out.licenseNo = licenseNo;
+              out.taxCode = taxCode;
+              out.hasLegalInfo = Boolean(licenseNo || taxCode);
+            }
             return out;
           }),
           meta: { limit: lim, offset: off, total }
@@ -198,6 +212,12 @@ function createFakeModels() {
           type: p.type,
           isSample: Boolean(p.isSample),
           active: Boolean(p.isActive),
+          address: p.address || null,
+          phone: p.phone || null,
+          description: p.description || null,
+          licenseNo: p.licenseNo || null,
+          taxCode: p.taxCode || null,
+          updatedAt: p.updatedAt || null,
           createdAt: tick()
         });
       },

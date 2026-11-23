@@ -61,6 +61,8 @@ function createAuthService({ models, config, clock = () => new Date() }) {
         orgName: value.role === 'provider' ? value.orgName : null,
         orgType: value.role === 'provider' ? value.orgType : null,
         orgArea: value.role === 'provider' ? value.orgArea : null,
+        orgLicenseNo: value.role === 'provider' ? value.licenseNo : null,
+        orgTaxCode: value.role === 'provider' ? value.taxCode : null,
         createdAt: clock().toISOString()
       };
       try {

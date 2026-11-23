@@ -10,6 +10,7 @@ const SEX = ['male', 'female'];
 const NEUTERED = ['yes', 'no', 'unknown'];
 const TIME_SLOTS = ['08:30', '09:30', '10:30', '14:00', '15:30', '16:30', '18:00', '19:30'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const LICENSE_RE = /^[A-Za-z0-9\s/.\-]+$/;
 const PHOTO_RE = /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
 const MAX_PHOTO_BYTES = 400 * 1024;
 
@@ -20,6 +21,38 @@ function normalizePhone(raw) {
   const compact = str(raw).replace(/[\s.\-()]/g, '');
   if (!PHONE_RE.test(compact)) return null;
   return compact.replace(/^\+?84/, '0');
+}
+
+function parseLegalInfo(input, errors) {
+  let licenseNo = null;
+  let taxCode = null;
+
+  if (input.licenseNo !== undefined && input.licenseNo !== null) {
+    const rawLic = str(input.licenseNo).trim();
+    if (rawLic !== '') {
+      if (rawLic.length > 50) {
+        errors.licenseNo = 'Số giấy phép hành nghề tối đa 50 ký tự.';
+      } else if (!LICENSE_RE.test(rawLic)) {
+        errors.licenseNo = 'Số giấy phép chỉ gồm chữ, số, khoảng trắng và các ký tự / - .';
+      } else {
+        licenseNo = rawLic;
+      }
+    }
+  }
+
+  if (input.taxCode !== undefined && input.taxCode !== null) {
+    const rawTax = str(input.taxCode).trim();
+    if (rawTax !== '') {
+      const compactTax = rawTax.replace(/[\s\-]/g, '');
+      if (!/^\d{10}$|^\d{13}$/.test(compactTax)) {
+        errors.taxCode = 'Mã số thuế phải gồm 10 hoặc 13 chữ số.';
+      } else {
+        taxCode = compactTax;
+      }
+    }
+  }
+
+  return { licenseNo, taxCode };
 }
 
 function passwordOk(v) {
@@ -37,7 +70,9 @@ function validateRegister(input) {
     password: str(input.password),
     orgName: str(input.orgName).trim(),
     orgType: str(input.orgType),
-    orgArea: str(input.orgArea).trim()
+    orgArea: str(input.orgArea).trim(),
+    licenseNo: null,
+    taxCode: null
   };
   const errors = {};
   if (role !== 'customer' && role !== 'provider') errors.role = 'Chỉ có thể đăng ký tài khoản chủ nuôi hoặc đối tác. Tài khoản bác sĩ/quản trị do hệ thống cấp.';
@@ -46,12 +81,24 @@ function validateRegister(input) {
   if (!EMAIL_RE.test(value.email) || value.email.length > 254) errors.email = 'Email chưa đúng định dạng, ví dụ: ten@gmail.com.';
   if (!value.phone) errors.phone = 'Số điện thoại Việt Nam gồm 10 số, ví dụ: 0912 345 678.';
   if (!passwordOk(value.password) || value.password.length > 72) errors.password = 'Mật khẩu cần ít nhất 8 ký tự, gồm cả chữ và số (tối đa 72 ký tự).';
+
   if (role === 'provider') {
     if (value.orgName.length < 2) errors.orgName = 'Vui lòng nhập tên cơ sở.';
     else if (value.orgName.length > 150) errors.orgName = 'Tên cơ sở tối đa 150 ký tự.';
     if (!PROVIDER_TYPES.includes(value.orgType)) errors.orgType = 'Vui lòng chọn loại hình cơ sở.';
     if (!value.orgArea) errors.orgArea = 'Vui lòng nhập khu vực hoạt động của cơ sở.';
     else if (value.orgArea.length > 100) errors.orgArea = 'Khu vực tối đa 100 ký tự.';
+
+    const legal = parseLegalInfo(input, errors);
+    value.licenseNo = legal.licenseNo;
+    value.taxCode = legal.taxCode;
+  } else {
+    if (input.licenseNo !== undefined && input.licenseNo !== null && str(input.licenseNo).trim() !== '') {
+      errors.licenseNo = 'Thông tin pháp lý chỉ áp dụng cho tài khoản đối tác.';
+    }
+    if (input.taxCode !== undefined && input.taxCode !== null && str(input.taxCode).trim() !== '') {
+      errors.taxCode = 'Mã số thuế chỉ áp dụng cho tài khoản đối tác.';
+    }
   }
   return { errors, value };
 }
@@ -207,6 +254,6 @@ function validateBooking(input, now) {
 }
 
 module.exports = {
-  EMAIL_RE, TIME_SLOTS, PROVIDER_TYPES, isUuid, normalizePhone, validateRegister, validateVetInput, validateChangePassword, validatePet,
+  EMAIL_RE, TIME_SLOTS, PROVIDER_TYPES, isUuid, normalizePhone, parseLegalInfo, validateRegister, validateVetInput, validateChangePassword, validatePet,
   validateWeight, validateVaccination, validateMedicalRecord, validateBooking
 };

@@ -103,7 +103,9 @@ function createAdminService({ models, config, clock = () => new Date() }) {
           area: orgArea,
           type: user.orgType || 'clinic',
           isSample: false,
-          isActive: true
+          isActive: true,
+          licenseNo: user.orgLicenseNo || null,
+          taxCode: user.orgTaxCode || null
         });
 
         const approvedAt = clock().toISOString();

@@ -2,29 +2,31 @@
 const { T, lc, iso, isUniqueViolation } = require('./db');
 const { DuplicateError } = require('../utils/errors');
 
-const COLS = `UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, CreatedAt, ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason, TokenVersion`;
+const COLS = `UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, CreatedAt, ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason, TokenVersion, OrgLicenseNo, OrgTaxCode`;
 const map = (r) => r && ({
   id: lc(r.UserId), role: r.Role, status: r.Status, fullName: r.FullName, email: r.Email, phone: r.Phone,
   passwordHash: r.PasswordHash, orgName: r.OrgName, orgType: r.OrgType, createdAt: iso(r.CreatedAt),
   providerId: r.ProviderId || null, orgArea: r.OrgArea || null,
   approvedBy: lc(r.ApprovedBy), approvedAt: iso(r.ApprovedAt),
   mustChangePassword: Boolean(r.MustChangePassword), rejectReason: r.RejectReason || null,
-  tokenVersion: r.TokenVersion !== undefined && r.TokenVersion !== null ? Number(r.TokenVersion) : 0
+  tokenVersion: r.TokenVersion !== undefined && r.TokenVersion !== null ? Number(r.TokenVersion) : 0,
+  orgLicenseNo: r.OrgLicenseNo || null, orgTaxCode: r.OrgTaxCode || null
 });
 
 module.exports = (db) => ({
   async create(u, runner = db) {
     try {
       await runner.query(
-        `INSERT INTO dbo.Users (UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason)
-         VALUES (@id, @role, @status, @fullName, @email, @phone, @hash, @orgName, @orgType, @providerId, @orgArea, @approvedBy, @approvedAt, @mustChangePassword, @rejectReason)`,
+        `INSERT INTO dbo.Users (UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason, OrgLicenseNo, OrgTaxCode)
+         VALUES (@id, @role, @status, @fullName, @email, @phone, @hash, @orgName, @orgType, @providerId, @orgArea, @approvedBy, @approvedAt, @mustChangePassword, @rejectReason, @orgLicenseNo, @orgTaxCode)`,
         {
           id: [T.guid, u.id], role: [T.vstr(10), u.role], status: [T.vstr(10), u.status], fullName: [T.str(100), u.fullName],
           email: [T.str(254), u.email], phone: [T.vstr(15), u.phone], hash: [T.vstr(100), u.passwordHash],
           orgName: [T.str(150), u.orgName], orgType: [T.vstr(10), u.orgType],
           providerId: [T.vstr(50), u.providerId || null], orgArea: [T.str(100), u.orgArea || null],
           approvedBy: [T.guid, u.approvedBy || null], approvedAt: [T.dt, u.approvedAt || null],
-          mustChangePassword: [T.bool, u.mustChangePassword ? 1 : 0], rejectReason: [T.str(200), u.rejectReason || null]
+          mustChangePassword: [T.bool, u.mustChangePassword ? 1 : 0], rejectReason: [T.str(200), u.rejectReason || null],
+          orgLicenseNo: [T.str(50), u.orgLicenseNo || null], orgTaxCode: [T.vstr(20), u.orgTaxCode || null]
         }
       );
     } catch (e) {

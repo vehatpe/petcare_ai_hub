@@ -3,25 +3,41 @@ const { T, lc, iso } = require('./db');
 const { AppError } = require('../utils/errors');
 
 const USER_COLS = `u.UserId, u.Role, u.Status, u.FullName, u.Email, u.Phone, u.OrgName, u.OrgType, u.CreatedAt,
-                   u.ProviderId, u.OrgArea, u.ApprovedBy, u.ApprovedAt, u.MustChangePassword, u.RejectReason`;
+                   u.ProviderId, u.OrgArea, u.ApprovedBy, u.ApprovedAt, u.MustChangePassword, u.RejectReason,
+                   u.OrgLicenseNo, u.OrgTaxCode, p.LicenseNo AS ProvLicenseNo, p.TaxCode AS ProvTaxCode`;
 
-const mapUser = (r) => r && ({
-  id: lc(r.UserId),
-  role: r.Role,
-  status: r.Status,
-  fullName: r.FullName,
-  email: r.Email,
-  phone: r.Phone,
-  orgName: r.OrgName || null,
-  orgType: r.OrgType || null,
-  createdAt: iso(r.CreatedAt),
-  providerId: r.ProviderId || null,
-  orgArea: r.OrgArea || null,
-  approvedBy: lc(r.ApprovedBy),
-  approvedAt: iso(r.ApprovedAt),
-  mustChangePassword: Boolean(r.MustChangePassword),
-  rejectReason: r.RejectReason || null
-});
+const mapUser = (r) => {
+  if (!r) return null;
+  const isProv = r.Role === 'provider';
+  const licenseNo = isProv ? (r.ProvLicenseNo !== undefined && r.ProvLicenseNo !== null ? r.ProvLicenseNo : (r.OrgLicenseNo || null)) : undefined;
+  const taxCode = isProv ? (r.ProvTaxCode !== undefined && r.ProvTaxCode !== null ? r.ProvTaxCode : (r.OrgTaxCode || null)) : undefined;
+
+  const out = {
+    id: lc(r.UserId),
+    role: r.Role,
+    status: r.Status,
+    fullName: r.FullName,
+    email: r.Email,
+    phone: r.Phone,
+    orgName: r.OrgName || null,
+    orgType: r.OrgType || null,
+    createdAt: iso(r.CreatedAt),
+    providerId: r.ProviderId || null,
+    orgArea: r.OrgArea || null,
+    approvedBy: lc(r.ApprovedBy),
+    approvedAt: iso(r.ApprovedAt),
+    mustChangePassword: Boolean(r.MustChangePassword),
+    rejectReason: r.RejectReason || null
+  };
+
+  if (isProv) {
+    out.licenseNo = licenseNo;
+    out.taxCode = taxCode;
+    out.hasLegalInfo = Boolean(licenseNo || taxCode);
+  }
+
+  return out;
+};
 
 module.exports = (db) => ({
   async listUsers({ status, role, q, limit = 20, offset = 0 }) {
@@ -57,6 +73,7 @@ module.exports = (db) => ({
     const dataSql = `
       SELECT ${USER_COLS}
       FROM dbo.Users u
+      LEFT JOIN dbo.Providers p ON u.ProviderId = p.ProviderId
       ${whereSql}
       ORDER BY u.CreatedAt DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -81,7 +98,8 @@ module.exports = (db) => ({
   async getUserForUpdate(tx, userId) {
     const rows = await tx.query(
       `SELECT UserId, Role, Status, FullName, Email, Phone, OrgName, OrgType, CreatedAt,
-              ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason, TokenVersion
+              ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason, TokenVersion,
+              OrgLicenseNo, OrgTaxCode
        FROM dbo.Users WITH (UPDLOCK, HOLDLOCK)
        WHERE UserId = @id`,
       { id: [T.guid, userId] }
@@ -90,6 +108,8 @@ module.exports = (db) => ({
     if (!r) return null;
     return {
       ...mapUser(r),
+      orgLicenseNo: r.OrgLicenseNo || null,
+      orgTaxCode: r.OrgTaxCode || null,
       tokenVersion: r.TokenVersion !== undefined && r.TokenVersion !== null ? Number(r.TokenVersion) : 0
     };
   },
@@ -119,15 +139,17 @@ module.exports = (db) => ({
 
   async insertProvider(tx, p) {
     await tx.query(
-      `INSERT INTO dbo.Providers (ProviderId, Name, Area, Type, IsSample, IsActive, CreatedAt)
-       VALUES (@id, @name, @area, @type, @isSample, @isActive, SYSUTCDATETIME())`,
+      `INSERT INTO dbo.Providers (ProviderId, Name, Area, Type, IsSample, IsActive, LicenseNo, TaxCode, CreatedAt)
+       VALUES (@id, @name, @area, @type, @isSample, @isActive, @licenseNo, @taxCode, SYSUTCDATETIME())`,
       {
         id: [T.vstr(50), p.providerId],
         name: [T.str(150), p.name],
         area: [T.str(100), p.area],
         type: [T.vstr(10), p.type],
         isSample: [T.bool, p.isSample ? 1 : 0],
-        isActive: [T.bool, p.isActive ? 1 : 0]
+        isActive: [T.bool, p.isActive ? 1 : 0],
+        licenseNo: [T.str(50), p.licenseNo || null],
+        taxCode: [T.vstr(20), p.taxCode || null]
       }
     );
   },
