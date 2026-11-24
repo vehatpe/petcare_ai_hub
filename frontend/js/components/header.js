@@ -58,6 +58,8 @@
           ${dash ? `<a role="menuitem" href="${url(dash)}">Bảng điều khiển</a>` : ''}
           ${user.role === 'admin' ? `<a role="menuitem" href="${url('admin-partners.html')}">Duyệt đối tác</a>` : ''}
           ${user.role === 'admin' ? `<a role="menuitem" href="${url('admin-users.html')}">Quản lý tài khoản</a>` : ''}
+          ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-services.html')}">Dịch vụ của tôi</a>` : ''}
+          ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-profile.html')}">Hồ sơ cơ sở</a>` : ''}
           ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-vets.html')}">Quản lý bác sĩ</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('health-records.html')}">Sổ sức khỏe</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('pet-profile.html')}">Thêm thú cưng</a>` : ''}
@@ -108,6 +110,16 @@
         isActive: currentFile === 'admin-users.html'
       });
     } else if (user.role === 'provider') {
+      items.push({
+        href: url('provider-services.html'),
+        text: 'Dịch vụ của tôi',
+        isActive: currentFile === 'provider-services.html'
+      });
+      items.push({
+        href: url('provider-profile.html'),
+        text: 'Hồ sơ cơ sở',
+        isActive: currentFile === 'provider-profile.html'
+      });
       items.push({
         href: url('provider-vets.html'),
         text: 'Quản lý bác sĩ',
@@ -182,6 +194,8 @@
           ${dash ? `<li><a href="${url(dash)}">Bảng điều khiển</a></li>` : ''}
           ${user.role === 'admin' ? `<li><a href="${url('admin-partners.html')}">Duyệt đối tác</a></li>` : ''}
           ${user.role === 'admin' ? `<li><a href="${url('admin-users.html')}">Quản lý tài khoản</a></li>` : ''}
+          ${user.role === 'provider' ? `<li><a href="${url('provider-services.html')}">Dịch vụ của tôi</a></li>` : ''}
+          ${user.role === 'provider' ? `<li><a href="${url('provider-profile.html')}">Hồ sơ cơ sở</a></li>` : ''}
           ${user.role === 'provider' ? `<li><a href="${url('provider-vets.html')}">Quản lý bác sĩ</a></li>` : ''}
           ${user.role === 'customer' ? `<li><a href="${url('health-records.html')}">Sổ sức khỏe</a></li>` : ''}
           <li><a href="${url('change-password.html')}">Đổi mật khẩu</a></li>
