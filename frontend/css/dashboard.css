@@ -53,6 +53,37 @@
   color: var(--color-dark-forest);
 }
 
+/* ---------- Provider Profile & Services Common Styles (S11.1) ---------- */
+
+.system-info-box {
+  background: var(--color-surface-soft-mint);
+  border: var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  margin-bottom: 28px;
+}
+
+.system-info-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.system-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.provider-lock-alert {
+  margin-bottom: 24px;
+  padding: 16px;
+  border-radius: var(--radius-card);
+}
+
 .pet-summary {
   font-size: 0.875rem;
   color: var(--text-secondary);

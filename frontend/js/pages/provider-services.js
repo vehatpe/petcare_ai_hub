@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentOffset = 0;
   let currentTotal = 0;
   let isLoadingMore = false;
-  let serviceOptions = null; // populated from API data.options
+  let serviceOptions = null; // populated from API options
   let isLocked = false;
   let lockReason = '';
 
@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (locked) {
       if (openAddBtn) openAddBtn.disabled = true;
       alertBox.hidden = false;
-      alertBox.className = 'form-alert form-alert-error';
+      alertBox.className = 'form-alert form-alert-error provider-lock-alert';
       alertBox.innerHTML = `<strong>Cơ sở đang bị tạm khóa:</strong> ${esc(reason || 'Cơ sở hoặc tài khoản đang bị vô hiệu hóa. Các thao tác thêm, sửa, ẩn/hiện dịch vụ bị vô hiệu.')}`;
     } else {
       if (openAddBtn) openAddBtn.disabled = false;
@@ -54,20 +54,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const catName = CATEGORY_NAMES[s.category] || s.category;
     const statusBadge = s.isActive
       ? '<span class="badge badge-mint">Đang hiển thị</span>'
-      : '<span class="badge" style="background: var(--color-cream-soft, #f7f9f5); color: var(--text-secondary);">Đã ẩn</span>';
+      : '<span class="badge" style="background: var(--color-surface-muted); color: var(--text-secondary);">Đã ẩn</span>';
 
     const actionButtons = isLocked
       ? `<button type="button" class="btn btn-outline btn-sm" disabled>Sửa</button>`
       : `
         <button type="button" class="btn btn-outline btn-sm" data-action="edit" data-id="${esc(s.id)}">Sửa</button>
         ${s.isActive
-          ? `<button type="button" class="btn btn-outline btn-sm" data-action="toggle-status" data-id="${esc(s.id)}" data-active="1" style="color: var(--color-danger-text, #c53030);">Ẩn</button>`
+          ? `<button type="button" class="btn btn-outline btn-sm" data-action="toggle-status" data-id="${esc(s.id)}" data-active="1" style="color: var(--color-danger-text);">Ẩn</button>`
           : `<button type="button" class="btn btn-primary btn-sm" data-action="toggle-status" data-id="${esc(s.id)}" data-active="0">Hiện</button>`
         }`;
 
     return `
       <li class="pet-row" data-service-id="${esc(s.id)}" style="${!s.isActive ? 'opacity: 0.75; background: #fafafa;' : ''}">
-        <div class="pet-avatar" aria-hidden="true" style="font-size: 1.125rem; font-weight: 700; background: ${s.isActive ? 'var(--color-mint-light, #ecf9f9)' : '#eee'}; color: var(--color-dark-forest);">
+        <div class="pet-avatar" aria-hidden="true" style="font-size: 1.125rem; font-weight: 700; background: ${s.isActive ? 'var(--color-surface-soft-mint)' : '#eee'}; color: var(--color-dark-forest);">
           ${esc(Fmt.initials(s.name))}
         </div>
         <div class="pet-main">
@@ -124,18 +124,30 @@ document.addEventListener('DOMContentLoaded', () => {
     return Panel.load(listEl, async () => {
       try {
         const res = await Api.get('/provider/services', { limit: PAGE_SIZE, offset: 0 });
-        setLockState(false);
-        services = res.data?.services || [];
-        serviceOptions = res.data?.options || null;
-        currentTotal = (res.data?.meta && res.data.meta.total) ?? services.length;
+        services = res.services || [];
+        serviceOptions = res.options || null;
+        currentTotal = (res.meta && res.meta.total) ?? services.length;
         currentOffset = services.length;
+
+        // Kiểm tra trạng thái cơ sở từ profile
+        try {
+          const prof = await Api.get('/provider/profile');
+          if (prof && prof.isActive === false) {
+            setLockState(true, 'Cơ sở đã bị tạm khóa hoặc ngừng hoạt động.');
+          } else {
+            setLockState(false);
+          }
+        } catch (_) {
+          // Nếu get profile lỗi
+        }
+
         return res;
       } catch (err) {
         if (err.status === 403 || err.status === 409) {
           setLockState(true, err.message);
           services = [];
           currentTotal = 0;
-          return { data: { services: [], meta: { total: 0 } } };
+          return { services: [], meta: { total: 0 } };
         }
         throw err;
       }
@@ -150,14 +162,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       const res = await Api.get('/provider/services', { limit: PAGE_SIZE, offset: currentOffset });
-      const nextBatch = res.data?.services || [];
+      const nextBatch = res.services || [];
       services = services.concat(nextBatch);
-      currentTotal = (res.data?.meta && res.data.meta.total) ?? currentTotal;
+      currentTotal = (res.meta && res.meta.total) ?? currentTotal;
       currentOffset += nextBatch.length;
       renderList();
     } catch (err) {
       if (err.status === 403 || err.status === 409) {
-        setLockState(true, err.message);
+        // Kiểm tra profile trước khi khóa
+        try {
+          const prof = await Api.get('/provider/profile');
+          if (prof && prof.isActive === false) {
+            setLockState(true, err.message);
+          }
+        } catch (_) {}
       }
       Toast.show({ title: 'Lỗi tải thêm', message: err.message || 'Không thể tải thêm dịch vụ.', type: 'danger' });
       loadMoreBtn.disabled = false;
@@ -383,23 +401,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         if (isEdit) {
-          const res = await Api.put(`/provider/services/${encodeURIComponent(service.id)}`, payload);
+          await Api.put(`/provider/services/${encodeURIComponent(service.id)}`, payload);
           Toast.show({ title: 'Thành công', message: 'Đã cập nhật dịch vụ.', type: 'success' });
         } else {
-          const res = await Api.post('/provider/services', payload);
+          await Api.post('/provider/services', payload);
           Toast.show({ title: 'Thành công', message: 'Đã tạo dịch vụ mới.', type: 'success' });
         }
         requestClose(true);
         loadInitial();
       } catch (err) {
         if (err.status === 403 || err.status === 409) {
-          if (err.code === 'conflict' && !err.errors) {
-            // Lỗi khóa cơ sở hoặc đạt giới hạn tối đa
-            setLockState(true, err.message);
-            Toast.show({ title: 'Không thể thực hiện', message: err.message, type: 'danger' });
-            requestClose(true);
-            return;
-          }
+          try {
+            const check = await Api.get('/provider/profile');
+            if (check && check.isActive === false) {
+              setLockState(true, err.message);
+              Toast.show({ title: 'Cơ sở bị khóa', message: err.message, type: 'danger' });
+              requestClose(true);
+              return;
+            }
+          } catch (_) {}
+
+          // Nếu cơ sở không bị khóa (hoặc check profile lỗi), giữ nguyên trạng thái mở khóa trang
+          Toast.show({ title: 'Không thể thực hiện', message: err.message, type: 'danger' });
+          loadInitial();
+          // Không đóng dialog nếu gặp lỗi giới hạn 50 dịch vụ hoặc conflict
+          return;
         }
 
         if (err.code === 'validation' && err.errors) {
@@ -501,11 +527,19 @@ document.addEventListener('DOMContentLoaded', () => {
           loadInitial();
         } catch (err) {
           if (err.status === 403 || err.status === 409) {
-            setLockState(true, err.message);
+            try {
+              const check = await Api.get('/provider/profile');
+              if (check && check.isActive === false) {
+                setLockState(true, err.message);
+                Toast.show({ title: 'Cơ sở bị khóa', message: err.message, type: 'danger' });
+                requestClose();
+                return;
+              }
+            } catch (_) {}
           }
           Toast.show({ title: 'Lỗi', message: err.message || 'Không thể thực hiện thao tác.', type: 'danger' });
-          btn.disabled = false;
-          btn.classList.remove('is-loading');
+          loadInitial();
+          requestClose();
         }
       }
     });

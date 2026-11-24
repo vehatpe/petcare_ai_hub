@@ -51,11 +51,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderProfile(profile) {
     currentProfile = profile;
+    isLocked = profile.isActive === false;
     const typeText = TYPE_LABEL[profile.type] || profile.type || 'Chưa phân loại';
     const descLen = (profile.description || '').length;
 
     const lockBanner = isLocked ? `
-      <div class="form-alert form-alert-error" role="alert" style="margin-bottom: 24px; padding: 16px; border-radius: var(--radius-card);">
+      <div class="form-alert form-alert-error provider-lock-alert" role="alert">
         <strong>Cơ sở đang bị tạm khóa:</strong> ${esc(lockReason || 'Cơ sở hoặc tài khoản đang bị vô hiệu hóa. Bạn chỉ có thể xem thông tin, không thể chỉnh sửa.')}
       </div>` : '';
 
@@ -71,12 +72,12 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
 
           <!-- Thông tin do Admin quản lý (Chỉ đọc) -->
-          <div style="background: var(--color-mint-light, #ecf9f9); border: 1px solid var(--border-hairline, #e2e8f0); border-radius: var(--radius-card, 16px); padding: 20px; margin-bottom: 28px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div class="system-info-box">
+            <div class="system-info-head">
               <h3 style="font-size: 1rem; margin: 0; color: var(--color-dark-forest);">Thông tin hệ thống</h3>
               <span class="text-muted" style="font-size: 0.8125rem;">(do quản trị viên quản lý)</span>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+            <div class="system-info-grid">
               <div>
                 <label style="font-size: 0.8125rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">Tên cơ sở</label>
                 <strong style="font-size: 1rem; color: var(--color-dark-forest);">${esc(profile.name || 'Chưa đặt tên')}</strong>
@@ -189,18 +190,26 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const res = await Api.put('/provider/profile', payload);
         Toast.show({ title: 'Thành công', message: 'Hồ sơ cơ sở đã được cập nhật thành công.', type: 'success' });
-        if (res.data) {
-          renderProfile(res.data);
-        } else {
-          loadProfile();
-        }
+        renderProfile(res);
       } catch (err) {
         if (err.status === 403 || err.status === 409) {
-          isLocked = true;
-          lockReason = err.message || 'Cơ sở đã bị tạm khóa.';
-          renderProfile(currentProfile || {});
-          Toast.show({ title: 'Cơ sở bị khóa', message: lockReason, type: 'danger' });
-          return;
+          try {
+            const check = await Api.get('/provider/profile');
+            if (check && check.isActive === false) {
+              isLocked = true;
+              lockReason = err.message || 'Cơ sở đã bị tạm khóa.';
+              renderProfile(check);
+              Toast.show({ title: 'Cơ sở bị khóa', message: lockReason, type: 'danger' });
+              return;
+            }
+          } catch (_) {
+            // Nếu get profile cũng lỗi 403/409, coi như cơ sở bị khóa
+            isLocked = true;
+            lockReason = err.message || 'Cơ sở đã bị tạm khóa.';
+            renderProfile(currentProfile || {});
+            Toast.show({ title: 'Cơ sở bị khóa', message: lockReason, type: 'danger' });
+            return;
+          }
         }
 
         if (err.code === 'validation' && err.errors) {
@@ -222,8 +231,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return Panel.load(container, async () => {
       try {
         const res = await Api.get('/provider/profile');
-        isLocked = false;
-        return res.data;
+        isLocked = res.isActive === false;
+        if (isLocked) {
+          lockReason = 'Cơ sở đã bị tạm khóa hoặc ngừng hoạt động.';
+        }
+        return res;
       } catch (err) {
         if (err.status === 403 || err.status === 409) {
           isLocked = true;
