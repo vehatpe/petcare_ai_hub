@@ -10,6 +10,7 @@ const SEX = ['male', 'female'];
 const NEUTERED = ['yes', 'no', 'unknown'];
 const TIME_SLOTS = ['08:30', '09:30', '10:30', '14:00', '15:30', '16:30', '18:00', '19:30'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const LICENSE_RE = /^[A-Za-z0-9\s/.\-]+$/;
 const PHOTO_RE = /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
 const MAX_PHOTO_BYTES = 400 * 1024;
 
@@ -20,6 +21,42 @@ function normalizePhone(raw) {
   const compact = str(raw).replace(/[\s.\-()]/g, '');
   if (!PHONE_RE.test(compact)) return null;
   return compact.replace(/^\+?84/, '0');
+}
+
+function parseLegalField(fieldName, val, errors) {
+  if (val === undefined) return undefined;
+  if (val === null) return null;
+  const raw = str(val).trim();
+  if (raw === '') return null;
+
+  if (fieldName === 'licenseNo') {
+    if (raw.length > 50) {
+      errors.licenseNo = 'Số giấy phép hành nghề tối đa 50 ký tự.';
+      return null;
+    }
+    if (!LICENSE_RE.test(raw)) {
+      errors.licenseNo = 'Số giấy phép chỉ gồm chữ, số, khoảng trắng và các ký tự / - .';
+      return null;
+    }
+    return raw;
+  }
+
+  if (fieldName === 'taxCode') {
+    const compactTax = raw.replace(/[\s\-]/g, '');
+    if (!/^\d{10}$|^\d{13}$/.test(compactTax)) {
+      errors.taxCode = 'Mã số thuế phải gồm 10 hoặc 13 chữ số.';
+      return null;
+    }
+    return compactTax;
+  }
+
+  return raw;
+}
+
+function parseLegalInfo(input, errors) {
+  const licenseNo = parseLegalField('licenseNo', input.licenseNo, errors) ?? null;
+  const taxCode = parseLegalField('taxCode', input.taxCode, errors) ?? null;
+  return { licenseNo, taxCode };
 }
 
 function passwordOk(v) {
@@ -37,7 +74,9 @@ function validateRegister(input) {
     password: str(input.password),
     orgName: str(input.orgName).trim(),
     orgType: str(input.orgType),
-    orgArea: str(input.orgArea).trim()
+    orgArea: str(input.orgArea).trim(),
+    licenseNo: null,
+    taxCode: null
   };
   const errors = {};
   if (role !== 'customer' && role !== 'provider') errors.role = 'Chỉ có thể đăng ký tài khoản chủ nuôi hoặc đối tác. Tài khoản bác sĩ/quản trị do hệ thống cấp.';
@@ -46,12 +85,24 @@ function validateRegister(input) {
   if (!EMAIL_RE.test(value.email) || value.email.length > 254) errors.email = 'Email chưa đúng định dạng, ví dụ: ten@gmail.com.';
   if (!value.phone) errors.phone = 'Số điện thoại Việt Nam gồm 10 số, ví dụ: 0912 345 678.';
   if (!passwordOk(value.password) || value.password.length > 72) errors.password = 'Mật khẩu cần ít nhất 8 ký tự, gồm cả chữ và số (tối đa 72 ký tự).';
+
   if (role === 'provider') {
     if (value.orgName.length < 2) errors.orgName = 'Vui lòng nhập tên cơ sở.';
     else if (value.orgName.length > 150) errors.orgName = 'Tên cơ sở tối đa 150 ký tự.';
     if (!PROVIDER_TYPES.includes(value.orgType)) errors.orgType = 'Vui lòng chọn loại hình cơ sở.';
     if (!value.orgArea) errors.orgArea = 'Vui lòng nhập khu vực hoạt động của cơ sở.';
     else if (value.orgArea.length > 100) errors.orgArea = 'Khu vực tối đa 100 ký tự.';
+
+    const legal = parseLegalInfo(input, errors);
+    value.licenseNo = legal.licenseNo;
+    value.taxCode = legal.taxCode;
+  } else {
+    if (input.licenseNo !== undefined && input.licenseNo !== null && str(input.licenseNo).trim() !== '') {
+      errors.licenseNo = 'Thông tin pháp lý chỉ áp dụng cho tài khoản đối tác.';
+    }
+    if (input.taxCode !== undefined && input.taxCode !== null && str(input.taxCode).trim() !== '') {
+      errors.taxCode = 'Mã số thuế chỉ áp dụng cho tài khoản đối tác.';
+    }
   }
   return { errors, value };
 }
@@ -206,7 +257,132 @@ function validateBooking(input, now) {
   return { errors, value: { petId: petId.toLowerCase(), serviceId, date, time, notes } };
 }
 
+const SERVICE_CATEGORIES = [
+  { id: 'medical', labels: ['Khám & điều trị', 'Tiêm chủng', 'Phòng bệnh', 'Phẫu thuật'] },
+  { id: 'grooming', labels: ['Spa & làm đẹp', 'Cắt tỉa lông', 'Tắm & vệ sinh'] },
+  { id: 'hotel', labels: ['Lưu trú', 'Trông giữ theo giờ'] },
+  { id: 'emergency', labels: ['Cấp cứu 24/7', 'Hồi sức cấp cứu'] }
+];
+
+const SERVICE_LIMITS = {
+  priceMaxVnd: 100000000,
+  capacityMax: 50,
+  nameMax: 200,
+  unitMax: 30,
+  descriptionMax: 500,
+  maxServicesPerProvider: 50
+};
+
+function getServiceOptions() {
+  return {
+    categories: SERVICE_CATEGORIES.map((c) => ({ id: c.id, labels: [...c.labels] })),
+    priceMaxVnd: SERVICE_LIMITS.priceMaxVnd,
+    capacityMax: SERVICE_LIMITS.capacityMax,
+    nameMax: SERVICE_LIMITS.nameMax,
+    unitMax: SERVICE_LIMITS.unitMax
+  };
+}
+
+function validateServiceInput(input = {}, isUpdate = false) {
+  const errors = {};
+  const value = {};
+
+  // name: 3-200 chars (trim)
+  if (input.name !== undefined || !isUpdate) {
+    const rawName = str(input.name).trim();
+    if (!rawName) {
+      errors.name = 'Vui lòng nhập tên dịch vụ.';
+    } else if (rawName.length < 3) {
+      errors.name = 'Tên dịch vụ tối thiểu 3 ký tự.';
+    } else if (rawName.length > SERVICE_LIMITS.nameMax) {
+      errors.name = `Tên dịch vụ tối đa ${SERVICE_LIMITS.nameMax} ký tự.`;
+    } else {
+      value.name = rawName;
+    }
+  }
+
+  // description: <= 500 chars (optional, default '')
+  if (input.description !== undefined) {
+    const rawDesc = str(input.description).trim();
+    if (rawDesc.length > SERVICE_LIMITS.descriptionMax) {
+      errors.description = `Mô tả dịch vụ tối đa ${SERVICE_LIMITS.descriptionMax} ký tự.`;
+    } else {
+      value.description = rawDesc;
+    }
+  } else if (!isUpdate) {
+    value.description = '';
+  }
+
+  // category: medical | grooming | hotel | emergency
+  let catDef = null;
+  if (input.category !== undefined || !isUpdate) {
+    const rawCat = str(input.category).trim();
+    catDef = SERVICE_CATEGORIES.find((c) => c.id === rawCat);
+    if (!catDef) {
+      errors.category = 'Danh mục không hợp lệ (chỉ chấp nhận: medical, grooming, hotel, emergency).';
+    } else {
+      value.category = rawCat;
+    }
+  }
+
+  // categoryLabel: thuộc danh mục tương ứng, nếu thiếu thì mặc định nhãn đầu của danh mục
+  if (input.categoryLabel !== undefined) {
+    const rawLabel = str(input.categoryLabel).trim();
+    if (catDef) {
+      if (!catDef.labels.includes(rawLabel)) {
+        errors.categoryLabel = `Nhãn danh mục không hợp lệ cho ${catDef.id}. Các nhãn hợp lệ: ${catDef.labels.join(', ')}.`;
+      } else {
+        value.categoryLabel = rawLabel;
+      }
+    } else if (!isUpdate || input.category !== undefined) {
+      // nếu category lỗi, không thể gán nhãn
+    } else {
+      // isUpdate nhưng không đổi category, cần validate đối chiếu sau hoặc kiểm tra nhãn thuộc bất kỳ category nào
+      value.categoryLabel = rawLabel;
+    }
+  } else if (!isUpdate && catDef) {
+    value.categoryLabel = catDef.labels[0];
+  }
+
+  // priceVnd: integer 0 - 100,000,000
+  if (input.priceVnd !== undefined || !isUpdate) {
+    const rawPrice = Number(input.priceVnd);
+    if (!Number.isInteger(rawPrice) || rawPrice < 0 || rawPrice > SERVICE_LIMITS.priceMaxVnd) {
+      errors.priceVnd = `Giá dịch vụ phải là số nguyên từ 0 đến ${SERVICE_LIMITS.priceMaxVnd.toLocaleString('vi-VN')} đ.`;
+    } else {
+      value.priceVnd = rawPrice;
+    }
+  }
+
+  // unit: 1-30 chars
+  if (input.unit !== undefined || !isUpdate) {
+    const rawUnit = str(input.unit).trim();
+    if (!rawUnit) {
+      errors.unit = 'Vui lòng nhập đơn vị tính (ví dụ: lượt khám, ngày, liệu trình).';
+    } else if (rawUnit.length > SERVICE_LIMITS.unitMax) {
+      errors.unit = `Đơn vị tính tối đa ${SERVICE_LIMITS.unitMax} ký tự.`;
+    } else {
+      value.unit = rawUnit;
+    }
+  }
+
+  // slotCapacity: integer 1 - 50 (default 3 if creating and not provided)
+  if (input.slotCapacity !== undefined) {
+    const rawCap = Number(input.slotCapacity);
+    if (!Number.isInteger(rawCap) || rawCap < 1 || rawCap > SERVICE_LIMITS.capacityMax) {
+      errors.slotCapacity = `Sức chứa mỗi khung giờ phải là số nguyên từ 1 đến ${SERVICE_LIMITS.capacityMax}.`;
+    } else {
+      value.slotCapacity = rawCap;
+    }
+  } else if (!isUpdate) {
+    value.slotCapacity = 3;
+  }
+
+  return { errors, value };
+}
+
 module.exports = {
-  EMAIL_RE, TIME_SLOTS, PROVIDER_TYPES, isUuid, normalizePhone, validateRegister, validateVetInput, validateChangePassword, validatePet,
-  validateWeight, validateVaccination, validateMedicalRecord, validateBooking
+  EMAIL_RE, TIME_SLOTS, PROVIDER_TYPES, isUuid, normalizePhone, parseLegalInfo, parseLegalField, validateRegister, validateVetInput, validateChangePassword, validatePet,
+  validateWeight, validateVaccination, validateMedicalRecord, validateBooking,
+  SERVICE_CATEGORIES, SERVICE_LIMITS, getServiceOptions, validateServiceInput
 };

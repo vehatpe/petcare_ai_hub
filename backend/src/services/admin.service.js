@@ -44,6 +44,7 @@ function createAdminService({ models, config, clock = () => new Date() }) {
       return adminModel.listUsers({
         status: query.status ? String(query.status).trim() : undefined,
         role: query.role ? String(query.role).trim() : undefined,
+        q: query.q ? String(query.q).trim() : undefined,
         limit: query.limit,
         offset: query.offset
       });
@@ -102,7 +103,9 @@ function createAdminService({ models, config, clock = () => new Date() }) {
           area: orgArea,
           type: user.orgType || 'clinic',
           isSample: false,
-          isActive: true
+          isActive: true,
+          licenseNo: user.orgLicenseNo || null,
+          taxCode: user.orgTaxCode || null
         });
 
         const approvedAt = clock().toISOString();
@@ -198,7 +201,7 @@ function createAdminService({ models, config, clock = () => new Date() }) {
           }
         }
 
-        await adminModel.updateUserStatus(tx, userId, 'disabled');
+        await adminModel.updateUserStatus(tx, userId, 'disabled', true);
 
         if (user.role === 'provider' && user.providerId) {
           await adminModel.disableProviderAndVets(tx, user.providerId);

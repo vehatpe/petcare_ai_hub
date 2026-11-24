@@ -62,7 +62,14 @@ test('Admin API: access control, partner approval, rejection, and account disabl
     for (const u of r.data.users) {
       assert.equal(u.passwordHash, undefined, 'passwordHash must never be leaked');
       assert.equal(u.PasswordHash, undefined, 'PasswordHash must never be leaked');
+      assert.equal(u.tokenVersion, undefined, 'tokenVersion must never be leaked');
+      assert.equal(u.TokenVersion, undefined, 'TokenVersion must never be leaked');
     }
+
+    // Filter by query q
+    const rSearch = await app.call('GET', '/admin/users?q=nguyen', { token: adminToken });
+    assert.equal(rSearch.status, 200);
+    assert.ok(Array.isArray(rSearch.data.users));
   });
 
   await t.test('approve provider: creates Providers entry, updates ProviderId/status/approvedBy/At, writes AuditLog', async () => {
@@ -340,6 +347,21 @@ test('Admin API: access control, partner approval, rejection, and account disabl
 
     assert.equal(getProvRow().active, true);
     assert.equal(getVetRow().status, 'disabled', 'Vet remains disabled on provider enable');
+
+    // Sau khi mở khóa, token cũ trước khi bị khóa vẫn phải bị 401 token_revoked vì TokenVersion đã tăng khi khóa
+    const meWithOldTokenAfterEnable = await app.call('GET', '/auth/me', { token: providerToken });
+    assert.equal(meWithOldTokenAfterEnable.status, 401);
+    assert.equal(meWithOldTokenAfterEnable.body.code, 'token_revoked');
+
+    // Phải đăng nhập lại để lấy token mới
+    const reloginP = await app.call('POST', '/auth/login', {
+      body: { identifier: 'spa_owner@spa.vn', password: 'Password123!' }
+    });
+    assert.equal(reloginP.status, 200);
+    const newProviderToken = reloginP.data.token;
+    const meWithNewToken = await app.call('GET', '/auth/me', { token: newProviderToken });
+    assert.equal(meWithNewToken.status, 200);
+    assert.equal(meWithNewToken.data.user.status, 'active');
 
     // 5. Thử mở khóa vet khi cơ sở bị khóa -> 409
     // Khóa lại provider

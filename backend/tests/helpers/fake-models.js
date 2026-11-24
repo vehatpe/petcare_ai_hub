@@ -26,9 +26,13 @@ function createFakeModels() {
   const bookingOut = (b) => { if (!b) return null; const { ownerId, ...rest } = b; return clone(rest); }; // eslint-disable-line no-unused-vars
   const svcOut = (sv) => {
     const p = s.providers.find((x) => x.id === sv.providerId);
-    return { id: sv.id, category: sv.category, categoryLabel: sv.categoryLabel, providerId: sv.providerId, providerName: p.name,
-      providerArea: p.area, name: sv.name, description: sv.description || '', priceVnd: sv.priceVnd, unit: sv.unit,
-      isSample: sv.isSample, slotCapacity: sv.slotCapacity };
+    return {
+      id: sv.id, category: sv.category, categoryLabel: sv.categoryLabel, providerId: sv.providerId,
+      providerName: p.name, providerArea: p.area,
+      providerAddress: p.address || null, providerPhone: p.phone || null, providerDescription: p.description || null,
+      name: sv.name, description: sv.description || '', priceVnd: sv.priceVnd, unit: sv.unit,
+      isSample: sv.isSample, slotCapacity: sv.slotCapacity
+    };
   };
 
   const userOut = (u) => {
@@ -49,7 +53,10 @@ function createFakeModels() {
       approvedBy: u.approvedBy || null,
       approvedAt: u.approvedAt || null,
       mustChangePassword: Boolean(u.mustChangePassword),
-      rejectReason: u.rejectReason || null
+      rejectReason: u.rejectReason || null,
+      tokenVersion: u.tokenVersion !== undefined && u.tokenVersion !== null ? Number(u.tokenVersion) : 0,
+      orgLicenseNo: u.orgLicenseNo || null,
+      orgTaxCode: u.orgTaxCode || null
     };
   };
 
@@ -65,7 +72,10 @@ function createFakeModels() {
           approvedBy: u.approvedBy || null,
           approvedAt: u.approvedAt || null,
           mustChangePassword: Boolean(u.mustChangePassword),
-          rejectReason: u.rejectReason || null
+          rejectReason: u.rejectReason || null,
+          tokenVersion: u.tokenVersion !== undefined && u.tokenVersion !== null ? Number(u.tokenVersion) : 0,
+          orgLicenseNo: u.orgLicenseNo || null,
+          orgTaxCode: u.orgTaxCode || null
         };
         s.users.push(clone(userObj));
         return userOut(userObj);
@@ -78,6 +88,7 @@ function createFakeModels() {
         if (u) {
           u.passwordHash = passwordHash;
           u.mustChangePassword = Boolean(mustChangePassword);
+          u.tokenVersion = (u.tokenVersion || 0) + 1;
         }
       }
     },
@@ -95,13 +106,21 @@ function createFakeModels() {
       }
     },
     admin: {
-      async listUsers({ status, role, limit = 20, offset = 0 }) {
+      async listUsers({ status, role, q, limit = 20, offset = 0 }) {
         const lim = Math.max(1, Math.min(50, Number(limit) || 20));
         const off = Math.max(0, Number(offset) || 0);
+        const search = q ? String(q).trim().toLowerCase().slice(0, 100) : null;
 
         let filtered = s.users.slice();
         if (status) filtered = filtered.filter((u) => u.status === status);
         if (role) filtered = filtered.filter((u) => u.role === role);
+        if (search) {
+          filtered = filtered.filter((u) =>
+            (u.fullName && u.fullName.toLowerCase().includes(search)) ||
+            (u.email && u.email.toLowerCase().includes(search)) ||
+            (u.phone && u.phone.includes(search))
+          );
+        }
 
         const total = filtered.length;
         // Sort by createdAt DESC
@@ -112,6 +131,24 @@ function createFakeModels() {
           users: paged.map((u) => {
             const out = userOut(u);
             delete out.passwordHash;
+            delete out.tokenVersion;
+            delete out.orgLicenseNo;
+            delete out.orgTaxCode;
+            if (u.role === 'provider') {
+              let licenseNo = null;
+              let taxCode = null;
+              if (u.providerId) {
+                const prov = s.providers.find((p) => p.id === u.providerId);
+                licenseNo = prov && prov.licenseNo ? prov.licenseNo : null;
+                taxCode = prov && prov.taxCode ? prov.taxCode : null;
+              } else {
+                licenseNo = u.orgLicenseNo || null;
+                taxCode = u.orgTaxCode || null;
+              }
+              out.licenseNo = licenseNo;
+              out.taxCode = taxCode;
+              out.hasLegalInfo = Boolean(licenseNo || taxCode);
+            }
             return out;
           }),
           meta: { limit: lim, offset: off, total }
@@ -186,6 +223,12 @@ function createFakeModels() {
           type: p.type,
           isSample: Boolean(p.isSample),
           active: Boolean(p.isActive),
+          address: p.address || null,
+          phone: p.phone || null,
+          description: p.description || null,
+          licenseNo: p.licenseNo || null,
+          taxCode: p.taxCode || null,
+          updatedAt: p.updatedAt || null,
           createdAt: tick()
         });
       },
@@ -208,10 +251,13 @@ function createFakeModels() {
         }
       },
 
-      async updateUserStatus(tx, userId, status) {
+      async updateUserStatus(tx, userId, status, incrementTokenVersion = false) {
         const u = s.users.find((x) => x.id === userId);
         if (u) {
           u.status = status;
+          if (incrementTokenVersion) {
+            u.tokenVersion = (u.tokenVersion || 0) + 1;
+          }
         }
       },
 
@@ -221,6 +267,7 @@ function createFakeModels() {
         for (const u of s.users) {
           if (u.providerId === providerId && u.role === 'vet') {
             u.status = 'disabled';
+            u.tokenVersion = (u.tokenVersion || 0) + 1;
           }
         }
       },
@@ -278,22 +325,188 @@ function createFakeModels() {
           createdAt: u.createdAt
         };
       },
-      async updateVetStatus(tx, vetId, status) {
+      async updateVetStatus(tx, vetId, status, incrementTokenVersion = false) {
         const u = s.users.find((x) => x.id === vetId);
         if (u) {
           u.status = status;
+          if (incrementTokenVersion) {
+            u.tokenVersion = (u.tokenVersion || 0) + 1;
+          }
+        }
+      },
+      async getProviderProfile(providerId) {
+        const p = s.providers.find((x) => x.id === providerId);
+        if (!p) return null;
+        return {
+          id: p.id,
+          name: p.name,
+          area: p.area,
+          type: p.type,
+          address: p.address || null,
+          phone: p.phone || null,
+          description: p.description || null,
+          licenseNo: p.licenseNo || null,
+          taxCode: p.taxCode || null,
+          isActive: p.active !== false,
+          isSample: Boolean(p.isSample),
+          updatedAt: p.updatedAt || null
+        };
+      },
+      async getProviderForUpdate(tx, providerId) {
+        const p = s.providers.find((x) => x.id === providerId);
+        if (!p) return null;
+        return {
+          id: p.id,
+          name: p.name,
+          area: p.area,
+          type: p.type,
+          address: p.address || null,
+          phone: p.phone || null,
+          description: p.description || null,
+          licenseNo: p.licenseNo || null,
+          taxCode: p.taxCode || null,
+          isActive: p.active !== false,
+          isSample: Boolean(p.isSample),
+          updatedAt: p.updatedAt || null
+        };
+      },
+      async updateProviderProfile(tx, providerId, fields, updatedAt) {
+        const p = s.providers.find((x) => x.id === providerId);
+        if (p) {
+          p.address = fields.address;
+          p.phone = fields.phone;
+          p.description = fields.description;
+          p.licenseNo = fields.licenseNo;
+          p.taxCode = fields.taxCode;
+          p.updatedAt = updatedAt;
+        }
+      },
+      async listServices({ providerId, limit = 50, offset = 0 }) {
+        const lim = Math.max(1, Math.min(100, Number(limit) || 50));
+        const off = Math.max(0, Number(offset) || 0);
+
+        let filtered = s.services.filter((x) => x.providerId === providerId);
+        const total = filtered.length;
+
+        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        const paged = filtered.slice(off, off + lim).map((x) => ({
+          id: x.id,
+          providerId: x.providerId,
+          category: x.category,
+          categoryLabel: x.categoryLabel,
+          name: x.name,
+          description: x.description || '',
+          priceVnd: x.priceVnd,
+          unit: x.unit,
+          slotCapacity: x.slotCapacity,
+          isActive: x.active !== false,
+          isSample: Boolean(x.isSample),
+          createdAt: x.createdAt
+        }));
+
+        return {
+          services: clone(paged),
+          meta: { limit: lim, offset: off, total }
+        };
+      },
+      async countServices(tx, providerId) {
+        return s.services.filter((x) => x.providerId === providerId).length;
+      },
+      async getServiceForUpdate(tx, serviceId) {
+        const x = s.services.find((sv) => sv.id === serviceId);
+        if (!x) return null;
+        return {
+          id: x.id,
+          providerId: x.providerId,
+          category: x.category,
+          categoryLabel: x.categoryLabel,
+          name: x.name,
+          description: x.description || '',
+          priceVnd: x.priceVnd,
+          unit: x.unit,
+          slotCapacity: x.slotCapacity,
+          isActive: x.active !== false,
+          isSample: Boolean(x.isSample),
+          createdAt: x.createdAt
+        };
+      },
+      async findServiceByName(tx, providerId, name, excludeServiceId = null) {
+        const trimmed = (name || '').trim().toLowerCase();
+        const found = s.services.find((x) =>
+          x.providerId === providerId &&
+          (x.name || '').trim().toLowerCase() === trimmed &&
+          (!excludeServiceId || x.id !== excludeServiceId)
+        );
+        return found ? { ServiceId: found.id, Name: found.name } : null;
+      },
+      async serviceIdExists(tx, serviceId) {
+        return s.services.some((x) => x.id === serviceId);
+      },
+      async createService(tx, service) {
+        s.services.push({
+          id: service.id,
+          providerId: service.providerId,
+          category: service.category,
+          categoryLabel: service.categoryLabel,
+          name: service.name,
+          description: service.description || '',
+          priceVnd: service.priceVnd,
+          unit: service.unit,
+          slotCapacity: service.slotCapacity,
+          active: Boolean(service.isActive),
+          isSample: Boolean(service.isSample),
+          createdAt: service.createdAt instanceof Date ? service.createdAt.toISOString() : service.createdAt || tick()
+        });
+      },
+      async updateService(tx, serviceId, fields) {
+        const x = s.services.find((sv) => sv.id === serviceId);
+        if (x) {
+          x.name = fields.name;
+          x.description = fields.description;
+          x.category = fields.category;
+          x.categoryLabel = fields.categoryLabel;
+          x.priceVnd = fields.priceVnd;
+          x.unit = fields.unit;
+          x.slotCapacity = fields.slotCapacity;
+        }
+      },
+      async setServiceActive(tx, serviceId, isActive) {
+        const x = s.services.find((sv) => sv.id === serviceId);
+        if (x) {
+          x.active = Boolean(isActive);
         }
       }
     },
     catalog: {
-      async listProviders() { return s.providers.filter((p) => p.active !== false).map(({ active, ...p }) => clone(p)); }, // eslint-disable-line no-unused-vars
+      async listProviders() {
+        return s.providers.filter((p) => p.active !== false).map((p) => ({
+          id: p.id,
+          name: p.name,
+          area: p.area,
+          type: p.type,
+          address: p.address || null,
+          phone: p.phone || null,
+          description: p.description || null,
+          isSample: Boolean(p.isSample)
+        }));
+      },
       async listServices({ category, providerId, q }) {
         return s.services.filter((x) => x.active !== false)
+          .filter((x) => {
+            const p = s.providers.find((prov) => prov.id === x.providerId);
+            return p && p.active !== false;
+          })
           .filter((x) => (!category || x.category === category) && (!providerId || x.providerId === providerId))
           .filter((x) => !q || x.name.toLowerCase().includes(q.toLowerCase()))
           .map(svcOut);
       },
-      async getService(id) { const x = s.services.find((v) => v.id === id && v.active !== false); return x ? svcOut(x) : null; }
+      async getService(id) {
+        const x = s.services.find((v) => v.id === id && v.active !== false);
+        if (!x) return null;
+        const p = s.providers.find((prov) => prov.id === x.providerId);
+        if (!p || p.active === false) return null;
+        return svcOut(x);
+      }
     },
     pets: {
       async listByOwner(o) { return s.pets.filter((p) => p.ownerId === o).map(petOut); },
@@ -390,6 +603,12 @@ function createFakeModels() {
     },
     async addStaff(role, { id, email, phone, passwordHash, fullName = 'Bác sĩ Test' }) {
       await models.users.create({ id, role, status: 'active', fullName, email, phone, passwordHash, orgName: null, orgType: null, createdAt: tick() });
+    },
+    async queryAuditLogs(filter = {}) {
+      let logs = s.auditLogs.slice();
+      if (filter.action) logs = logs.filter((l) => l.action === filter.action);
+      if (filter.targetType) logs = logs.filter((l) => l.targetType === filter.targetType);
+      return clone(logs);
     }
   };
   return { models, testHelpers };

@@ -57,6 +57,9 @@
           </div>
           ${dash ? `<a role="menuitem" href="${url(dash)}">Bảng điều khiển</a>` : ''}
           ${user.role === 'admin' ? `<a role="menuitem" href="${url('admin-partners.html')}">Duyệt đối tác</a>` : ''}
+          ${user.role === 'admin' ? `<a role="menuitem" href="${url('admin-users.html')}">Quản lý tài khoản</a>` : ''}
+          ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-services.html')}">Dịch vụ của tôi</a>` : ''}
+          ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-profile.html')}">Hồ sơ cơ sở</a>` : ''}
           ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-vets.html')}">Quản lý bác sĩ</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('health-records.html')}">Sổ sức khỏe</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('pet-profile.html')}">Thêm thú cưng</a>` : ''}
@@ -101,7 +104,22 @@
         text: 'Duyệt đối tác',
         isActive: currentFile === 'admin-partners.html'
       });
+      items.push({
+        href: url('admin-users.html'),
+        text: 'Quản lý tài khoản',
+        isActive: currentFile === 'admin-users.html'
+      });
     } else if (user.role === 'provider') {
+      items.push({
+        href: url('provider-services.html'),
+        text: 'Dịch vụ của tôi',
+        isActive: currentFile === 'provider-services.html'
+      });
+      items.push({
+        href: url('provider-profile.html'),
+        text: 'Hồ sơ cơ sở',
+        isActive: currentFile === 'provider-profile.html'
+      });
       items.push({
         href: url('provider-vets.html'),
         text: 'Quản lý bác sĩ',
@@ -142,6 +160,24 @@
   }
 
   function renderFooterAuth(user) {
+    // Hide booking footer links and bento booking section for staff roles (admin, provider, vet)
+    const isStaff = Boolean(user && user.role !== 'customer');
+
+    // Bento booking card on landing page
+    document.querySelectorAll('.bento2-booking').forEach((el) => {
+      el.hidden = isStaff;
+    });
+
+    // Footer links to booking.html ("Đặt lịch" / "Đặt lịch khám")
+    document.querySelectorAll('footer a[href*="booking.html"]').forEach((link) => {
+      const parentLi = link.closest('li');
+      if (parentLi) {
+        parentLi.hidden = isStaff;
+      } else {
+        link.hidden = isStaff;
+      }
+    });
+
     document.querySelectorAll('[data-auth-slot="footer-account"]').forEach((slot) => {
       if (!user) {
         slot.innerHTML = `
@@ -157,6 +193,9 @@
         slot.innerHTML = `
           ${dash ? `<li><a href="${url(dash)}">Bảng điều khiển</a></li>` : ''}
           ${user.role === 'admin' ? `<li><a href="${url('admin-partners.html')}">Duyệt đối tác</a></li>` : ''}
+          ${user.role === 'admin' ? `<li><a href="${url('admin-users.html')}">Quản lý tài khoản</a></li>` : ''}
+          ${user.role === 'provider' ? `<li><a href="${url('provider-services.html')}">Dịch vụ của tôi</a></li>` : ''}
+          ${user.role === 'provider' ? `<li><a href="${url('provider-profile.html')}">Hồ sơ cơ sở</a></li>` : ''}
           ${user.role === 'provider' ? `<li><a href="${url('provider-vets.html')}">Quản lý bác sĩ</a></li>` : ''}
           ${user.role === 'customer' ? `<li><a href="${url('health-records.html')}">Sổ sức khỏe</a></li>` : ''}
           <li><a href="${url('change-password.html')}">Đổi mật khẩu</a></li>
@@ -294,6 +333,9 @@
       <div class="drawer-who"><strong>${esc(user.fullName)}</strong><span>${esc(user.email)}</span></div>
       ${dash ? `<a href="${url(dash)}" class="btn btn-secondary">Bảng điều khiển</a>` : ''}
       ${user.role === 'admin' ? `<a href="${url('admin-partners.html')}" class="btn btn-secondary">Duyệt đối tác</a>` : ''}
+      ${user.role === 'admin' ? `<a href="${url('admin-users.html')}" class="btn btn-secondary">Quản lý tài khoản</a>` : ''}
+      ${user.role === 'provider' ? `<a href="${url('provider-services.html')}" class="btn btn-secondary">Dịch vụ của tôi</a>` : ''}
+      ${user.role === 'provider' ? `<a href="${url('provider-profile.html')}" class="btn btn-secondary">Hồ sơ cơ sở</a>` : ''}
       ${user.role === 'provider' ? `<a href="${url('provider-vets.html')}" class="btn btn-secondary">Quản lý bác sĩ</a>` : ''}
       <a href="${url('change-password.html')}" class="btn btn-outline">Đổi mật khẩu</a>
       <button type="button" class="btn btn-outline" data-action="logout">Đăng xuất</button>`;

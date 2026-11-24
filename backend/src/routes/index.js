@@ -15,6 +15,7 @@ function createRouter({ services, mw, config, models }) {
   const { authenticate, requireRole } = mw;
   const customer = [authenticate, requireRole('customer')];
   const admin = [authenticate, requireRole('admin')];
+  const provider = [authenticate, requireRole('provider')];
   const providerOrAdmin = [authenticate, requireRole('provider', 'admin')];
 
   const { authLimiter, meLimiter, aiLimiter, changePasswordLimiter } = createRateLimiters(config);
@@ -67,6 +68,15 @@ function createRouter({ services, mw, config, models }) {
   r.post('/admin/users/:id/reject', admin, uuidParam('id'), c.admin.reject);
   r.post('/admin/users/:id/disable', admin, uuidParam('id'), c.admin.disable);
   r.post('/admin/users/:id/enable', admin, uuidParam('id'), c.admin.enable);
+
+  r.get('/provider/profile', provider, c.provider.getProfile);
+  r.put('/provider/profile', provider, c.provider.updateProfile);
+
+  r.get('/provider/services', provider, c.provider.listServices);
+  r.post('/provider/services', provider, c.provider.createService);
+  r.put('/provider/services/:id', provider, c.provider.updateService);
+  r.post('/provider/services/:id/disable', provider, c.provider.disableService);
+  r.post('/provider/services/:id/enable', provider, c.provider.enableService);
 
   r.post('/provider/vets', providerOrAdmin, c.provider.createVet);
   r.get('/provider/vets', providerOrAdmin, c.provider.listVets);

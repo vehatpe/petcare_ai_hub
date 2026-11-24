@@ -3,6 +3,7 @@ const { T } = require('./db');
 
 const SERVICE_SELECT = `
   SELECT s.ServiceId, s.Category, s.CategoryLabel, s.ProviderId, p.Name AS ProviderName, p.Area AS ProviderArea,
+         p.Address AS ProviderAddress, p.Phone AS ProviderPhone, p.Description AS ProviderDescription,
          s.Name, s.Description, s.PriceVnd, s.Unit, s.SlotCapacity, s.IsSample
   FROM dbo.Services s
   JOIN dbo.Providers p ON p.ProviderId = s.ProviderId
@@ -10,14 +11,25 @@ const SERVICE_SELECT = `
 
 const mapService = (r) => r && ({
   id: r.ServiceId, category: r.Category, categoryLabel: r.CategoryLabel, providerId: r.ProviderId,
-  providerName: r.ProviderName, providerArea: r.ProviderArea, name: r.Name, description: r.Description,
+  providerName: r.ProviderName, providerArea: r.ProviderArea,
+  providerAddress: r.ProviderAddress || null, providerPhone: r.ProviderPhone || null, providerDescription: r.ProviderDescription || null,
+  name: r.Name, description: r.Description,
   priceVnd: r.PriceVnd, unit: r.Unit, isSample: !!r.IsSample, slotCapacity: r.SlotCapacity
 });
 
 module.exports = (db) => ({
   async listProviders() {
-    const rows = await db.query(`SELECT ProviderId, Name, Area, Type, IsSample FROM dbo.Providers WHERE IsActive = 1 ORDER BY Name`);
-    return rows.map((r) => ({ id: r.ProviderId, name: r.Name, area: r.Area, type: r.Type, isSample: !!r.IsSample }));
+    const rows = await db.query(`SELECT ProviderId, Name, Area, Type, Address, Phone, Description, IsSample FROM dbo.Providers WHERE IsActive = 1 ORDER BY Name`);
+    return rows.map((r) => ({
+      id: r.ProviderId,
+      name: r.Name,
+      area: r.Area,
+      type: r.Type,
+      address: r.Address || null,
+      phone: r.Phone || null,
+      description: r.Description || null,
+      isSample: !!r.IsSample
+    }));
   },
   async listServices({ category, providerId, q }) {
     const rows = await db.query(

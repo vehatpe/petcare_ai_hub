@@ -60,11 +60,21 @@ document.addEventListener('DOMContentLoaded', () => {
       let roleSpecificLink = '';
       let pcardActionLink = '';
       if (user.role === 'admin') {
-        roleSpecificLink = `<a href="pages/admin-partners.html" class="btn btn-primary btn-lg">Duyệt đối tác</a>`;
-        pcardActionLink = `<a href="pages/admin-partners.html" class="btn btn-primary btn-sm">Duyệt đối tác</a>`;
+        roleSpecificLink = `
+          <a href="pages/admin-partners.html" class="btn btn-primary btn-lg">Duyệt đối tác</a>
+          <a href="pages/admin-users.html" class="btn btn-outline btn-lg">Quản lý tài khoản</a>`;
+        pcardActionLink = `
+          <a href="pages/admin-partners.html" class="btn btn-primary btn-sm">Duyệt đối tác</a>
+          <a href="pages/admin-users.html" class="btn btn-outline btn-sm">Quản lý tài khoản</a>`;
       } else if (user.role === 'provider') {
-        roleSpecificLink = `<a href="pages/provider-vets.html" class="btn btn-primary btn-lg">Quản lý bác sĩ</a>`;
-        pcardActionLink = `<a href="pages/provider-vets.html" class="btn btn-primary btn-sm">Quản lý bác sĩ</a>`;
+        roleSpecificLink = `
+          <a href="pages/provider-services.html" class="btn btn-primary btn-lg">Dịch vụ của tôi</a>
+          <a href="pages/provider-profile.html" class="btn btn-outline btn-lg">Hồ sơ cơ sở</a>
+          <a href="pages/provider-vets.html" class="btn btn-outline btn-lg">Quản lý bác sĩ</a>`;
+        pcardActionLink = `
+          <a href="pages/provider-services.html" class="btn btn-primary btn-sm">Dịch vụ của tôi</a>
+          <a href="pages/provider-profile.html" class="btn btn-outline btn-sm">Hồ sơ cơ sở</a>
+          <a href="pages/provider-vets.html" class="btn btn-outline btn-sm">Quản lý bác sĩ</a>`;
       }
 
       $('heroActions').innerHTML = `
@@ -218,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ---------- Services ledger ---------- */
   function row(s) {
     const user = AuthService.currentUser();
-    const isStaff = user && user.role !== 'customer';
+    const isStaff = Boolean(user && user.role !== 'customer');
     const actionHtml = isStaff
       ? ''
       : `<div class="ledger-action"><a class="btn btn-primary btn-sm" data-auth-required="${esc(AUTH_REASON)}" href="pages/booking.html?service=${encodeURIComponent(s.id)}">Đặt lịch</a></div>`;

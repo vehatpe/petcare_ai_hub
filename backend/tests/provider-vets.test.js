@@ -256,6 +256,12 @@ test('C1: Provider management of Vets and Mandatory Change Password', async (t) 
 
     // Mở khóa lại cơ sở Alpha
     await app.call('POST', `/admin/users/${uProvider.id}/enable`, { token: adminToken });
+    // Token cũ của provider đã bị vô hiệu hóa khi cơ sở bị khóa -> đăng nhập lại lấy token mới
+    const rProviderRelogin = await app.call('POST', '/auth/login', {
+      body: { identifier: 'clinic1@petcare.vn', password: 'Password123!' }
+    });
+    providerToken = rProviderRelogin.data.token;
+
     // Bây giờ mở khóa vet thành công
     const rEnableOk = await app.call('POST', `/provider/vets/${createdVet.id}/enable`, { token: adminToken });
     assert.equal(rEnableOk.status, 200);
@@ -328,9 +334,15 @@ test('C1: Provider management of Vets and Mandatory Change Password', async (t) 
     });
     assert.equal(rSuccess.status, 200);
     assert.equal(rSuccess.data.user.mustChangePassword, false);
+    assert.ok(rSuccess.data.token, 'changePassword must return new token');
 
-    // Kiểm tra lại qua GET /auth/me
-    const rMeAfter = await app.call('GET', '/auth/me', { token: vetToken });
+    // Token cũ sau đổi mật khẩu bị vô hiệu hóa (401 token_revoked)
+    const rOldTokenBlocked = await app.call('GET', '/auth/me', { token: vetToken });
+    assert.equal(rOldTokenBlocked.status, 401);
+    assert.equal(rOldTokenBlocked.body.code, 'token_revoked');
+
+    // Token mới dùng được qua GET /auth/me
+    const rMeAfter = await app.call('GET', '/auth/me', { token: rSuccess.data.token });
     assert.equal(rMeAfter.status, 200);
     assert.equal(rMeAfter.data.user.mustChangePassword, false);
 

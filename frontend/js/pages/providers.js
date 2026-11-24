@@ -14,21 +14,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function card(p, services) {
     const user = AuthService.currentUser();
-    const isStaff = user && user.role !== 'customer';
+    const isStaff = Boolean(user && user.role !== 'customer');
     const mine = services.filter((s) => s.providerId === p.id);
     const actionHtml = (!isStaff && mine.length)
       ? `<a class="btn btn-primary btn-sm" data-auth-required="${esc(AUTH_REASON)}" href="booking.html?provider=${encodeURIComponent(p.id)}">Đặt lịch tại đây</a>`
       : '';
 
+    const metaParts = [];
+    if (Catalog.TYPE_LABEL[p.type]) metaParts.push(Catalog.TYPE_LABEL[p.type]);
+    if (p.area) metaParts.push(p.area);
+
+    const contactParts = [];
+    if (p.address) contactParts.push(`<span>📍 ${esc(p.address)}</span>`);
+    if (p.phone) contactParts.push(`<span>📞 ${esc(p.phone)}</span>`);
+
     return `
       <article class="provider-row">
         <div class="provider-row-head">
           <h2 class="provider-row-name">${esc(p.name)}</h2>
-          <p class="provider-row-meta">${esc(Catalog.TYPE_LABEL[p.type] || '')}${p.area ? ` · ${esc(p.area)}` : ''}</p>
+          <p class="provider-row-meta">${metaParts.map(esc).join(' · ')}</p>
+          ${contactParts.length ? `<p class="provider-row-contact" style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 4px;">${contactParts.join(' · ')}</p>` : ''}
+          ${p.description ? `<p class="provider-row-desc" style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.4;">${esc(p.description)}</p>` : ''}
         </div>
         ${mine.length
           ? `<ul class="provider-services">${mine.map((s) => `<li><span>${esc(s.name)}</span><span class="provider-services-price">${esc(Fmt.vnd(s.priceVnd))} / ${esc(s.unit)}</span></li>`).join('')}</ul>`
-          : '<p class="provider-row-empty">Chưa đăng dịch vụ nào.</p>'}
+          : '<p class="provider-row-empty">Cơ sở chưa đăng dịch vụ nào.</p>'}
         ${actionHtml}
       </article>`;
   }

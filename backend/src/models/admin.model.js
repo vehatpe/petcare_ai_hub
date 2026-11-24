@@ -3,30 +3,57 @@ const { T, lc, iso } = require('./db');
 const { AppError } = require('../utils/errors');
 
 const USER_COLS = `u.UserId, u.Role, u.Status, u.FullName, u.Email, u.Phone, u.OrgName, u.OrgType, u.CreatedAt,
-                   u.ProviderId, u.OrgArea, u.ApprovedBy, u.ApprovedAt, u.MustChangePassword, u.RejectReason`;
+                   u.ProviderId, u.OrgArea, u.ApprovedBy, u.ApprovedAt, u.MustChangePassword, u.RejectReason,
+                   u.OrgLicenseNo, u.OrgTaxCode, p.LicenseNo AS ProvLicenseNo, p.TaxCode AS ProvTaxCode`;
 
-const mapUser = (r) => r && ({
-  id: lc(r.UserId),
-  role: r.Role,
-  status: r.Status,
-  fullName: r.FullName,
-  email: r.Email,
-  phone: r.Phone,
-  orgName: r.OrgName || null,
-  orgType: r.OrgType || null,
-  createdAt: iso(r.CreatedAt),
-  providerId: r.ProviderId || null,
-  orgArea: r.OrgArea || null,
-  approvedBy: lc(r.ApprovedBy),
-  approvedAt: iso(r.ApprovedAt),
-  mustChangePassword: Boolean(r.MustChangePassword),
-  rejectReason: r.RejectReason || null
-});
+const mapUser = (r) => {
+  if (!r) return null;
+  const isProv = r.Role === 'provider';
+  let licenseNo;
+  let taxCode;
+
+  if (isProv) {
+    if (r.ProviderId) {
+      licenseNo = r.ProvLicenseNo || null;
+      taxCode = r.ProvTaxCode || null;
+    } else {
+      licenseNo = r.OrgLicenseNo || null;
+      taxCode = r.OrgTaxCode || null;
+    }
+  }
+
+  const out = {
+    id: lc(r.UserId),
+    role: r.Role,
+    status: r.Status,
+    fullName: r.FullName,
+    email: r.Email,
+    phone: r.Phone,
+    orgName: r.OrgName || null,
+    orgType: r.OrgType || null,
+    createdAt: iso(r.CreatedAt),
+    providerId: r.ProviderId || null,
+    orgArea: r.OrgArea || null,
+    approvedBy: lc(r.ApprovedBy),
+    approvedAt: iso(r.ApprovedAt),
+    mustChangePassword: Boolean(r.MustChangePassword),
+    rejectReason: r.RejectReason || null
+  };
+
+  if (isProv) {
+    out.licenseNo = licenseNo;
+    out.taxCode = taxCode;
+    out.hasLegalInfo = Boolean(licenseNo || taxCode);
+  }
+
+  return out;
+};
 
 module.exports = (db) => ({
-  async listUsers({ status, role, limit = 20, offset = 0 }) {
+  async listUsers({ status, role, q, limit = 20, offset = 0 }) {
     const lim = Math.max(1, Math.min(50, Number(limit) || 20));
     const off = Math.max(0, Number(offset) || 0);
+    const search = q ? String(q).trim().slice(0, 100) : null;
 
     const whereClauses = [];
     const params = {
@@ -42,6 +69,10 @@ module.exports = (db) => ({
       whereClauses.push('u.Role = @role');
       params.role = [T.vstr(10), role];
     }
+    if (search) {
+      whereClauses.push(`(u.FullName LIKE @like ESCAPE '\\' OR u.Email LIKE @like ESCAPE '\\' OR u.Phone LIKE @like ESCAPE '\\')`);
+      params.like = [T.str(110), '%' + search.replace(/[\\%_[]/g, (m) => '\\' + m) + '%'];
+    }
 
     const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
@@ -52,6 +83,7 @@ module.exports = (db) => ({
     const dataSql = `
       SELECT ${USER_COLS}
       FROM dbo.Users u
+      LEFT JOIN dbo.Providers p ON u.ProviderId = p.ProviderId
       ${whereSql}
       ORDER BY u.CreatedAt DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -76,12 +108,20 @@ module.exports = (db) => ({
   async getUserForUpdate(tx, userId) {
     const rows = await tx.query(
       `SELECT UserId, Role, Status, FullName, Email, Phone, OrgName, OrgType, CreatedAt,
-              ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason
+              ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason, TokenVersion,
+              OrgLicenseNo, OrgTaxCode
        FROM dbo.Users WITH (UPDLOCK, HOLDLOCK)
        WHERE UserId = @id`,
       { id: [T.guid, userId] }
     );
-    return mapUser(rows[0]);
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      ...mapUser(r),
+      orgLicenseNo: r.OrgLicenseNo || null,
+      orgTaxCode: r.OrgTaxCode || null,
+      tokenVersion: r.TokenVersion !== undefined && r.TokenVersion !== null ? Number(r.TokenVersion) : 0
+    };
   },
 
   async providerExists(tx, providerId) {
@@ -109,15 +149,17 @@ module.exports = (db) => ({
 
   async insertProvider(tx, p) {
     await tx.query(
-      `INSERT INTO dbo.Providers (ProviderId, Name, Area, Type, IsSample, IsActive, CreatedAt)
-       VALUES (@id, @name, @area, @type, @isSample, @isActive, SYSUTCDATETIME())`,
+      `INSERT INTO dbo.Providers (ProviderId, Name, Area, Type, IsSample, IsActive, LicenseNo, TaxCode, CreatedAt)
+       VALUES (@id, @name, @area, @type, @isSample, @isActive, @licenseNo, @taxCode, SYSUTCDATETIME())`,
       {
         id: [T.vstr(50), p.providerId],
         name: [T.str(150), p.name],
         area: [T.str(100), p.area],
         type: [T.vstr(10), p.type],
         isSample: [T.bool, p.isSample ? 1 : 0],
-        isActive: [T.bool, p.isActive ? 1 : 0]
+        isActive: [T.bool, p.isActive ? 1 : 0],
+        licenseNo: [T.str(50), p.licenseNo || null],
+        taxCode: [T.vstr(20), p.taxCode || null]
       }
     );
   },
@@ -148,11 +190,18 @@ module.exports = (db) => ({
     );
   },
 
-  async updateUserStatus(tx, userId, status) {
-    await tx.query(
-      `UPDATE dbo.Users SET Status = @status WHERE UserId = @id`,
-      { id: [T.guid, userId], status: [T.vstr(10), status] }
-    );
+  async updateUserStatus(tx, userId, status, incrementTokenVersion = false) {
+    if (incrementTokenVersion) {
+      await tx.query(
+        `UPDATE dbo.Users SET Status = @status, TokenVersion = TokenVersion + 1 WHERE UserId = @id`,
+        { id: [T.guid, userId], status: [T.vstr(10), status] }
+      );
+    } else {
+      await tx.query(
+        `UPDATE dbo.Users SET Status = @status WHERE UserId = @id`,
+        { id: [T.guid, userId], status: [T.vstr(10), status] }
+      );
+    }
   },
 
   async disableProviderAndVets(tx, providerId) {
@@ -161,7 +210,7 @@ module.exports = (db) => ({
       { providerId: [T.vstr(50), providerId] }
     );
     await tx.query(
-      `UPDATE dbo.Users SET Status = 'disabled' WHERE ProviderId = @providerId AND Role = 'vet'`,
+      `UPDATE dbo.Users SET Status = 'disabled', TokenVersion = TokenVersion + 1 WHERE ProviderId = @providerId AND Role = 'vet'`,
       { providerId: [T.vstr(50), providerId] }
     );
   },

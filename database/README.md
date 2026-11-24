@@ -26,6 +26,7 @@ sqlcmd -S localhost -U sa -P "<mật khẩu>" -C -b -i database/seeds/001_Seed_P
 - `Bookings.PetId` là `ON DELETE SET NULL`; lịch hẹn giữ ảnh chụp `PetName/ServiceName/ProviderLabel/PriceVnd`. `Bookings.UserId` và `Medical_Records.VetId` cố ý để `NO ACTION` (tránh lỗi "multiple cascade paths"); chưa có chức năng xóa user.
 - Cột `Medical_Records.PlanText` (không phải `Plan`, vì `PLAN` là từ khóa dành riêng của T-SQL).
 - Mô tả dịch vụ (`Services.Description`) để trống vì bản mẫu không có mô tả; không bịa thêm.
+- **Quy tắc không xóa cứng dịch vụ (Session S10):** Dịch vụ không bao giờ bị xóa cứng khỏi cơ sở dữ liệu (không có route DELETE). Khi ngừng cung cấp, hệ thống đặt `Services.IsActive = 0`. Dịch vụ ẩn sẽ không xuất hiện trên danh mục công khai (`GET /services`), không nhận lịch hẹn mới (`POST /bookings` từ chối), nhưng toàn bộ lịch sử lịch hẹn đã đặt trước đó vẫn được bảo toàn nguyên vẹn và Provider có thể kích hoạt lại (`enable`) bất kỳ lúc nào.
 
 ## Cơ chế Migration tự động
 Dự án sử dụng cơ chế migration có phiên bản qua bảng `dbo.SchemaVersions` và script `backend/scripts/migrate.js`:
@@ -35,7 +36,8 @@ npm run migrate         # Chạy các script schema và migration mới nhất
 npm run migrate -- --seed # Chạy kèm script seed minh họa
 ```
 - Tự động bỏ qua các file migration đã áp dụng trước đó (idempotent).
-- Các migration tăng tiến tiếp theo được đặt trong thư mục `database/migrations/` (ví dụ `003_....sql`, `004_....sql`).
+- Các migration tăng tiến tiếp theo được đặt trong thư mục `database/migrations/` (ví dụ `003_....sql`, `004_....sql`, `005_....sql`, `006_Provider_Profile_Legal.sql`).
+  - `006_Provider_Profile_Legal.sql`: Thêm `OrgLicenseNo`, `OrgTaxCode` vào `Users` (lưu tạm thông tin pháp lý tùy chọn khi đăng ký provider); thêm `Address`, `Phone`, `Description`, `LicenseNo`, `TaxCode`, `UpdatedAt` vào `Providers` để quản lý hồ sơ cơ sở.
 
 ## Đã kiểm chứng trên SQL Server 2022 thật
 Toàn bộ các script tạo schema (`001_Create_Schema.sql`), tri thức RAG (`002_Create_AI_Knowledge.sql`) và dữ liệu mẫu (`001_Seed_Providers_And_Services.sql`) đã được thực thi và kiểm chứng thành công trên Microsoft SQL Server 2022 (RTM) thật và container Docker `mcr.microsoft.com/mssql/server:2022-latest`. Mọi cú pháp T-SQL, kiểu dữ liệu (`UNIQUEIDENTIFIER`, `DATETIME2(3)`, `NVARCHAR(MAX)` JSON check constraint), chỉ mục có điều kiện (`UX_Bookings_Pet_Slot`), và câu lệnh `MERGE` đều hoạt động trơn tru không phát sinh lỗi.
@@ -72,6 +74,12 @@ SELECT ProviderId, Name, Area FROM dbo.Providers;
 - `Users`: ràng buộc kiểm tra toàn vẹn tầng DB `CK_Users_ProviderLink` đảm bảo các vai trò `vet`/`provider` khi `active` bắt buộc phải có `ProviderId`, và người dùng không thuộc vai trò này không được gắn `ProviderId`.
 - `Users`: non-clustered filtered index `IX_Users_ProviderId` (WHERE `ProviderId IS NOT NULL`).
 - `AuditLog`: bảng ghi vết kiểm toán quản trị (`AuditId`, `ActorUserId`, `Action`, `TargetType`, `TargetId`, `Detail`, `CreatedAt`) và index `IX_AuditLog_CreatedAt`. `Detail` không bao giờ chứa mật khẩu/token.
+
+## Migration 005: Vô hiệu hóa token cũ bằng TokenVersion
+
+`migrations/005_Users_TokenVersion.sql` (chạy lại được):
+- `Users`: thêm cột `TokenVersion INT NOT NULL DEFAULT 0` (ràng buộc mặc định `DF_Users_TokenVersion`).
+- Mọi token JWT mang claim `tv` tương ứng `user.tokenVersion`. Khi đổi mật khẩu hoặc bị khóa tài khoản (bao gồm cả cascade khóa vet khi provider bị khóa), `TokenVersion` tăng `+1` làm toàn bộ phiên cũ lập tức bị vô hiệu hóa (`401 token_revoked`).
 
 ### Quy trình duyệt đối tác (Provider) & Ý nghĩa các trạng thái
 

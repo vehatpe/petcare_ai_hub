@@ -13,10 +13,10 @@ Base URL: `/api/v1`. Backend (Express) phục vụ cả thư mục `frontend/` �
 ## Đối tượng
 ```
 User     { id, role: "customer"|"provider"|"vet"|"admin", status: "active"|"pending"|"disabled"|"rejected",
-           fullName, email, phone, providerId?, mustChangePassword?, orgName?, orgType?, createdAt }
-Provider { id, name, area, type: "clinic"|"spa"|"hotel"|"emergency", isSample }
+           fullName, email, phone, providerId?, mustChangePassword?, orgName?, orgType?, orgArea?, licenseNo?, taxCode?, hasLegalInfo?, createdAt }
+Provider { id, name, area, type: "clinic"|"spa"|"hotel"|"emergency", address|null, phone|null, description|null, isSample, updatedAt|null }
 Service  { id, category: "medical"|"grooming"|"hotel"|"emergency", categoryLabel, providerId, providerName,
-           providerArea, name, description, priceVnd, unit, isSample }
+           providerArea, providerAddress|null, providerPhone|null, providerDescription|null, name, description, priceVnd, unit, isSample }
 Pet      { id, name, species: "dog"|"cat"|"rabbit"|"hamster"|"bird"|"fish"|"reptile"|"other", breed, sex: "male"|"female", birthDate, weightKg|null,
            color, neutered: "yes"|"no"|"unknown", microchip, conditions, photo|null, createdAt, updatedAt }
            // weightKg = số đo mới nhất trong Health_Metrics, null nếu chưa có.
@@ -48,10 +48,10 @@ Các tầng rate limiter được tách riêng:
 ## Auth
 | Method | Path | Body | Kết quả |
 |---|---|---|---|
-| POST | `/auth/register` | `{role:"customer"|"provider", fullName, email, phone, password, orgName?, orgType?, orgArea?}` | 201 `{user, token}` (customer) hoặc `{user, token:null}` (provider, status `pending`). Với provider: bắt buộc `orgName` (≤ 150 ký tự), `orgType` (clinic/spa/hotel/emergency) và `orgArea` (≤ 100 ký tự). vet/admin không tự đăng ký (role khác → 422). |
+| POST | `/auth/register` | `{role:"customer"|"provider", fullName, email, phone, password, orgName?, orgType?, orgArea?, licenseNo?, taxCode?}` | 201 `{user, token}` (customer) hoặc `{user, token:null}` (provider, status `pending`). Với provider: bắt buộc `orgName` (≤ 150 ký tự), `orgType` (clinic/spa/hotel/emergency) và `orgArea` (≤ 100 ký tự); `licenseNo` (≤ 50 ký tự chữ, số, khoảng trắng, `/ - .`) và `taxCode` (10 hoặc 13 chữ số) là tùy chọn. vet/admin không tự đăng ký (role khác gửi legal info → 422). Không lộ giấy tờ trong `user` trả về. |
 | POST | `/auth/login` | `{identifier, password, remember?}` | 200 `{user, token}`; sai thông tin/không tồn tại → `401 credentials` (thông báo chung). Sau khi mật khẩu đúng: nếu `pending` → `403 pending`, nếu `rejected` → `403 rejected` (kèm `RejectReason` nếu có), nếu `disabled` → `403 disabled`. Phản hồi 200 kèm `providerId`, `orgArea` và `mustChangePassword`. |
 | GET | `/auth/me` | – | 200 `{user}`; 401 nếu token sai/hết hạn. Phản hồi kèm `providerId`, `orgArea` và `mustChangePassword`. |
-| POST | `/auth/change-password` | `{currentPassword, newPassword}` | 200 `{user}`; yêu cầu đăng nhập. Mật khẩu mới thỏa mãn độ phức tạp (≥ 8 ký tự, có chữ và số, tối đa 72 ký tự) và phải khác mật khẩu hiện tại (trùng → 422). Sai mật khẩu cũ → 422 kèm `errors.currentPassword`. Sau khi đổi thành công, `MustChangePassword = 0`. |
+| POST | `/auth/change-password` | `{currentPassword, newPassword}` | 200 `{user, token}`; yêu cầu đăng nhập. Mật khẩu mới thỏa mãn độ phức tạp (≥ 8 ký tự, có chữ và số, tối đa 72 ký tự) và phải khác mật khẩu hiện tại (trùng → 422). Sai mật khẩu cũ → 422 kèm `errors.currentPassword`. Sau khi đổi thành công, `MustChangePassword = 0`, tăng `TokenVersion` làm vô hiệu hóa token cũ, và trả kèm `token` mới có hiệu lực ngay. |
 
 Validation giống frontend: email hợp lệ; SĐT VN `^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$` (chuẩn hóa về `0xxxxxxxxx`); mật khẩu ≥ 8 ký tự gồm chữ và số; provider cần `orgName` ≥ 2 ký tự, `orgType` ∈ clinic|spa|hotel|emergency, và `orgArea` ≤ 100 ký tự. Email/SĐT trùng → 409 `duplicate` kèm `errors.email`/`errors.phone`.
 Mật khẩu băm bằng bcrypt (cost ≥ 10). Giới hạn tốc độ cho `/auth/*`.
@@ -68,18 +68,47 @@ Khi tài khoản có cờ `mustChangePassword: true` (đặc biệt là bác sĩ
   }
   ```
 - **Ngoại lệ:** Chỉ `GET /api/v1/auth/me` và `POST /api/v1/auth/change-password` được phép đi qua.
-- **Lưu ý bảo mật JWT:** JWT cũ đã cấp vẫn có hiệu lực cho đến khi hết hạn (token không trạng thái). Trạng thái `MustChangePassword` được xác thực trực tiếp tại tầng middleware mỗi lượt gọi API, và token cũ sẽ không còn bị chặn một khi cờ trong DB được gỡ về 0. Cân nhắc thu hồi phiên chủ động khi triển khai refresh token trong các giai đoạn sau.
+- **Vô hiệu hóa phiên đăng nhập cũ (Token Revocation qua `TokenVersion`):** Mỗi token JWT mang claim `tv` đại diện cho phiên bản token của tài khoản. Khi người dùng đổi mật khẩu hoặc bị khóa tài khoản, `TokenVersion` trong DB được tăng thêm 1. Các yêu cầu mang token cũ mang `tv` lệch với giá trị trong DB sẽ bị từ chối ngay lập tức với mã `401` và mã lỗi `token_revoked`:
+  ```json
+  {
+    "success": false,
+    "data": null,
+    "code": "token_revoked",
+    "message": "Phiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại."
+  }
+  ```
 
 ## Quản trị hệ thống (Admin)
 Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài khoản có role `admin`. Không bao giờ trả `PasswordHash`.
 
 | Method | Path | Query / Body | Kết quả & Quy tắc |
 |---|---|---|---|
-| GET | `/admin/users?status=&role=&limit=&offset=` | Query: `status` (active/pending/disabled/rejected), `role` (customer/provider/vet/admin), `limit` (mặc định 20, tối đa 50), `offset` (mặc định 0). | 200 `{ users: User[], meta: { limit, offset, total } }`. Không rò rỉ trường nhạy cảm (`passwordHash`). |
+| GET | `/admin/users?status=&role=&q=&limit=&offset=` | Query: `status` (active/pending/disabled/rejected), `role` (customer/provider/vet/admin), `q` (tìm kiếm theo tên, email, SĐT), `limit` (mặc định 20, tối đa 50), `offset` (mặc định 0). | 200 `{ users: User[], meta: { limit, offset, total } }`. Với dòng provider trả thêm `licenseNo`, `taxCode`, `hasLegalInfo`. Không rò rỉ trường nhạy cảm (`passwordHash`, `tokenVersion`). |
 | POST | `/admin/users/:id/approve` | Body: `{ area? }` (bắt buộc nếu tài khoản provider chưa có `orgArea`). | 200 `{ id, role, status: "active", providerId, orgArea, approvedBy, approvedAt }`. Chạy trong 1 transaction: tạo dòng `Providers` (slug từ `orgName` duy nhất ≤ 50 ký tự, `isActive=1`), cập nhật `Users.ProviderId`, `Status='active'`, `ApprovedBy/At`, ghi `AuditLog`. Chỉ áp dụng cho `provider` `pending` (duyệt lặp → 409 `conflict`, thiếu area → 422 `validation`). |
 | POST | `/admin/users/:id/reject` | Body: `{ reason }` (bắt buộc, tối đa 200 ký tự). | 200 `{ id, status: "rejected", rejectReason }`. Chỉ áp dụng cho user `pending` (không áp dụng cho `admin`). Ghi `AuditLog`. Từ chối là kết thúc vòng đời. |
 | POST | `/admin/users/:id/disable` | – | 200 `{ id, status: "disabled" }`. Chỉ áp dụng cho tài khoản `active`. Khóa `provider` sẽ cùng transaction khóa toàn bộ `vet` thuộc cơ sở đó và đặt `Providers.IsActive = 0`. Ràng buộc: Admin không tự khóa mình (403); không được khóa Admin `active` cuối cùng (403). Ghi `AuditLog`. |
 | POST | `/admin/users/:id/enable` | – | 200 `{ id, status: "active" }`. Chỉ áp dụng cho tài khoản `disabled`. Mở khóa `provider` chỉ khôi phục provider và đặt `Providers.IsActive = 1` (các `vet` vẫn disabled, cần mở khóa riêng). Ghi `AuditLog`. |
+
+## Hồ sơ Cơ sở Đối tác (Provider Profile)
+Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài khoản có role `provider`. Cơ sở được quản lý lấy tự động từ `user.providerId`, không nhận `providerId` từ client. Luôn gửi header `Cache-Control: no-store`.
+
+| Method | Path | Body | Kết quả & Quy tắc |
+|---|---|---|---|
+| GET | `/provider/profile` | – | 200 `{ id, name, area, type, address, phone, description, licenseNo, taxCode, isActive, isSample, updatedAt }`. 401 nếu chưa đăng nhập, 403 nếu không phải provider. |
+| PUT | `/provider/profile` | `{ address?, phone?, description?, licenseNo?, taxCode? }` | 200 `{ id, name, area, type, address, phone, description, licenseNo, taxCode, isActive, isSample, updatedAt }`. Khóa vắng mặt giữ nguyên giá trị cũ; `null` hoặc chuỗi rỗng xóa giá trị (về null). Nếu body chứa `name`, `area` hoặc `type` → 422 "Tên, khu vực và loại hình cơ sở do quản trị viên quản lý.". Thực thi trong transaction kèm khóa dòng `UPDLOCK, HOLDLOCK`. Từ chối khi cơ sở `IsActive = 0` hoặc user không `active` (403). Ghi `AuditLog` với `action='provider_profile_updated'` và `Detail` chỉ chứa danh sách tên các trường đã đổi (không ghi giá trị). Dữ liệu mẫu (`IsSample = 1`) bị từ chối sửa (403). |
+
+## Quản lý Dịch vụ Cơ sở (Provider)
+Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài khoản có role `provider` đang hoạt động (`status = active`, cơ sở `IsActive = 1`). `ProviderId` luôn lấy từ token người gọi. Không hỗ trợ xóa cứng (không có route DELETE). Dịch vụ cơ sở khác hoặc dữ liệu mẫu (`IsSample = 1`) trả về `404`.
+
+> **Lưu ý mã lỗi khi cơ sở bị khóa:** `PUT /provider/profile` phản hồi mã `403` khi cơ sở bị khóa/ngưng hoạt động (`Providers.IsActive = 0`), trong khi các thao tác ghi dịch vụ (`POST /provider/services`, `PUT /provider/services/:id`, `/disable`, `/enable`) phản hồi mã `409 conflict` ("Cơ sở đang bị khóa hoặc ngưng hoạt động..."). Giao diện đối tác (S11) cần xử lý phù hợp cho cả 2 mã lỗi này.
+
+| Method | Path | Query / Body | Kết quả & Quy tắc |
+|---|---|---|---|
+| GET | `/provider/services` | Query: `limit`, `offset` | 200 `{ services: Service[], meta: { limit, offset, total }, options: { categories: [{ id, labels: [...] }], priceMaxVnd, capacityMax, nameMax, unitMax } }`. Trả về cả dịch vụ đang ẩn (`isActive: false`) của chính cơ sở. `options` chứa hằng số backend định nghĩa danh mục và nhãn dịch vụ động (frontend dùng trực tiếp từ options, không phụ thuộc cứng vào file seed). |
+| POST | `/provider/services` | Body: `{ name, category, categoryLabel?, priceVnd, unit, slotCapacity?, description? }` | 201 `Service`. Server tự sinh `ServiceId` dạng `<providerId>-<slug-tên>` (rút gọn ≤ 50 ký tự; trùng thêm số `-2`, `-3`). Mặc định `IsSample = 0`, `IsActive = 1`. Kiểm tra: `name` 3–200 ký tự (trim); không trùng tên (không phân biệt hoa thường) với dịch vụ khác của cùng cơ sở, kể cả dịch vụ đang ẩn → 409 `duplicate`; `category` ∈ `medical | grooming | hotel | emergency`; `categoryLabel` phải thuộc nhãn của danh mục (thiếu mặc định nhãn đầu); `priceVnd` số nguyên 0 đến 100.000.000; `unit` 1–30 ký tự; `slotCapacity` 1–50 (mặc định 3); `description` ≤ 500 ký tự. Tối đa 50 dịch vụ/cơ sở → 409. Ghi AuditLog `service_created` (TargetType: `service`). |
+| PUT | `/provider/services/:id` | Body: `{ name?, category?, categoryLabel?, priceVnd?, unit?, slotCapacity?, description? }` | 200 `Service`. Sửa thông tin dịch vụ. Không đổi được `ProviderId`. Kiểm tra trùng tên và tính tương thích của danh mục & nhãn. Khi không có trường nào thay đổi (kể cả body `{}` hoặc giá trị y nguyên): không cập nhật DB, không ghi AuditLog. Khi có thay đổi: ghi AuditLog `service_updated` (Detail chỉ lưu `serviceId` và danh sách tên các trường thật sự thay đổi). |
+| POST | `/provider/services/:id/disable` | – | 200 `{ id, isActive: false }`. Ngừng cung cấp dịch vụ: ẩn khỏi trang công khai, không nhận lịch mới, lịch cũ giữ nguyên. Trùng trạng thái (đã tắt) → 409 conflict. Ghi AuditLog `service_disabled`. |
+| POST | `/provider/services/:id/enable` | – | 200 `{ id, isActive: true }`. Kích hoạt lại dịch vụ. Trùng trạng thái (đã bật) → 409 conflict. Ghi AuditLog `service_enabled`. |
 
 ## Quản lý Bác sĩ Cơ sở (Provider & Admin)
 Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài khoản có role `provider` (đang `active`) hoặc `admin`.
