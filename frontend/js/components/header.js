@@ -333,6 +333,9 @@
       <div class="drawer-who"><strong>${esc(user.fullName)}</strong><span>${esc(user.email)}</span></div>
       ${dash ? `<a href="${url(dash)}" class="btn btn-secondary">Bảng điều khiển</a>` : ''}
       ${user.role === 'admin' ? `<a href="${url('admin-partners.html')}" class="btn btn-secondary">Duyệt đối tác</a>` : ''}
+      ${user.role === 'admin' ? `<a href="${url('admin-users.html')}" class="btn btn-secondary">Quản lý tài khoản</a>` : ''}
+      ${user.role === 'provider' ? `<a href="${url('provider-services.html')}" class="btn btn-secondary">Dịch vụ của tôi</a>` : ''}
+      ${user.role === 'provider' ? `<a href="${url('provider-profile.html')}" class="btn btn-secondary">Hồ sơ cơ sở</a>` : ''}
       ${user.role === 'provider' ? `<a href="${url('provider-vets.html')}" class="btn btn-secondary">Quản lý bác sĩ</a>` : ''}
       <a href="${url('change-password.html')}" class="btn btn-outline">Đổi mật khẩu</a>
       <button type="button" class="btn btn-outline" data-action="logout">Đăng xuất</button>`;
