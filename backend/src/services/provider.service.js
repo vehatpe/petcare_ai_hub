@@ -619,21 +619,71 @@ function createProviderService({ models, config, clock = () => new Date() }) {
           });
         }
 
+        // So sánh từng trường để tìm changedFields thật sự
+        const changedFields = [];
+
+        if (value.name !== undefined && value.name !== svc.name) {
+          changedFields.push('name');
+        }
+
+        const oldDesc = (svc.description || '').trim();
+        const newDesc = value.description !== undefined ? value.description.trim() : oldDesc;
+        if (value.description !== undefined && newDesc !== oldDesc) {
+          changedFields.push('description');
+        }
+
+        if (value.category !== undefined && value.category !== svc.category) {
+          changedFields.push('category');
+        }
+
+        if (newLabel !== svc.categoryLabel) {
+          changedFields.push('categoryLabel');
+        }
+
+        if (value.priceVnd !== undefined && Number(value.priceVnd) !== Number(svc.priceVnd)) {
+          changedFields.push('priceVnd');
+        }
+
+        if (value.unit !== undefined && value.unit !== svc.unit) {
+          changedFields.push('unit');
+        }
+
+        if (value.slotCapacity !== undefined && Number(value.slotCapacity) !== Number(svc.slotCapacity)) {
+          changedFields.push('slotCapacity');
+        }
+
+        // Khi không có trường nào thay đổi: không gọi updateService, không ghi AuditLog
+        if (changedFields.length === 0) {
+          return {
+            id: svc.id,
+            providerId: svc.providerId,
+            category: svc.category,
+            categoryLabel: svc.categoryLabel,
+            name: svc.name,
+            description: svc.description,
+            priceVnd: svc.priceVnd,
+            unit: svc.unit,
+            slotCapacity: svc.slotCapacity,
+            isActive: svc.isActive,
+            isSample: svc.isSample,
+            createdAt: svc.createdAt
+          };
+        }
+
         const merged = {
           name: newName,
-          description: value.description !== undefined ? value.description : svc.description,
+          description: newDesc,
           category: newCategory,
           categoryLabel: newLabel,
-          priceVnd: value.priceVnd !== undefined ? value.priceVnd : svc.priceVnd,
+          priceVnd: value.priceVnd !== undefined ? Number(value.priceVnd) : svc.priceVnd,
           unit: value.unit !== undefined ? value.unit : svc.unit,
-          slotCapacity: value.slotCapacity !== undefined ? value.slotCapacity : svc.slotCapacity
+          slotCapacity: value.slotCapacity !== undefined ? Number(value.slotCapacity) : svc.slotCapacity
         };
 
         await memberModel.updateService(tx, serviceId, merged);
 
         // AuditLog: action = 'service_updated', TargetType = 'service'
-        // Detail chỉ chứa id dịch vụ và TÊN các trường đã đổi, không chứa giá/mô tả
-        const changedFields = Object.keys(input).filter((k) => ['name', 'description', 'category', 'categoryLabel', 'priceVnd', 'unit', 'slotCapacity'].includes(k));
+        // Detail chỉ chứa id dịch vụ và TÊN các trường thật sự đổi, không chứa giá/mô tả
         await adminModel.logAudit(tx, {
           actorUserId: actorUser.id,
           action: 'service_updated',

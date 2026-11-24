@@ -483,8 +483,13 @@ async function main() {
         `Delta U:${finalUsers - baselineUsers}, P:${finalProviders - baselineProviders}, S:${finalServices - baselineServices}, B:${finalBookings - baselineBookings}`
       );
     } catch (cleanupErr) {
-      console.error('[CLEANUP ERROR]', cleanupErr);
+      console.error('[CLEANUP ERROR]', cleanupErr.message);
+      record('14. Cleanup/baseline', false, cleanupErr.message);
     } finally {
+      const step14Found = results.some((r) => r.name.startsWith('14.'));
+      if (!step14Found) {
+        record('14. Cleanup/baseline', false, 'Cleanup did not complete');
+      }
       await server.close();
       await pool.close();
     }

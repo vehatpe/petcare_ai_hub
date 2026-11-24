@@ -239,22 +239,91 @@ test('S10: Provider Services Management (Unit / DB giả)', async (t) => {
     assert.equal(res.body.code, 'duplicate');
   });
 
-  // 7. PUT /provider/services/:id: update service, cannot change providerId
-  await t.test('PUT /provider/services/:id: update fields and audit log', async () => {
-    const res = await app.call('PUT', `/provider/services/${serviceA1Id}`, {
-      token: provAToken,
-      body: {
-        name: 'Tiêm phòng Dại & 7 bệnh',
-        priceVnd: 250000,
-        slotCapacity: 5,
-        providerId: 'hacker-provider' // must be ignored
-      }
-    });
-    assert.equal(res.status, 200);
-    assert.equal(res.data.name, 'Tiêm phòng Dại & 7 bệnh');
-    assert.equal(res.data.priceVnd, 250000);
-    assert.equal(res.data.slotCapacity, 5);
-    assert.equal(res.data.providerId, provAId);
+  // 7. PUT /provider/services/:id: update fields and audit log (diff-only)
+  await t.test('PUT /provider/services/:id: update fields and audit log diff-only', async () => {
+    // Theo dõi số lần gọi logAudit và updateService
+    let lastAuditLog = null;
+    const origLogAudit = app.models.admin.logAudit;
+    app.models.admin.logAudit = async (tx, entry) => {
+      lastAuditLog = entry;
+      return origLogAudit(tx, entry);
+    };
+
+    let updateServiceCalls = 0;
+    const origUpdateService = app.models.providerMember.updateService;
+    app.models.providerMember.updateService = async (tx, id, fields) => {
+      updateServiceCalls++;
+      return origUpdateService(tx, id, fields);
+    };
+
+    try {
+      // 7a. Đổi fields -> ghi đúng tên các trường thật sự đổi
+      lastAuditLog = null;
+      updateServiceCalls = 0;
+      const res = await app.call('PUT', `/provider/services/${serviceA1Id}`, {
+        token: provAToken,
+        body: {
+          name: 'Tiêm phòng Dại & 7 bệnh',
+          priceVnd: 250000,
+          slotCapacity: 5,
+          providerId: 'hacker-provider' // must be ignored
+        }
+      });
+      assert.equal(res.status, 200);
+      assert.equal(res.data.name, 'Tiêm phòng Dại & 7 bệnh');
+      assert.equal(res.data.priceVnd, 250000);
+      assert.equal(res.data.slotCapacity, 5);
+      assert.equal(res.data.providerId, provAId);
+      assert.equal(updateServiceCalls, 1);
+      assert.ok(lastAuditLog);
+      const detail1 = JSON.parse(lastAuditLog.detail);
+      assert.deepEqual(detail1.changedFields.sort(), ['name', 'priceVnd', 'slotCapacity'].sort());
+
+      // 7b. Chỉ đổi chữ hoa/thường của tên -> vẫn tính có thay đổi và ghi audit đúng 1 trường 'name'
+      lastAuditLog = null;
+      updateServiceCalls = 0;
+      const resCase = await app.call('PUT', `/provider/services/${serviceA1Id}`, {
+        token: provAToken,
+        body: {
+          name: 'TIÊM PHÒNG DẠI & 7 BỆNH'
+        }
+      });
+      assert.equal(resCase.status, 200);
+      assert.equal(resCase.data.name, 'TIÊM PHÒNG DẠI & 7 BỆNH');
+      assert.equal(updateServiceCalls, 1);
+      assert.ok(lastAuditLog);
+      const detailCase = JSON.parse(lastAuditLog.detail);
+      assert.deepEqual(detailCase.changedFields, ['name']);
+
+      // 7c. Gửi lại y nguyên giá trị cũ -> 200, updateService không được gọi, không ghi AuditLog
+      lastAuditLog = null;
+      updateServiceCalls = 0;
+      const resIdentical = await app.call('PUT', `/provider/services/${serviceA1Id}`, {
+        token: provAToken,
+        body: {
+          name: 'TIÊM PHÒNG DẠI & 7 BỆNH',
+          priceVnd: 250000,
+          slotCapacity: 5
+        }
+      });
+      assert.equal(resIdentical.status, 200);
+      assert.equal(updateServiceCalls, 0);
+      assert.equal(lastAuditLog, null);
+
+      // 7d. Gửi body {} -> 200, updateService không được gọi, không ghi AuditLog
+      lastAuditLog = null;
+      updateServiceCalls = 0;
+      const resEmpty = await app.call('PUT', `/provider/services/${serviceA1Id}`, {
+        token: provAToken,
+        body: {}
+      });
+      assert.equal(resEmpty.status, 200);
+      assert.equal(updateServiceCalls, 0);
+      assert.equal(lastAuditLog, null);
+    } finally {
+      app.models.admin.logAudit = origLogAudit;
+      app.models.providerMember.updateService = origUpdateService;
+    }
   });
 
   // 8. Cross-provider isolation: Provider B cannot see or edit A's service -> 404
