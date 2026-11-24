@@ -90,6 +90,18 @@
               <input class="form-control" id="orgArea" name="orgArea" type="text" placeholder="Ví dụ: Quận 1, TP.HCM hoặc Ba Đình, Hà Nội" maxlength="100" aria-describedby="orgArea-error">
               <p class="field-error" id="orgArea-error" hidden></p>
             </div>
+            <div class="form-group">
+              <label class="form-label" for="licenseNo">Số giấy phép hành nghề <span class="text-muted" style="font-weight: 400; font-size: 0.8125rem;">(không bắt buộc)</span></label>
+              <input class="form-control" id="licenseNo" name="licenseNo" type="text" placeholder="Ví dụ: 123/CCCN-TY" maxlength="50" aria-describedby="licenseNo-desc licenseNo-error">
+              <p class="field-hint" id="licenseNo-desc" style="font-size: 0.8125rem; color: var(--text-secondary); margin-top: 4px;">Cung cấp giúp quản trị viên xác minh nhanh hơn; không hiển thị công khai.</p>
+              <p class="field-error" id="licenseNo-error" hidden></p>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="taxCode">Mã số thuế <span class="text-muted" style="font-weight: 400; font-size: 0.8125rem;">(không bắt buộc)</span></label>
+              <input class="form-control" id="taxCode" name="taxCode" type="text" placeholder="Ví dụ: 0101234567 hoặc 0101234567-001" maxlength="20" aria-describedby="taxCode-desc taxCode-error">
+              <p class="field-hint" id="taxCode-desc" style="font-size: 0.8125rem; color: var(--text-secondary); margin-top: 4px;">Cung cấp giúp quản trị viên xác minh nhanh hơn; không hiển thị công khai.</p>
+              <p class="field-error" id="taxCode-error" hidden></p>
+            </div>
           </div>
 
           <div class="form-group">

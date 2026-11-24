@@ -106,7 +106,9 @@
         password: String(input.password || ''),
         orgName: String(input.orgName || '').trim(),
         orgType: String(input.orgType || ''),
-        orgArea: String(input.orgArea || '').trim()
+        orgArea: String(input.orgArea || '').trim(),
+        licenseNo: input.licenseNo !== undefined && input.licenseNo !== null ? String(input.licenseNo).trim() : null,
+        taxCode: input.taxCode !== undefined && input.taxCode !== null ? String(input.taxCode).trim() : null
       };
 
       const errors = {};
@@ -120,6 +122,15 @@
         if (!PROVIDER_TYPES.includes(data.orgType)) errors.orgType = 'Vui lòng chọn loại hình cơ sở.';
         if (!data.orgArea) errors.orgArea = 'Vui lòng nhập khu vực hoạt động của cơ sở.';
         else if (data.orgArea.length > 100) errors.orgArea = 'Khu vực tối đa 100 ký tự.';
+
+        if (data.licenseNo) {
+          if (data.licenseNo.length > 50) errors.licenseNo = 'Số giấy phép hành nghề tối đa 50 ký tự.';
+          else if (!/^[A-Za-z0-9\s/.\-]+$/.test(data.licenseNo)) errors.licenseNo = 'Số giấy phép chỉ gồm chữ, số, khoảng trắng và các ký tự / - .';
+        }
+        if (data.taxCode) {
+          const compactTax = data.taxCode.replace(/[\s\-]/g, '');
+          if (!/^\d{10}$|^\d{13}$/.test(compactTax)) errors.taxCode = 'Mã số thuế phải gồm 10 hoặc 13 chữ số.';
+        }
       }
       if (Object.keys(errors).length) {
         throw new AuthError('validation', 'Vui lòng kiểm tra lại các trường được đánh dấu.', errors);

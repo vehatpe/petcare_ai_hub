@@ -159,9 +159,11 @@ document.addEventListener('DOMContentLoaded', () => {
           email: registerForm.email.value,
           phone: registerForm.phone.value,
           password: registerForm.password.value,
-          orgName: registerForm.orgName.value,
-          orgType: registerForm.orgType.value,
-          orgArea: registerForm.orgArea ? registerForm.orgArea.value : ''
+          orgName: registerForm.orgName ? registerForm.orgName.value : '',
+          orgType: registerForm.orgType ? registerForm.orgType.value : '',
+          orgArea: registerForm.orgArea ? registerForm.orgArea.value : '',
+          licenseNo: registerForm.licenseNo ? registerForm.licenseNo.value : '',
+          taxCode: registerForm.taxCode ? registerForm.taxCode.value : ''
         });
 
         if (user.status === 'active') {

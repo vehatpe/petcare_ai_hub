@@ -111,6 +111,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const areaText = p.orgArea || 'Chưa cập nhật khu vực';
     const regDate = p.createdAt ? Fmt.dateShort(p.createdAt.slice(0, 10)) : 'Chưa rõ';
 
+    let legalHtml = '';
+    if (p.licenseNo || p.taxCode) {
+      const parts = [];
+      if (p.licenseNo) parts.push(`<strong>Số GP:</strong> ${esc(p.licenseNo)}`);
+      if (p.taxCode) parts.push(`<strong>MST:</strong> ${esc(p.taxCode)}`);
+      legalHtml = `<p class="pet-summary" style="font-size: 0.8125rem; color: var(--color-dark-forest); margin-bottom: 4px;">
+        <span class="badge" style="background: var(--color-mint-light, #ecf9f9); color: var(--color-dark-forest); margin-right: 6px;">Pháp lý</span> ${parts.join(' · ')}
+      </p>`;
+    } else {
+      legalHtml = `<p class="pet-summary" style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 4px;">
+        <span class="badge" style="background: var(--color-cream-soft, #f7f9f5); color: var(--text-secondary); margin-right: 6px;">Chưa cung cấp thông tin pháp lý</span>
+      </p>`;
+    }
+
     return `
       <li class="pet-row" data-partner-id="${esc(p.id)}">
         <div class="pet-avatar" aria-hidden="true" style="font-size: 1.25rem; font-weight: 700; background: var(--color-mint-light, #eaf5e9); color: var(--color-dark-forest);">
@@ -123,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <strong>Loại:</strong> <span class="badge badge-mint">${esc(typeText)}</span> ·
             <strong>Khu vực:</strong> ${esc(areaText)}
           </p>
+          ${legalHtml}
           <p class="pet-summary" style="font-size: 0.8125rem; color: var(--text-secondary);">
             <strong>Email:</strong> ${esc(p.email)} ·
             <strong>SĐT:</strong> ${esc(p.phone)} ·
