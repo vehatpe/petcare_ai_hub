@@ -144,8 +144,8 @@ test('authorization: user B cannot touch user A rows (404)', async (t) => {
   assert.equal((await call('GET', `/pets/${pet.id}`, { token: A.token })).status, 200);
   assert.equal((await call('GET', '/bookings', { token: A.token })).data[0].status, 'pending');
   assert.equal((await call('GET', `/health-records?petId=${pet.id}`, { token: A.token })).data.weights.length, 2);
-  // customers cannot write medical records; unauthenticated cannot either
-  const mr = { visitDate: '2026-06-01', subjective: 's', objective: 'o', assessment: 'a', plan: 'p' };
-  assert.equal((await call('POST', `/pets/${pet.id}/medical-records`, { token: A.token, body: mr })).status, 403);
-  assert.equal((await call('POST', `/pets/${pet.id}/medical-records`, { body: mr })).status, 401);
+  // old medical-records route is removed (404)
+  const mr = { subjective: 's', objective: 'o', assessment: 'a', plan: 'p' };
+  assert.equal((await call('POST', `/pets/${pet.id}/medical-records`, { token: A.token, body: mr })).status, 404);
+  assert.equal((await call('POST', `/pets/${pet.id}/medical-records`, { body: mr })).status, 404);
 });

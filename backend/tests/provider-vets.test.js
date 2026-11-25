@@ -285,17 +285,9 @@ test('C1: Provider management of Vets and Mandatory Change Password', async (t) 
     assert.equal(rMe.data.user.mustChangePassword, true);
     assert.equal(rMe.data.user.providerId, providerId);
 
-    // Gọi route nghiệp vụ khác (ví dụ: POST /pets/dummy/medical-records) -> 403 must_change_password
-    const dummyPetId = crypto.randomUUID();
-    const rBlocked = await app.call('POST', `/pets/${dummyPetId}/medical-records`, {
-      token: vetToken,
-      body: {
-        visitDate: '2026-06-10',
-        subjective: 'Ho khạc',
-        objective: 'Phổi ran ẩm',
-        assessment: 'Viêm phế quản',
-        plan: 'Uống kháng sinh 5 ngày'
-      }
+    // Gọi route nghiệp vụ khác (ví dụ: GET /vet/bookings) -> 403 must_change_password
+    const rBlocked = await app.call('GET', '/vet/bookings', {
+      token: vetToken
     });
     assert.equal(rBlocked.status, 403);
     assert.equal(rBlocked.body.code, 'must_change_password');
@@ -494,5 +486,8 @@ test('C1: Provider management of Vets and Mandatory Change Password', async (t) 
   });
 
   // --- Việc 3: Bệnh án của Vet (hoãn có kiểm soát) ---
-  await t.test('C2 rule: vet only writes medical record for pets that have an active (non-cancelled) booking with vet facility', { todo: 'Will be implemented in C2' }, () => {});
+  await t.test('C2 rule: disabled vet cannot access /vet/bookings', async () => {
+    const rVetBookings = await app.call('GET', '/vet/bookings', { token: vetToken });
+    assert.ok(rVetBookings.status === 401 || rVetBookings.status === 403);
+  });
 });

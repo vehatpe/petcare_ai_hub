@@ -55,6 +55,21 @@ const mapProvider = (r) => r && ({
   noShowAt: iso(r.NoShowAt)
 });
 
+const mapVet = (r) => r && ({
+  id: lc(r.BookingId),
+  code: r.BookingCode,
+  date: r.BookingDate,
+  time: r.BookingTime,
+  status: r.Status,
+  serviceName: r.ServiceName,
+  petId: lc(r.PetId) || null,
+  petName: r.PetName,
+  petSpecies: r.PetSpecies || null,
+  customerName: r.CustomerName || null,
+  notes: r.Notes,
+  hasMedicalRecord: Boolean(r.HasMedicalRecord)
+});
+
 const PROVIDER_SELECT = `
   SELECT b.BookingId, b.BookingCode, b.ProviderId, b.VetId,
          b.PetName, b.ServiceName, b.PriceVnd,
@@ -276,6 +291,48 @@ module.exports = (db) => {
         { providerId: [T.vstr(50), providerId] }
       );
       return rows.length > 0 && Boolean(rows[0].IsActive);
+    },
+    async listForVet(vetId, filters = {}) {
+      const where = ['b.VetId = @vetId'];
+      const params = { vetId: [T.guid, vetId] };
+      if (filters.status) { where.push('b.Status = @status'); params.status = [T.vstr(20), filters.status]; }
+      if (filters.date) { where.push('b.BookingDate = CAST(@date AS DATE)'); params.date = [T.ymd, filters.date]; }
+      if (filters.from) { where.push('b.BookingDate >= CAST(@from AS DATE)'); params.from = [T.ymd, filters.from]; }
+      if (filters.to) { where.push('b.BookingDate <= CAST(@to AS DATE)'); params.to = [T.ymd, filters.to]; }
+      if (filters.q) {
+        where.push('(b.BookingCode LIKE @q OR b.PetName LIKE @q OR u.FullName LIKE @q OR b.ServiceName LIKE @q)');
+        params.q = [T.str(100), `%${filters.q}%`];
+      }
+      const rows = await db.query(
+        `SELECT TOP 200 b.BookingId, b.BookingCode, b.PetId, b.PetName, p.Species AS PetSpecies,
+                b.ServiceName, CONVERT(CHAR(10), b.BookingDate, 23) AS BookingDate, b.BookingTime,
+                b.Status, u.FullName AS CustomerName, b.Notes,
+                CASE WHEN EXISTS (SELECT 1 FROM dbo.Medical_Records mr WHERE mr.BookingId = b.BookingId) THEN 1 ELSE 0 END AS HasMedicalRecord
+         FROM dbo.Bookings b
+         LEFT JOIN dbo.Pets p ON p.PetId = b.PetId
+         LEFT JOIN dbo.Users u ON u.UserId = b.UserId
+         WHERE ${where.join(' AND ')}
+         ORDER BY b.BookingDate ASC, b.BookingTime ASC, b.BookingId ASC`,
+        params
+      );
+      return rows.map(mapVet);
+    },
+    async getForVet(id, vetId, executor = db) {
+      const lock = executor !== db ? 'WITH (UPDLOCK, HOLDLOCK)' : '';
+      const r = (await executor.query(
+        `SELECT b.BookingId, b.BookingCode, b.ProviderId, b.PetId, b.PetName, p.Species AS PetSpecies,
+                b.ServiceName, CONVERT(CHAR(10), b.BookingDate, 23) AS BookingDate, b.BookingTime,
+                b.Status, u.FullName AS CustomerName, b.Notes, pr.Name AS ProviderName,
+                CASE WHEN EXISTS (SELECT 1 FROM dbo.Medical_Records mr WHERE mr.BookingId = b.BookingId) THEN 1 ELSE 0 END AS HasMedicalRecord
+         FROM dbo.Bookings b ${lock}
+         LEFT JOIN dbo.Pets p ON p.PetId = b.PetId
+         LEFT JOIN dbo.Users u ON u.UserId = b.UserId
+         LEFT JOIN dbo.Providers pr ON pr.ProviderId = b.ProviderId
+         WHERE b.BookingId = @id AND b.VetId = @vetId`,
+        { id: [T.guid, id], vetId: [T.guid, vetId] }
+      ))[0];
+      if (!r) return null;
+      return { ...mapVet(r), providerId: r.ProviderId, providerName: r.ProviderName || null };
     }
   };
 };

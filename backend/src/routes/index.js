@@ -54,7 +54,6 @@ function createRouter({ services, mw, config, models }) {
   r.delete('/pets/:id/weights/:metricId', customer, uuidParam('id'), uuidParam('metricId'), c.health.deleteWeight);
   r.post('/pets/:id/vaccinations', customer, uuidParam('id'), c.health.addVaccination);
   r.delete('/pets/:id/vaccinations/:vaccinationId', customer, uuidParam('id'), uuidParam('vaccinationId'), c.health.deleteVaccination);
-  r.post('/pets/:id/medical-records', authenticate, requireRole('vet', 'admin'), uuidParam('id'), c.health.addMedicalRecord);
 
   r.get('/bookings', customer, c.booking.list);
   r.post('/bookings', customer, c.booking.create);
@@ -65,6 +64,12 @@ function createRouter({ services, mw, config, models }) {
   r.patch('/bookings/:id/vet', provider, uuidParam('id'), c.booking.assignVet);
 
   r.get('/provider/bookings', provider, c.booking.listForProvider);
+
+  const vet = [authenticate, requireRole('vet')];
+  r.get('/vet/bookings', vet, c.health.listVetBookings);
+  r.get('/vet/bookings/:id', vet, uuidParam('id'), c.health.getVetBookingDetail);
+  r.post('/vet/bookings/:id/medical-record', vet, uuidParam('id'), c.health.addMedicalRecordForBooking);
+  r.post('/vet/bookings/:id/vaccinations', vet, uuidParam('id'), c.health.addVaccinationForBooking);
 
   r.get('/dashboard/customer', customer, c.dashboard.customer);
   r.post('/ai/chat', customer, aiLimiter, c.ai.chat);

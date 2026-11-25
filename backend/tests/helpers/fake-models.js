@@ -564,7 +564,16 @@ function createFakeModels() {
         return s.records.filter((r) => r.petId === petId).sort((a, b) => b.visitDate.localeCompare(a.visitDate))
           .map((r) => { const vet = s.users.find((u) => u.id === r.vetId); return { id: r.id, visitDate: r.visitDate, vetName: vet ? vet.fullName : null, subjective: r.subjective, objective: r.objective, assessment: r.assessment, plan: r.plan }; });
       },
+      async getMedicalRecordByBooking(bookingId) {
+        const r = s.records.find((x) => x.bookingId === bookingId);
+        if (!r) return null;
+        const vet = s.users.find((u) => u.id === r.vetId);
+        return { id: r.id, visitDate: r.visitDate, vetName: vet ? vet.fullName : null, subjective: r.subjective, objective: r.objective, assessment: r.assessment, plan: r.plan };
+      },
       async addMedicalRecord(m) {
+        if (m.bookingId && s.records.some((r) => r.bookingId === m.bookingId)) {
+          throw conflict('Lịch hẹn này đã có bệnh án.', {}, 'already_recorded');
+        }
         s.records.push(clone(m));
         const vet = s.users.find((u) => u.id === m.vetId);
         return { id: m.id, visitDate: m.visitDate, vetName: vet ? vet.fullName : null, subjective: m.subjective, objective: m.objective, assessment: m.assessment, plan: m.plan };
@@ -668,6 +677,46 @@ function createFakeModels() {
       async isFacilityActive(providerId) {
         const p = s.providers.find((x) => x.id === providerId);
         return Boolean(p && p.isActive !== false);
+      },
+      async listForVet(vetId, filters = {}) {
+        const toVetDto = (b) => {
+          const pet = s.pets.find((p) => p.id === b.petId);
+          const customer = s.users.find((u) => u.id === b.ownerId);
+          return {
+            id: b.id, code: b.code, date: b.date, time: b.time, status: b.status,
+            serviceName: b.serviceName, petId: b.petId || null, petName: b.petName,
+            petSpecies: pet ? pet.species : null, customerName: customer ? customer.fullName : null,
+            notes: b.notes, hasMedicalRecord: s.records.some((r) => r.bookingId === b.id)
+          };
+        };
+        return s.bookings.filter((b) => {
+          if (b.vetId !== vetId) return false;
+          if (filters.status && b.status !== filters.status) return false;
+          if (filters.date && b.date !== filters.date) return false;
+          if (filters.from && b.date < filters.from) return false;
+          if (filters.to && b.date > filters.to) return false;
+          if (filters.q) {
+            const qLower = filters.q.toLowerCase();
+            const customer = s.users.find((u) => u.id === b.ownerId);
+            const cName = customer ? customer.fullName.toLowerCase() : '';
+            if (!b.code.toLowerCase().includes(qLower) && !b.petName.toLowerCase().includes(qLower) && !cName.includes(qLower) && !b.serviceName.toLowerCase().includes(qLower)) return false;
+          }
+          return true;
+        }).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 200).map(toVetDto);
+      },
+      async getForVet(id, vetId) {
+        const b = s.bookings.find((x) => x.id === id && x.vetId === vetId);
+        if (!b) return null;
+        const pet = s.pets.find((p) => p.id === b.petId);
+        const customer = s.users.find((u) => u.id === b.ownerId);
+        const provider = s.providers.find((p) => p.id === b.providerId);
+        return {
+          id: b.id, code: b.code, date: b.date, time: b.time, status: b.status,
+          serviceName: b.serviceName, petId: b.petId || null, petName: b.petName,
+          petSpecies: pet ? pet.species : null, customerName: customer ? customer.fullName : null,
+          notes: b.notes, hasMedicalRecord: s.records.some((r) => r.bookingId === b.id),
+          providerId: b.providerId, providerName: provider ? provider.name : null
+        };
       }
     },
     knowledge: {

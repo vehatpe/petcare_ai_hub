@@ -266,6 +266,37 @@ async function run() {
     const inactiveRes = await api('PATCH', `/bookings/${bk4.id}/confirm`, { token: tokenPA });
     await pool.request().input('pa', sql.VarChar(50), provAId).query('UPDATE dbo.Providers SET IsActive = 1 WHERE ProviderId = @pa');
     record('13. Facility IsActive=0 -> 409 facility_inactive', inactiveRes.status === 409 && inactiveRes.body.code === 'facility_inactive');
+
+    // 15. Vet API: list, detail (no photo), medical-record (201 then 409), cross-vet 404, vaccination (201), customer reads back
+    const vetListRes = await api('GET', '/vet/bookings', { token: tokenVetA });
+    const vetDetailRes = await api('GET', `/vet/bookings/${bk1.id}`, { token: tokenVetA });
+    const vetMr1 = await api('POST', `/vet/bookings/${bk1.id}/medical-record`, {
+      token: tokenVetA,
+      body: { subjective: 'Ho nhẹ', objective: 'Thân nhiệt 38.5', assessment: 'Ổn định', plan: 'Theo dõi thêm' }
+    });
+    const vetMr2 = await api('POST', `/vet/bookings/${bk1.id}/medical-record`, {
+      token: tokenVetA,
+      body: { subjective: 'Lần 2', objective: 'o', assessment: 'a', plan: 'p' }
+    });
+    const vetMrOther = await api('POST', `/vet/bookings/${bk1.id}/medical-record`, {
+      token: tokenVetB,
+      body: { subjective: 'Khác', objective: 'o', assessment: 'a', plan: 'p' }
+    });
+    const vetVaccRes = await api('POST', `/vet/bookings/${bk1.id}/vaccinations`, {
+      token: tokenVetA,
+      body: { vaccineName: 'Rabies Smoke', administeredOn: todayYmd }
+    });
+    const custHealthRes = await api('GET', `/health-records?petId=${petId}`, { token: tokenCust });
+    const vetApiOk = vetListRes.status === 200
+      && vetDetailRes.status === 200 && vetDetailRes.data.pet && vetDetailRes.data.pet.photo === undefined
+      && vetMr1.status === 201
+      && vetMr2.status === 409 && vetMr2.body.code === 'already_recorded'
+      && vetMrOther.status === 404
+      && vetVaccRes.status === 201 && vetVaccRes.data.source === 'clinic'
+      && custHealthRes.status === 200
+      && custHealthRes.data.medicalRecords.length >= 1
+      && custHealthRes.data.vaccinations.some((v) => v.vaccineName === 'Rabies Smoke');
+    record('15. Vet API (list, detail, MR 201/409, cross-vet 404, vacc 201, customer reads)', vetApiOk);
   } finally {
     let cleanupFailed = false;
     try {
@@ -275,6 +306,7 @@ async function run() {
       if (custUserId) {
         await pool.request().input('vid', sql.UniqueIdentifier, vetAUserId).query('DELETE FROM dbo.Medical_Records WHERE VetId = @vid');
         await pool.request().input('uid', sql.UniqueIdentifier, custUserId).query(`
+          DELETE v FROM dbo.Vaccinations v JOIN dbo.Pets p ON p.PetId = v.PetId WHERE p.OwnerId = @uid;
           DELETE FROM dbo.Bookings WHERE UserId = @uid;
           DELETE FROM dbo.Pets WHERE OwnerId = @uid;
         `);
