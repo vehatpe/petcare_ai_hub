@@ -16,10 +16,21 @@ function addDaysYmd(ymd, days) {
   return d.toISOString().slice(0, 10);
 }
 
+async function getCounts(pool) {
+  const r = await pool.request().query(`
+    SELECT
+      (SELECT COUNT(*) FROM dbo.Users) AS u,
+      (SELECT COUNT(*) FROM dbo.Providers) AS p,
+      (SELECT COUNT(*) FROM dbo.Services) AS s,
+      (SELECT COUNT(*) FROM dbo.Bookings) AS b
+  `);
+  return r.recordset[0];
+}
+
 async function run() {
   console.log('=== PETCARE AI HUB BOOKINGS SMOKE TESTS (REAL SQL SERVER 2022) ===');
   const config = loadConfig();
-  const models = await createSqlModels(config.db);
+  const { models, pool: appPool } = await createSqlModels(config.db);
   const app = createApp({ models, config });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
@@ -34,6 +45,9 @@ async function run() {
     database: config.db.database,
     options: { encrypt: config.db.encrypt, trustServerCertificate: config.db.trustServerCertificate }
   }).connect();
+
+  const baseline = await getCounts(pool);
+  console.log(`Baseline counts - Users: ${baseline.u}, Providers: ${baseline.p}, Services: ${baseline.s}, Bookings: ${baseline.b}`);
 
   let passed = 0;
   let failed = 0;
@@ -66,11 +80,15 @@ async function run() {
   const provAUserId = crypto.randomUUID();
   const provBUserId = crypto.randomUUID();
   const vetAUserId = crypto.randomUUID();
+  const vetA2UserId = crypto.randomUUID();
+  const vetBUserId = crypto.randomUUID();
   const custEmail = `smoke_bk_cust_${tag}@example.com`;
   const provAEmail = `smoke_bk_pa_${tag}@example.com`;
   const provBEmail = `smoke_bk_pb_${tag}@example.com`;
   const vetAEmail = `smoke_bk_va_${tag}@example.com`;
-  const createdUserIds = [provAUserId, provBUserId, vetAUserId];
+  const vetA2Email = `smoke_bk_va2_${tag}@example.com`;
+  const vetBEmail = `smoke_bk_vb_${tag}@example.com`;
+  const createdUserIds = [provAUserId, provBUserId, vetAUserId, vetA2UserId, vetBUserId];
   let custUserId = null;
 
   try {
@@ -89,7 +107,9 @@ async function run() {
     for (const u of [
       { id: provAUserId, email: provAEmail, phone: `0971${String(tag).slice(-6)}`, role: 'provider', pid: provAId, name: 'Smoke Prov A' },
       { id: provBUserId, email: provBEmail, phone: `0972${String(tag).slice(-6)}`, role: 'provider', pid: provBId, name: 'Smoke Prov B' },
-      { id: vetAUserId, email: vetAEmail, phone: `0973${String(tag).slice(-6)}`, role: 'vet', pid: provAId, name: 'Smoke Vet A' }
+      { id: vetAUserId, email: vetAEmail, phone: `0973${String(tag).slice(-6)}`, role: 'vet', pid: provAId, name: 'Smoke Vet A' },
+      { id: vetA2UserId, email: vetA2Email, phone: `0975${String(tag).slice(-6)}`, role: 'vet', pid: provAId, name: 'Smoke Vet A2' },
+      { id: vetBUserId, email: vetBEmail, phone: `0976${String(tag).slice(-6)}`, role: 'vet', pid: provBId, name: 'Smoke Vet B' }
     ]) {
       await pool.request()
         .input('id', sql.UniqueIdentifier, u.id)
@@ -110,21 +130,31 @@ async function run() {
     const tokenPA = loginPA.data.token;
     const tokenPB = loginPB.data.token;
 
-    // Provider A creates a service
-    const svcRes = await api('POST', '/provider/services', {
-      token: tokenPA,
-      body: { name: 'Khám Smoke Gốc', category: 'medical', priceVnd: 200000, slotCapacity: 3 }
-    });
-    record('1. Provider A creates service', svcRes.status === 201, `id=${svcRes.data?.id}`);
-    const svcId = svcRes.data.id;
+    // Seed Service A directly
+    const svcId = `smoke-svc-${tag}`;
+    await pool.request()
+      .input('id', sql.VarChar(50), svcId)
+      .input('pid', sql.VarChar(50), provAId)
+      .query(`
+        INSERT INTO dbo.Services (ServiceId, ProviderId, Category, CategoryLabel, Name, PriceVnd, Unit, SlotCapacity, IsActive)
+        VALUES (@id, @pid, 'medical', N'Khám & điều trị', N'Khám Smoke Gốc', 200000, N'lần', 3, 1);
+      `);
+    record('1. Provider A service seeded', true, `id=${svcId}`);
 
-    // Register Customer & create Pet
-    const regCust = await api('POST', '/auth/register', {
-      body: { fullName: 'Smoke Customer', email: custEmail, phone: `0974${String(tag).slice(-6)}`, password: 'SmokePass123!' }
-    });
-    const tokenCust = regCust.data.token;
-    custUserId = regCust.data.user.id;
+    // Seed Customer & login
+    custUserId = crypto.randomUUID();
     createdUserIds.push(custUserId);
+    await pool.request()
+      .input('id', sql.UniqueIdentifier, custUserId)
+      .input('email', sql.VarChar(120), custEmail)
+      .input('phone', sql.VarChar(20), `0974${String(tag).slice(-6)}`)
+      .input('hash', sql.VarChar(200), pwHash)
+      .query(`
+        INSERT INTO dbo.Users (UserId, Email, Phone, PasswordHash, FullName, Role, Status, MustChangePassword)
+        VALUES (@id, @email, @phone, @hash, N'Smoke Customer', 'customer', 'active', 0);
+      `);
+    const loginCust = await api('POST', '/auth/login', { body: { identifier: custEmail, password: 'SmokePass123!' } });
+    const tokenCust = loginCust.data.token;
 
     const petRes = await api('POST', '/pets', {
       token: tokenCust,
@@ -190,6 +220,52 @@ async function run() {
     const statuses = [r1.status, r2.status].sort((a, b) => a - b);
     const errRes = r1.status === 409 ? r1 : r2;
     record('8. Parallel confirm race (200 + 409 invalid_transition)', statuses[0] === 200 && statuses[1] === 409 && errRes.body.code === 'invalid_transition');
+
+    // 9. too_early: complete future-slot confirmed bk3 -> 409 too_early
+    const earlyRes = await api('PATCH', `/bookings/${bk3.id}/complete`, { token: tokenPA });
+    record('9. Complete future slot returns 409 too_early', earlyRes.status === 409 && earlyRes.body.code === 'too_early');
+
+    // 10. no-show on past-slot confirmed bk3
+    await pool.request()
+      .input('id', sql.UniqueIdentifier, bk3.id)
+      .input('d', sql.VarChar(10), yesterdayYmd)
+      .query(`UPDATE dbo.Bookings SET BookingDate = CAST(@d AS DATE) WHERE BookingId = @id`);
+    const noShowRes = await api('PATCH', `/bookings/${bk3.id}/no-show`, { token: tokenPA });
+    record('10. No-show past-slot booking', noShowRes.status === 200 && noShowRes.data.status === 'no_show');
+
+    // 11. Assign Vet of another facility -> 422; already_recorded -> 409
+    const bk4 = (await api('POST', '/bookings', { token: tokenCust, body: { petId, serviceId: svcId, date: tomorrowYmd, time: '15:30' } })).data;
+    const otherVetRes = await api('PATCH', `/bookings/${bk4.id}/vet`, { token: tokenPA, body: { vetId: vetBUserId } });
+    record('11a. Assign vet from other facility -> 422', otherVetRes.status === 422);
+
+    await api('PATCH', `/bookings/${bk4.id}/vet`, { token: tokenPA, body: { vetId: vetAUserId } });
+    const mrId = crypto.randomUUID();
+    await pool.request()
+      .input('mrId', sql.UniqueIdentifier, mrId)
+      .input('petId', sql.UniqueIdentifier, petId)
+      .input('bkId', sql.UniqueIdentifier, bk4.id)
+      .input('vetId', sql.UniqueIdentifier, vetAUserId)
+      .input('d', sql.VarChar(10), tomorrowYmd)
+      .query(`
+        INSERT INTO dbo.Medical_Records (RecordId, PetId, BookingId, VetId, VisitDate, Subjective, Objective, Assessment, PlanText)
+        VALUES (@mrId, @petId, @bkId, @vetId, CAST(@d AS DATE), N'Smoke check', N'Smoke obj', N'Smoke assess', N'Smoke plan');
+      `);
+    const alreadyRecRes = await api('PATCH', `/bookings/${bk4.id}/vet`, { token: tokenPA, body: { vetId: vetA2UserId } });
+    record('11b. Change vet after medical record -> 409 already_recorded', alreadyRecRes.status === 409 && alreadyRecRes.body.code === 'already_recorded');
+
+    // 12. slot_passed: confirm past-slot pending bk4 -> 409 slot_passed
+    await pool.request()
+      .input('id', sql.UniqueIdentifier, bk4.id)
+      .input('d', sql.VarChar(10), yesterdayYmd)
+      .query(`UPDATE dbo.Bookings SET BookingDate = CAST(@d AS DATE) WHERE BookingId = @id`);
+    const slotPassedRes = await api('PATCH', `/bookings/${bk4.id}/confirm`, { token: tokenPA });
+    record('12. Confirm past slot -> 409 slot_passed', slotPassedRes.status === 409 && slotPassedRes.body.code === 'slot_passed');
+
+    // 13. facility_inactive: Providers.IsActive=0 -> confirm -> 409 facility_inactive, then restore IsActive=1
+    await pool.request().input('pa', sql.VarChar(50), provAId).query('UPDATE dbo.Providers SET IsActive = 0 WHERE ProviderId = @pa');
+    const inactiveRes = await api('PATCH', `/bookings/${bk4.id}/confirm`, { token: tokenPA });
+    await pool.request().input('pa', sql.VarChar(50), provAId).query('UPDATE dbo.Providers SET IsActive = 1 WHERE ProviderId = @pa');
+    record('13. Facility IsActive=0 -> 409 facility_inactive', inactiveRes.status === 409 && inactiveRes.body.code === 'facility_inactive');
   } finally {
     let cleanupFailed = false;
     try {
@@ -197,8 +273,11 @@ async function run() {
         await pool.request().input('uid', sql.UniqueIdentifier, uid).query('DELETE FROM dbo.AuditLog WHERE ActorUserId = @uid');
       }
       if (custUserId) {
-        await pool.request().input('uid', sql.UniqueIdentifier, custUserId).query('DELETE FROM dbo.Bookings WHERE UserId = @uid');
-        await pool.request().input('uid', sql.UniqueIdentifier, custUserId).query('DELETE FROM dbo.Pets WHERE UserId = @uid');
+        await pool.request().input('vid', sql.UniqueIdentifier, vetAUserId).query('DELETE FROM dbo.Medical_Records WHERE VetId = @vid');
+        await pool.request().input('uid', sql.UniqueIdentifier, custUserId).query(`
+          DELETE FROM dbo.Bookings WHERE UserId = @uid;
+          DELETE FROM dbo.Pets WHERE OwnerId = @uid;
+        `);
       }
       await pool.request().input('pa', sql.VarChar(50), provAId).input('pb', sql.VarChar(50), provBId).query(`
         DELETE FROM dbo.Services WHERE ProviderId IN (@pa, @pb);
@@ -210,12 +289,16 @@ async function run() {
       await pool.request().input('pa', sql.VarChar(50), provAId).input('pb', sql.VarChar(50), provBId).query(`
         DELETE FROM dbo.Providers WHERE ProviderId IN (@pa, @pb);
       `);
+      const after = await getCounts(pool);
+      const baselineOk = after.u === baseline.u && after.p === baseline.p && after.s === baseline.s && after.b === baseline.b;
+      record('14. Baseline counts restored', baselineOk, `U:${after.u}/${baseline.u} P:${after.p}/${baseline.p} S:${after.s}/${baseline.s} B:${after.b}/${baseline.b}`);
       console.log('[CLEANUP] Removed smoke-bookings test data.');
     } catch (e) {
       cleanupFailed = true;
       console.error('[CLEANUP ERROR]', e.message);
     }
     await pool.close();
+    if (appPool && typeof appPool.close === 'function') await appPool.close();
     server.close();
     if (failed > 0 || cleanupFailed) {
       process.exitCode = 1;
