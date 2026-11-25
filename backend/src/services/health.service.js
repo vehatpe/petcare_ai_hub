@@ -106,7 +106,7 @@ function createHealthService({ models, config, clock = () => new Date() }) {
       const b = await models.bookings.getForVet(bookingId, vet.id);
       if (!b) throw notFound('Không tìm thấy lịch hẹn này.');
       const pet = b.petId ? await models.pets.getById(b.petId) : null;
-      await models.auditLog.write({
+      await models.audit.log({
         actorUserId: vet.id,
         action: 'health_record_viewed',
         targetType: 'pet',
@@ -174,7 +174,7 @@ function createHealthService({ models, config, clock = () => new Date() }) {
           assessment: value.assessment,
           plan: value.plan
         }, tx);
-        await models.auditLog.write({
+        await models.audit.log({
           actorUserId: vet.id,
           action: 'medical_record_created',
           targetType: 'booking',
@@ -206,7 +206,7 @@ function createHealthService({ models, config, clock = () => new Date() }) {
         source: 'clinic',
         createdAt: clock().toISOString()
       });
-      await models.auditLog.write({
+      await models.audit.log({
         actorUserId: vet.id,
         action: 'vaccination_created',
         targetType: 'booking',

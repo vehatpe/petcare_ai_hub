@@ -149,7 +149,10 @@ Validation: name 1–40; species/sex thuộc tập; birthDate hợp lệ, không
 | DELETE | `/pets/:id/weights/:metricId` | xóa số đo nhập nhầm |
 | POST | `/pets/:id/vaccinations` | `{vaccineName, administeredOn, nextDueOn?, providerName?, batchNo?}` → 201. Bản ghi do chủ nuôi nhập có `source:"owner"` (chưa được cơ sở xác nhận). |
 | DELETE | `/pets/:id/vaccinations/:vaccinationId` | chỉ xóa được bản ghi `source:"owner"` |
-| POST | `/pets/:id/medical-records` | chỉ role `vet`/`admin`; `{visitDate, subjective, objective, assessment, plan, bookingId?}` |
+| GET | `/vet/bookings` | chỉ role `vet`; lọc `status`, `date`, `from`/`to` (≤ 92 ngày), `q`; tối đa 200 dòng |
+| GET | `/vet/bookings/:id` | chỉ role `vet` được gán; trả chi tiết lịch + hồ sơ thú cưng (không `photo`), ghi `AuditLog` (`health_record_viewed`) |
+| POST | `/vet/bookings/:id/medical-record` | chỉ role `vet` được gán, lịch `confirmed`/`completed`; `{subjective, objective, assessment, plan}` (mỗi lịch tối đa 1 bệnh án) |
+| POST | `/vet/bookings/:id/vaccinations` | chỉ role `vet` được gán, lịch `confirmed`/`completed`; `{vaccineName, administeredOn, nextDueOn?, batchNo?}` (`source='clinic'`, `providerName` từ DB) |
 
 Tổng hợp `GET /health-records?petId=`:
 ```

@@ -1,47 +1,59 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const bcrypt = require('bcryptjs');
 const { startTestApp } = require('./helpers/harness');
 
 test('Vet Bookings API: access control, detail audit, medical record & vaccination', async (t) => {
-  const app = await startTestApp({ now: new Date('2026-06-15T03:00:00.000Z') }); // 10:00 VN
+  const app = await startTestApp({ now: '2026-06-15T03:00:00.000Z' }); // 10:00 VN
   t.after(app.close);
-  const { call, models } = app;
+  const { call } = app;
+  const { state } = app.testHelpers;
 
-  const { token: custToken } = await app.registerCustomer({ email: 'cust@vettest.vn' });
+  if (!state.providers.find((p) => p.id === 'clinic-vet')) {
+    state.providers.push({ id: 'clinic-vet', name: 'Phòng khám VetTest', area: 'Q1', isSample: false, isActive: true });
+  }
+  const svcId = crypto.randomUUID();
+  state.services.push({
+    id: svcId, providerId: 'clinic-vet', category: 'medical', name: 'Khám tổng quát', priceVnd: 200000, slotCapacity: 3, isActive: true
+  });
+
+  const { token: custToken } = await app.registerCustomer({ email: 'cust@vettest.vn', phone: '0909111000' });
   const pet = await app.createPet(custToken, { name: 'Milu', species: 'dog', photo: 'data:image/png;base64,AAAA' });
 
-  const [firstSvc] = await models.catalog.listServices({});
-  const svcId = firstSvc.id;
-  const provId = firstSvc.providerId;
+  let seq = 1;
+  const pwHash = bcrypt.hashSync('matkhau123', 4);
+  async function makeUser({ role, providerId = null, fullName }) {
+    const idx = seq++;
+    const id = crypto.randomUUID();
+    const email = `vettest${idx}@clinic.vn`;
+    await app.testHelpers.addStaff(role, {
+      id, email, phone: `09770000${String(idx).padStart(2, '0')}`, fullName, status: 'active', providerId, passwordHash: pwHash
+    });
+    const u = state.users.find((x) => x.id === id);
+    if (u) { u.providerId = providerId; u.status = 'active'; }
+    const loginRes = await call('POST', '/auth/login', { body: { identifier: email, password: 'matkhau123' } });
+    return { token: loginRes.data.token, user: loginRes.data.user };
+  }
 
-  const prov = await app.loginStaff('provider', { providerId: provId });
-  const vet1 = await app.loginStaff('vet', { providerId: provId });
-  const bcrypt = require('bcryptjs');
-  await models.users.create({
-    id: '00000000-0000-4000-8000-000000000222',
-    fullName: 'BS Hai', email: 'vet2@prov-a.vn', phone: '0911222334',
-    passwordHash: bcrypt.hashSync('Vet2Pass!123', 4), role: 'vet', status: 'active', providerId: provId
-  });
-  const vet2Login = await call('POST', '/auth/login', { body: { identifier: 'vet2@prov-a.vn', password: 'Vet2Pass!123' } });
-  const vet2 = { user: vet2Login.data.user, token: vet2Login.data.token };
-  await models.users.create({
-    id: '00000000-0000-4000-8000-000000000333',
-    fullName: 'Admin Test', email: 'admin-vettest@petcare.vn', phone: '0988777665',
-    passwordHash: bcrypt.hashSync('AdminPass!123', 4), role: 'admin', status: 'active', providerId: null
-  });
-  const adminLogin = await call('POST', '/auth/login', { body: { identifier: 'admin-vettest@petcare.vn', password: 'AdminPass!123' } });
-  const admin = { user: adminLogin.data.user, token: adminLogin.data.token };
+  const prov = await makeUser({ role: 'provider', providerId: 'clinic-vet', fullName: 'Chủ Cơ Sở' });
+  const vet1 = await makeUser({ role: 'vet', providerId: 'clinic-vet', fullName: 'BS Một' });
+  const vet2 = await makeUser({ role: 'vet', providerId: 'clinic-vet', fullName: 'BS Hai' });
+  const admin = await makeUser({ role: 'admin', fullName: 'Admin Test' });
 
   // Customer tạo 2 lịch: b1 (confirmed), b3 (pending)
-  const b1Res = await call('POST', '/bookings', { token: custToken, body: { petId: pet.id, serviceId: svcId, date: '2026-06-16', time: '09:00' } });
-  const b3Res = await call('POST', '/bookings', { token: custToken, body: { petId: pet.id, serviceId: svcId, date: '2026-06-17', time: '10:00' } });
+  const b1Res = await call('POST', '/bookings', { token: custToken, body: { petId: pet.id, serviceId: svcId, date: '2026-06-16', time: '08:30' } });
+  const b3Res = await call('POST', '/bookings', { token: custToken, body: { petId: pet.id, serviceId: svcId, date: '2026-06-17', time: '08:30' } });
+  assert.equal(b1Res.status, 201, JSON.stringify(b1Res.body));
+  assert.equal(b3Res.status, 201);
   const b1 = b1Res.data;
   const b3 = b3Res.data;
 
   // Provider xác nhận b1 và gán vet1; b3 giữ pending nhưng gán vet1
-  await call('PATCH', `/bookings/${b1.id}/confirm`, { token: prov.token, body: { vetId: vet1.user.id } });
-  await call('PATCH', `/bookings/${b3.id}/vet`, { token: prov.token, body: { vetId: vet1.user.id } });
+  assert.equal((await call('PATCH', `/bookings/${b1.id}/confirm`, { token: prov.token })).status, 200);
+  assert.equal((await call('PATCH', `/bookings/${b1.id}/vet`, { token: prov.token, body: { vetId: vet1.user.id } })).status, 200);
+  assert.equal((await call('PATCH', `/bookings/${b3.id}/vet`, { token: prov.token, body: { vetId: vet1.user.id } })).status, 200);
 
   await t.test('access control: customer/provider/admin -> 403; other vet -> 404', async () => {
     for (const tk of [custToken, prov.token, admin.token]) {
