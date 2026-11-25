@@ -23,7 +23,20 @@ function createFakeModels() {
     const { ownerId, ...rest } = p; // eslint-disable-line no-unused-vars
     return { ...clone(rest), weightKg: latestWeight(p.id) };
   };
-  const bookingOut = (b) => { if (!b) return null; const { ownerId, ...rest } = b; return clone(rest); }; // eslint-disable-line no-unused-vars
+  const bookingOut = (b) => {
+    if (!b) return null;
+    const { ownerId, vetId, ...rest } = b; // eslint-disable-line no-unused-vars
+    const prov = s.providers.find((p) => p.id === b.providerId);
+    return {
+      ...clone(rest),
+      providerIsSample: prov ? Boolean(prov.isSample) : false,
+      confirmedAt: b.confirmedAt || null,
+      completedAt: b.completedAt || null,
+      cancelledAt: b.cancelledAt || null,
+      cancelledBy: b.cancelledBy || null,
+      cancelReason: b.cancelReason || null
+    };
+  };
   const svcOut = (sv) => {
     const p = s.providers.find((x) => x.id === sv.providerId);
     return {
@@ -573,10 +586,27 @@ function createFakeModels() {
         s.bookings.push(clone(b));
         return { ok: true, booking: bookingOut(b) };
       },
-      async cancel(id, o) {
+      async transition(executor, id, { from, to, fields = {} }) {
+        const b = s.bookings.find((x) => x.id === id);
+        if (!b || b.status !== from) return null;
+        b.status = to;
+        if (fields.cancelledAt !== undefined) b.cancelledAt = fields.cancelledAt;
+        if (fields.cancelledBy !== undefined) b.cancelledBy = fields.cancelledBy;
+        if (fields.cancelReason !== undefined) b.cancelReason = fields.cancelReason;
+        if (fields.confirmedAt !== undefined) b.confirmedAt = fields.confirmedAt;
+        if (fields.completedAt !== undefined) b.completedAt = fields.completedAt;
+        if (fields.noShowAt !== undefined) b.noShowAt = fields.noShowAt;
+        if (fields.vetId !== undefined) b.vetId = fields.vetId;
+        return bookingOut(b);
+      },
+      async cancel(id, o, cancelledAt, cancelReason = null) {
         const b = s.bookings.find((x) => x.id === id && x.ownerId === o && ['pending', 'confirmed'].includes(x.status));
         if (!b) return null;
-        b.status = 'cancelled'; return bookingOut(b);
+        b.status = 'cancelled';
+        b.cancelledBy = 'customer';
+        b.cancelledAt = cancelledAt || tick();
+        b.cancelReason = cancelReason;
+        return bookingOut(b);
       }
     },
     knowledge: {
