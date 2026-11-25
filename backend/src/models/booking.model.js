@@ -51,14 +51,15 @@ const mapProvider = (r) => r && ({
   cancelReason: r.CancelReason || null,
   createdAt: iso(r.CreatedAt),
   confirmedAt: iso(r.ConfirmedAt),
-  completedAt: iso(r.CompletedAt)
+  completedAt: iso(r.CompletedAt),
+  noShowAt: iso(r.NoShowAt)
 });
 
 const PROVIDER_SELECT = `
   SELECT b.BookingId, b.BookingCode, b.ProviderId, b.VetId,
          b.PetName, b.ServiceName, b.PriceVnd,
          CONVERT(CHAR(10), b.BookingDate, 23) AS BookingDate, b.BookingTime, b.Notes, b.Status,
-         b.ConfirmedAt, b.CompletedAt, b.CancelledBy, b.CancelReason, b.CreatedAt,
+         b.ConfirmedAt, b.CompletedAt, b.NoShowAt, b.CancelledBy, b.CancelReason, b.CreatedAt,
          pt.Species AS PetSpecies,
          u.FullName AS CustomerName, u.Phone AS CustomerPhone,
          v.FullName AS VetName
@@ -227,8 +228,9 @@ module.exports = (db) => {
         params.vetId = [T.guid, filters.vetId];
       }
       if (filters.q) {
-        itemWhere.push('(b.BookingCode LIKE @q OR b.PetName LIKE @q)');
-        params.q = [T.str(100), `%${filters.q}%`];
+        const escapedQ = filters.q.replace(/[\\%_[]/g, (ch) => `\\${ch}`);
+        itemWhere.push("(b.BookingCode LIKE @q ESCAPE '\\' OR b.PetName LIKE @q ESCAPE '\\')");
+        params.q = [T.str(200), `%${escapedQ}%`];
       }
 
       const rows = await db.query(

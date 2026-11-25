@@ -623,7 +623,8 @@ function createFakeModels() {
           cancelReason: b.cancelReason || null,
           createdAt: b.createdAt,
           confirmedAt: b.confirmedAt || null,
-          completedAt: b.completedAt || null
+          completedAt: b.completedAt || null,
+          noShowAt: b.noShowAt || null
         };
       },
       async listByProvider(providerId, filters = {}) {

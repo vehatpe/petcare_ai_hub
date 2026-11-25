@@ -173,7 +173,7 @@ Quy tắc trạng thái tiêm: với mỗi `vaccineName` chỉ tính mũi có `a
 | PATCH | `/bookings/:id/complete` | Provider hoàn tất lịch `confirmed` → `completed` (409 `too_early` nếu chưa tới giờ) |
 | PATCH | `/bookings/:id/no-show` | Provider ghi vắng mặt `confirmed` → `no_show` (409 `too_early` nếu chưa tới giờ) |
 | PATCH | `/bookings/:id/vet` | Provider gán/đổi/bỏ gán (`vetId: uuid \| null`) cho lịch `pending\|confirmed` (409 `already_recorded` nếu Vet cũ đã ghi bệnh án) |
-| GET | `/provider/bookings` | Provider xem lịch cơ sở mình (`status`, `date`, `from`/`to` ≤ 92 ngày, `vetId`, `q`; tối đa 200 dòng, kèm `summary`) |
+| GET | `/provider/bookings` | Provider xem lịch cơ sở mình (`status`, `date`, `from`/`to` ≤ 92 ngày, `vetId`, `q`; tối đa 200 dòng). Trả về `data = { items: [...], summary: { pending, confirmed, completed, cancelled, no_show } }` |
 
 > **Mã lỗi nghiệp vụ C2:** `invalid_transition` (409), `cancel_window` (409), `slot_passed` (409), `too_early` (409), `facility_inactive` (409), `already_recorded` (409).
 
