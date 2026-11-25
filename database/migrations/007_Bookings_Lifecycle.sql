@@ -197,3 +197,10 @@ BEGIN
     CREATE UNIQUE NONCLUSTERED INDEX UX_MR_Booking ON dbo.Medical_Records (BookingId) WHERE BookingId IS NOT NULL;
 END
 GO
+
+-----------
+SELECT ProviderId, Name, IsSample, IsActive, CreatedAt FROM dbo.Providers ORDER BY CreatedAt;
+SELECT UserId, Email, Role, Status, ProviderId, CreatedAt FROM dbo.Users ORDER BY CreatedAt;
+SELECT BookingCode, ServiceId, ProviderId, Status, BookingDate, CreatedAt FROM dbo.Bookings ORDER BY CreatedAt;
+SELECT ProviderId, COUNT(*) AS n FROM dbo.Services GROUP BY ProviderId ORDER BY n DESC;
+------------
