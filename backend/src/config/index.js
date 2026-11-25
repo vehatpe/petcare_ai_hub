@@ -21,10 +21,23 @@ function loadConfig(env = process.env) {
     jwtSecret = crypto.randomBytes(32).toString('hex');
     jwtSecretEphemeral = true;
   }
+
+  const cancelWindowRaw = env.BOOKING_CANCEL_WINDOW_HOURS;
+  const bookingCancelWindowHours = int(cancelWindowRaw, 2);
+  if (
+    !Number.isInteger(bookingCancelWindowHours) ||
+    bookingCancelWindowHours < 0 ||
+    bookingCancelWindowHours > 72 ||
+    (cancelWindowRaw !== undefined && cancelWindowRaw !== '' && String(bookingCancelWindowHours) !== String(cancelWindowRaw).trim())
+  ) {
+    throw new Error('BOOKING_CANCEL_WINDOW_HOURS phải là số nguyên từ 0 đến 72.');
+  }
+
   return {
     nodeEnv,
     port: int(env.PORT, 3000),
     timezone: env.APP_TIMEZONE || 'Asia/Ho_Chi_Minh',
+    bookingCancelWindowHours,
     // Dev convenience: allow VS Code Live Server (5500/5501) when CORS_ORIGIN is not set. Never in production.
     corsOrigin: env.CORS_ORIGIN || (nodeEnv === 'production' ? '' : 'http://localhost:5500,http://127.0.0.1:5500,http://localhost:5501,http://127.0.0.1:5501'),
     serveFrontend: bool(env.SERVE_FRONTEND, true),
