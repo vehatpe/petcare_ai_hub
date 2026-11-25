@@ -324,11 +324,11 @@ async function main() {
       `Status: ${cancelData?.status}, CancelledBy: ${cancelData?.cancelledBy}, Reason: "${cancelData?.cancelReason}"`
     );
 
-    // 13. ERROR BRANCH: Cancel already cancelled booking -> 409 conflict
+    // 13. ERROR BRANCH: Cancel already cancelled booking -> 409 invalid_transition
     const cancelAgainRes = await api('PATCH', `/bookings/${booking1Id}/cancel`, { token });
     record(
       '13. PATCH /bookings/:id/cancel - ERROR 409 (Hủy lịch đã hủy)',
-      cancelAgainRes.status === 409 && cancelAgainRes.body.code === 'conflict',
+      cancelAgainRes.status === 409 && cancelAgainRes.body.code === 'invalid_transition',
       `HTTP ${cancelAgainRes.status}: ${cancelAgainRes.body.message}`
     );
   } finally {

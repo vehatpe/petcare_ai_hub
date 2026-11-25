@@ -116,7 +116,7 @@ test('bookings', async (t) => {
     const c = await call('PATCH', `/bookings/${target.id}/cancel`, { token: A.token });
     assert.equal(c.status, 200); assert.equal(c.data.status, 'cancelled');
     const again = await call('PATCH', `/bookings/${target.id}/cancel`, { token: A.token });
-    assert.equal(again.status, 409); assert.equal(again.body.code, 'conflict');
+    assert.equal(again.status, 409); assert.equal(again.body.code, 'invalid_transition');
     const slots = await call('GET', '/services/medical-general/slots?date=2026-06-12');
     assert.equal(slots.data.find((s) => s.time === '14:00').available, true, 'cancelled booking frees the slot');
     // re-book the same pet/time after cancel

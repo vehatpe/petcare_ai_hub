@@ -157,20 +157,6 @@ module.exports = (db) => {
         return runInTx(executor);
       }
       return db.transaction(runInTx);
-    },
-    async cancel(id, ownerId, cancelledAt, cancelReason = null) {
-      // Keep legacy method for compatibility if called directly
-      const r = await db.exec(
-        `UPDATE dbo.Bookings
-         SET Status = 'cancelled', CancelledBy = 'customer', CancelledAt = @cat, CancelReason = @reason, UpdatedAt = SYSUTCDATETIME()
-         WHERE BookingId = @id AND UserId = @owner AND Status IN ('pending','confirmed')`,
-        {
-          id: [T.guid, id],
-          owner: [T.guid, ownerId],
-          cat: [T.dateTime2, cancelledAt ? new Date(cancelledAt) : new Date()],
-          reason: [T.str(300), cancelReason]
-        });
-      return r.rowsAffected[0] > 0 ? getByOwner(id, ownerId) : null;
     }
   };
 };

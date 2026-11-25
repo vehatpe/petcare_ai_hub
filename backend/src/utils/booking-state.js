@@ -39,7 +39,6 @@ function assertTransition(from, to) {
  */
 function minutesUntil(date, time, clock = () => new Date(), tz = 'Asia/Ho_Chi_Minh') {
   const currentDate = typeof clock === 'function' ? clock() : new Date(clock);
-  const currentInstantMs = currentDate.getTime();
 
   let ymd = date;
   if (date instanceof Date) {
@@ -51,27 +50,23 @@ function minutesUntil(date, time, clock = () => new Date(), tz = 'Asia/Ho_Chi_Mi
   const [slotH, slotM] = time.split(':').map(Number);
   const [slotYear, slotMonth, slotDay] = ymd.split('-').map(Number);
 
-  // We need to construct the slot start instant in the target timezone (e.g. UTC+7)
-  // For 'Asia/Ho_Chi_Minh', UTC offset is always +07:00 (no daylight saving).
-  // But to be robust across any valid timezone, we can use Intl or ISO string with known offset.
-  // In Vietnam timezone, offset is +07:00.
-  let slotUtcMs;
-  if (tz === 'Asia/Ho_Chi_Minh' || tz === 'Asia/Saigon') {
-    slotUtcMs = Date.UTC(slotYear, slotMonth - 1, slotDay, slotH - 7, slotM, 0, 0);
-  } else {
-    // General fallback: approximate or parse via local date formatting
-    const assumedUtc = Date.UTC(slotYear, slotMonth - 1, slotDay, slotH, slotM, 0, 0);
-    const tzParts = nowInTz(new Date(assumedUtc), tz);
-    // Find offset
-    const currentInTz = nowInTz(currentDate, tz);
-    const [curY, curM, curD] = currentInTz.date.split('-').map(Number);
-    const [curH, curMin] = currentInTz.time.split(':').map(Number);
-    const diffDays = Math.round((Date.UTC(slotYear, slotMonth - 1, slotDay) - Date.UTC(curY, curM, curD)) / 86400000);
-    const diffMinutes = diffDays * 1440 + (slotH - curH) * 60 + (slotM - curMin);
-    return diffMinutes;
-  }
-
-  return Math.floor((slotUtcMs - currentInstantMs) / (60 * 1000));
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(currentDate).map((p) => [p.type, p.value]));
+  const curY = Number(parts.year);
+  const curM = Number(parts.month);
+  const curD = Number(parts.day);
+  const curH = Number(parts.hour === '24' ? 0 : parts.hour);
+  const curMin = Number(parts.minute);
+  const diffDays = Math.round((Date.UTC(slotYear, slotMonth - 1, slotDay) - Date.UTC(curY, curM - 1, curD)) / 86400000);
+  return diffDays * 1440 + (slotH - curH) * 60 + (slotM - curMin);
 }
 
 module.exports = {

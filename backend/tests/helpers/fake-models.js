@@ -598,15 +598,6 @@ function createFakeModels() {
         if (fields.noShowAt !== undefined) b.noShowAt = fields.noShowAt;
         if (fields.vetId !== undefined) b.vetId = fields.vetId;
         return bookingOut(b);
-      },
-      async cancel(id, o, cancelledAt, cancelReason = null) {
-        const b = s.bookings.find((x) => x.id === id && x.ownerId === o && ['pending', 'confirmed'].includes(x.status));
-        if (!b) return null;
-        b.status = 'cancelled';
-        b.cancelledBy = 'customer';
-        b.cancelledAt = cancelledAt || tick();
-        b.cancelReason = cancelReason;
-        return bookingOut(b);
       }
     },
     knowledge: {

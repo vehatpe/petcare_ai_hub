@@ -67,6 +67,15 @@ test('minutesUntil calculation & boundary logic', () => {
   // Midnight boundary test: Slot at 2026-06-16 00:00 vs clock 2026-06-15 23:59 (1 min before)
   const clockBeforeMidnight = new Date('2026-06-15T16:59:00.000Z'); // 23:59 VN time
   assert.equal(minutesUntil('2026-06-16', '08:30', clockBeforeMidnight, 'Asia/Ho_Chi_Minh'), 1 + 8 * 60 + 30);
+
+  // Asia/Bangkok (same UTC+7) must match Asia/Ho_Chi_Minh
+  assert.equal(minutesUntil(slotDate, slotTime, clock120m, 'Asia/Bangkok'), 120);
+  assert.equal(minutesUntil('2026-06-16', '08:30', clockBeforeMidnight, 'Asia/Bangkok'), 1 + 8 * 60 + 30);
+
+  // Asia/Tokyo (UTC+9): 2026-06-15T14:59:00.000Z is 2026-06-15 23:59 in Tokyo -> 1 min before 2026-06-16 00:00
+  const tokyoBeforeMidnight = new Date('2026-06-15T14:59:00.000Z');
+  assert.equal(minutesUntil('2026-06-16', '00:00', tokyoBeforeMidnight, 'Asia/Tokyo'), 1);
+  assert.equal(minutesUntil('2026-06-15', '23:00', tokyoBeforeMidnight, 'Asia/Tokyo'), -59);
 });
 
 test('Customer booking cancellation & lifecycle rules', async (t) => {

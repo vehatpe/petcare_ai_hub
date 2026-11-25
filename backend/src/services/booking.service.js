@@ -70,7 +70,7 @@ function createBookingService({ models, config, clock = () => new Date() }) {
         if (b.status === 'cancelled') msg = 'Lịch hẹn này đã được hủy trước đó.';
         else if (b.status === 'completed') msg = 'Lịch hẹn đã hoàn tất nên không thể hủy.';
         else if (b.status === 'no_show') msg = 'Lịch hẹn đã được ghi nhận vắng mặt nên không thể hủy.';
-        throw conflict(msg, undefined, 'conflict');
+        throw conflict(msg, undefined, 'invalid_transition');
       }
 
       // Assert transition is valid in state machine
@@ -87,7 +87,10 @@ function createBookingService({ models, config, clock = () => new Date() }) {
       // 4. Validate reason (optional, <= 300, trim)
       let reason = null;
       if (input && input.reason !== undefined && input.reason !== null) {
-        const trimmed = String(input.reason).trim();
+        if (typeof input.reason !== 'string') {
+          throw validation('Lý do hủy không hợp lệ.', { reason: 'Lý do hủy không hợp lệ.' });
+        }
+        const trimmed = input.reason.trim();
         if (trimmed.length > 300) {
           throw validation('Lý do hủy tối đa 300 ký tự.', { reason: 'Lý do hủy tối đa 300 ký tự.' });
         }
@@ -113,17 +116,13 @@ function createBookingService({ models, config, clock = () => new Date() }) {
 
       // 5. Ghi AuditLog (Action='booking_cancel', TargetType='booking', không đưa lý do vào log)
       if (models.audit && typeof models.audit.log === 'function') {
-        try {
-          await models.audit.log({
-            actorUserId: ownerId,
-            action: 'booking_cancel',
-            targetType: 'booking',
-            targetId: id,
-            detail: null
-          });
-        } catch (_) {
-          // Audit log failure shouldn't fail the response if in separate call, but keeps logged
-        }
+        await models.audit.log({
+          actorUserId: ownerId,
+          action: 'booking_cancel',
+          targetType: 'booking',
+          targetId: id,
+          detail: null
+        });
       }
 
       return updated;
