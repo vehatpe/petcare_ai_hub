@@ -134,7 +134,7 @@ test('Provider Bookings API: list, filters, transitions, vet assignment, permiss
 
     const expectedKeys = [
       'cancelReason', 'cancelledBy', 'code', 'completedAt', 'confirmedAt', 'createdAt',
-      'customerName', 'customerPhone', 'date', 'id', 'notes', 'petName', 'petSpecies',
+      'customerName', 'customerPhone', 'date', 'id', 'noShowAt', 'notes', 'petName', 'petSpecies',
       'priceVnd', 'serviceName', 'status', 'time', 'vet'
     ].sort();
     assert.deepEqual(Object.keys(res.data.items[0]).sort(), expectedKeys);
@@ -231,4 +231,84 @@ test('Provider Bookings API: list, filters, transitions, vet assignment, permiss
     assert.equal(writeRes.status, 409);
     assert.equal(writeRes.body.code, 'facility_inactive');
   });
+});
+
+test('Provider Bookings API: timing boundaries (0, +1, -1 min), status matrix, vetId/q filters, pending/disabled provider (DB giả)', async (t) => {
+  // Clock: 2026-06-15 14:00 VN time (07:00 UTC)
+  const app = await startTestApp({ now: '2026-06-15T07:00:00.000Z' });
+  t.after(app.close);
+  seedProviderAndCustomer(app);
+  const { call } = app;
+  const { state } = app.testHelpers;
+
+  const cust = await app.registerCustomer({ fullName: 'Khách Boundary', phone: '0909777666' });
+  const pet = await app.createPet(cust.token, { name: 'Bông', species: 'cat' });
+
+  const pwHash = bcrypt.hashSync('matkhau123', 4);
+  const provId = crypto.randomUUID();
+  await app.testHelpers.addStaff('provider', {
+    id: provId, email: 'prov-b2@clinic.vn', phone: '0988111222', fullName: 'Chủ B2', status: 'active', providerId: 'clinic-a', passwordHash: pwHash
+  });
+  state.users.find((x) => x.id === provId).providerId = 'clinic-a';
+  const provToken = (await call('POST', '/auth/login', { body: { identifier: 'prov-b2@clinic.vn', password: 'matkhau123' } })).data.token;
+
+  const vetId = crypto.randomUUID();
+  await app.testHelpers.addStaff('vet', {
+    id: vetId, email: 'vet-b2@clinic.vn', phone: '0988111333', fullName: 'BS B2', status: 'active', providerId: 'clinic-a', passwordHash: pwHash
+  });
+  state.users.find((x) => x.id === vetId).providerId = 'clinic-a';
+
+  // Pending & disabled providers -> 403
+  const pendId = crypto.randomUUID();
+  await app.testHelpers.addStaff('provider', {
+    id: pendId, email: 'prov-pend@clinic.vn', phone: '0988111444', fullName: 'Chủ Pend', status: 'pending', providerId: 'clinic-a', passwordHash: pwHash
+  });
+  const disId = crypto.randomUUID();
+  await app.testHelpers.addStaff('provider', {
+    id: disId, email: 'prov-dis@clinic.vn', phone: '0988111555', fullName: 'Chủ Dis', status: 'disabled', providerId: 'clinic-a', passwordHash: pwHash
+  });
+  // Sign tokens with jwt-like login? Pending/disabled cannot login, so test via state status change on active token
+  state.users.find((x) => x.id === provId).status = 'pending';
+  assert.equal((await call('GET', '/provider/bookings', { token: provToken })).status, 403);
+  state.users.find((x) => x.id === provId).status = 'disabled';
+  assert.equal((await call('GET', '/provider/bookings', { token: provToken })).status, 403);
+  state.users.find((x) => x.id === provId).status = 'active';
+
+  // Boundary: slot at 14:00 (0 min) -> confirm blocked (slot_passed)
+  const b0 = (await call('POST', '/bookings', { token: cust.token, body: { petId: pet.id, serviceId: 'medical-general', date: '2026-06-15', time: '16:30' } })).data;
+  state.bookings.find((x) => x.id === b0.id).time = '14:00';
+  assert.equal((await call('PATCH', `/bookings/${b0.id}/confirm`, { token: provToken })).body.code, 'slot_passed');
+
+  // Slot at 15:30 (+90 min) -> confirm allowed, complete/no-show blocked (too_early)
+  const bFuture = (await call('POST', '/bookings', { token: cust.token, body: { petId: pet.id, serviceId: 'medical-general', date: '2026-06-15', time: '15:30' } })).data;
+  assert.equal((await call('PATCH', `/bookings/${bFuture.id}/confirm`, { token: provToken })).status, 200);
+  assert.equal((await call('PATCH', `/bookings/${bFuture.id}/complete`, { token: provToken })).body.code, 'too_early');
+  assert.equal((await call('PATCH', `/bookings/${bFuture.id}/no-show`, { token: provToken })).body.code, 'too_early');
+
+  // Exact boundary: 14:00 (0 min) & 13:59 (-1 min) on confirmed booking -> complete/no-show allowed; 14:01 (+1 min) -> too_early
+  state.bookings.find((x) => x.id === bFuture.id).time = '14:01';
+  assert.equal((await call('PATCH', `/bookings/${bFuture.id}/no-show`, { token: provToken })).body.code, 'too_early');
+  state.bookings.find((x) => x.id === bFuture.id).time = '14:00';
+  const nsRes = await call('PATCH', `/bookings/${bFuture.id}/no-show`, { token: provToken });
+  assert.equal(nsRes.status, 200);
+  assert.equal(nsRes.data.status, 'no_show');
+  assert.ok(nsRes.data.noShowAt);
+
+  // Full status matrix on terminal state (no_show)
+  for (const act of ['confirm', 'complete', 'no-show']) {
+    assert.equal((await call('PATCH', `/bookings/${bFuture.id}/${act}`, { token: provToken })).body.code, 'invalid_transition');
+  }
+  assert.equal((await call('PATCH', `/bookings/${bFuture.id}/cancel`, { token: provToken, body: { reason: 'Hủy sau' } })).body.code, 'invalid_transition');
+  assert.equal((await call('PATCH', `/bookings/${bFuture.id}/vet`, { token: provToken, body: { vetId } })).body.code, 'invalid_transition');
+
+  // Filter by vetId and q
+  await call('PATCH', `/bookings/${b0.id}/vet`, { token: provToken, body: { vetId } });
+  const byVet = await call('GET', `/provider/bookings?vetId=${vetId}`, { token: provToken });
+  assert.equal(byVet.status, 200);
+  assert.equal(byVet.data.items.length, 1);
+  assert.equal(byVet.data.items[0].id, b0.id);
+
+  const byQ = await call('GET', `/provider/bookings?q=${encodeURIComponent(b0.code)}`, { token: provToken });
+  assert.equal(byQ.status, 200);
+  assert.equal(byQ.data.items.length, 1);
 });
