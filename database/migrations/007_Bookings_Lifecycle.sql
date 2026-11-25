@@ -197,3 +197,5 @@ BEGIN
     CREATE UNIQUE NONCLUSTERED INDEX UX_MR_Booking ON dbo.Medical_Records (BookingId) WHERE BookingId IS NOT NULL;
 END
 GO
+
+
