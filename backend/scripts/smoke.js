@@ -306,12 +306,22 @@ async function main() {
       `HTTP ${bookFullRes.status}: ${bookFullRes.body.message}`
     );
 
-    // 12. Cancel Booking
-    const cancelRes = await api('PATCH', `/bookings/${booking1Id}/cancel`, { token });
+    // 12. Cancel Booking with reason and verify CancelledBy / CancelReason
+    const cancelReasonText = 'Bận việc gia đình đột xuất';
+    const cancelRes = await api('PATCH', `/bookings/${booking1Id}/cancel`, {
+      token,
+      body: { reason: cancelReasonText }
+    });
+    const cancelData = cancelRes.body.data;
+    const cancelOk = cancelRes.status === 200 &&
+      cancelData?.status === 'cancelled' &&
+      cancelData?.cancelledBy === 'customer' &&
+      cancelData?.cancelReason === cancelReasonText &&
+      Boolean(cancelData?.cancelledAt);
     record(
-      '12. PATCH /bookings/:id/cancel',
-      cancelRes.status === 200 && cancelRes.body.data?.status === 'cancelled',
-      `Status changed to: ${cancelRes.body.data?.status}`
+      '12. PATCH /bookings/:id/cancel with reason',
+      cancelOk,
+      `Status: ${cancelData?.status}, CancelledBy: ${cancelData?.cancelledBy}, Reason: "${cancelData?.cancelReason}"`
     );
 
     // 13. ERROR BRANCH: Cancel already cancelled booking -> 409 conflict
@@ -322,6 +332,7 @@ async function main() {
       `HTTP ${cancelAgainRes.status}: ${cancelAgainRes.body.message}`
     );
   } finally {
+    let cleanupFailed = false;
     console.log('\n--- CLEANING UP TEST DATA ON SQL SERVER ---');
     try {
       const cleanupPool = await new sql.ConnectionPool({
@@ -339,6 +350,7 @@ async function main() {
         await q.query(`
           SET ANSI_NULLS ON;
           SET QUOTED_IDENTIFIER ON;
+          DELETE FROM dbo.AuditLog WHERE ActorUserId = @userId;
           DELETE FROM dbo.Bookings WHERE UserId = @userId;
           DELETE FROM dbo.Health_Metrics WHERE PetId IN (SELECT PetId FROM dbo.Pets WHERE OwnerId = @userId);
           DELETE FROM dbo.Vaccinations WHERE PetId IN (SELECT PetId FROM dbo.Pets WHERE OwnerId = @userId);
@@ -349,11 +361,17 @@ async function main() {
       }
       await cleanupPool.close();
     } catch (cleanErr) {
+      cleanupFailed = true;
       console.error('[CLEANUP ERROR]:', cleanErr.message);
     }
 
     await new Promise((r) => server.close(r));
     await pool.close();
+
+    if (cleanupFailed) {
+      console.error('[FATAL] Cleanup failed! Exiting with code 1.');
+      process.exit(1);
+    }
   }
 
   const allPassed = results.every((r) => r.pass);

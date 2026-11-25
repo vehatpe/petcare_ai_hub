@@ -112,7 +112,7 @@ module.exports = (db) => {
 
         if (fields.cancelledAt !== undefined) {
           setClauses.push('CancelledAt = @cancelledAt');
-          params.cancelledAt = [T.dateTime2, fields.cancelledAt ? new Date(fields.cancelledAt) : null];
+          params.cancelledAt = [T.dt, fields.cancelledAt ? new Date(fields.cancelledAt) : null];
         }
         if (fields.cancelledBy !== undefined) {
           setClauses.push('CancelledBy = @cancelledBy');
@@ -124,15 +124,15 @@ module.exports = (db) => {
         }
         if (fields.confirmedAt !== undefined) {
           setClauses.push('ConfirmedAt = @confirmedAt');
-          params.confirmedAt = [T.dateTime2, fields.confirmedAt ? new Date(fields.confirmedAt) : null];
+          params.confirmedAt = [T.dt, fields.confirmedAt ? new Date(fields.confirmedAt) : null];
         }
         if (fields.completedAt !== undefined) {
           setClauses.push('CompletedAt = @completedAt');
-          params.completedAt = [T.dateTime2, fields.completedAt ? new Date(fields.completedAt) : null];
+          params.completedAt = [T.dt, fields.completedAt ? new Date(fields.completedAt) : null];
         }
         if (fields.noShowAt !== undefined) {
           setClauses.push('NoShowAt = @noShowAt');
-          params.noShowAt = [T.dateTime2, fields.noShowAt ? new Date(fields.noShowAt) : null];
+          params.noShowAt = [T.dt, fields.noShowAt ? new Date(fields.noShowAt) : null];
         }
         if (fields.vetId !== undefined) {
           setClauses.push('VetId = @vetId');
