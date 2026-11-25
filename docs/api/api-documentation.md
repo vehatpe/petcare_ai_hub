@@ -168,7 +168,14 @@ Quy tắc trạng thái tiêm: với mỗi `vaccineName` chỉ tính mũi có `a
 |---|---|---|
 | GET | `/bookings` | `Booking[]` của chủ, sắp theo ngày+giờ |
 | POST | `/bookings` | `{petId, serviceId, date, time, notes?}` → 201 `Booking` status `pending`. Kiểm tra: bé thuộc chủ; dịch vụ còn hoạt động; ngày không ở quá khứ; `time` thuộc khung giờ; còn chỗ (`SlotCapacity`); bé không trùng giờ → 409 `conflict` với `errors.time`. |
-| PATCH | `/bookings/:id/cancel` | → `Booking` status `cancelled`; đã hủy/hoàn tất → 409 |
+| PATCH | `/bookings/:id/cancel` | Customer hủy (`pending` hoặc `confirmed` còn ≥ 2 giờ) hoặc Provider hủy (lý do 3–300 ký tự) → `Booking` status `cancelled` |
+| PATCH | `/bookings/:id/confirm` | Provider xác nhận lịch `pending` → `confirmed` (409 `slot_passed` nếu đã qua giờ) |
+| PATCH | `/bookings/:id/complete` | Provider hoàn tất lịch `confirmed` → `completed` (409 `too_early` nếu chưa tới giờ) |
+| PATCH | `/bookings/:id/no-show` | Provider ghi vắng mặt `confirmed` → `no_show` (409 `too_early` nếu chưa tới giờ) |
+| PATCH | `/bookings/:id/vet` | Provider gán/đổi/bỏ gán (`vetId: uuid \| null`) cho lịch `pending\|confirmed` (409 `already_recorded` nếu Vet cũ đã ghi bệnh án) |
+| GET | `/provider/bookings` | Provider xem lịch cơ sở mình (`status`, `date`, `from`/`to` ≤ 92 ngày, `vetId`, `q`; tối đa 200 dòng, kèm `summary`) |
+
+> **Mã lỗi nghiệp vụ C2:** `invalid_transition` (409), `cancel_window` (409), `slot_passed` (409), `too_early` (409), `facility_inactive` (409), `already_recorded` (409).
 
 ## Dashboard (customer) – mọi số được tính từ DB
 `GET /dashboard/customer` →

@@ -33,6 +33,40 @@ const mapCustomer = (r) => r && ({
   createdAt: iso(r.CreatedAt)
 });
 
+const mapProvider = (r) => r && ({
+  id: lc(r.BookingId),
+  code: r.BookingCode,
+  date: r.BookingDate,
+  time: r.BookingTime,
+  status: r.Status,
+  serviceName: r.ServiceName,
+  priceVnd: r.PriceVnd,
+  petName: r.PetName,
+  petSpecies: r.PetSpecies || null,
+  customerName: r.CustomerName,
+  customerPhone: r.CustomerPhone || null,
+  vet: r.VetId ? { id: lc(r.VetId), name: r.VetName } : null,
+  notes: r.Notes,
+  cancelledBy: r.CancelledBy || null,
+  cancelReason: r.CancelReason || null,
+  createdAt: iso(r.CreatedAt),
+  confirmedAt: iso(r.ConfirmedAt),
+  completedAt: iso(r.CompletedAt)
+});
+
+const PROVIDER_SELECT = `
+  SELECT b.BookingId, b.BookingCode, b.ProviderId, b.VetId,
+         b.PetName, b.ServiceName, b.PriceVnd,
+         CONVERT(CHAR(10), b.BookingDate, 23) AS BookingDate, b.BookingTime, b.Notes, b.Status,
+         b.ConfirmedAt, b.CompletedAt, b.CancelledBy, b.CancelReason, b.CreatedAt,
+         pt.Species AS PetSpecies,
+         u.FullName AS CustomerName, u.Phone AS CustomerPhone,
+         v.FullName AS VetName
+  FROM dbo.Bookings b
+  LEFT JOIN dbo.Pets pt ON b.PetId = pt.PetId
+  INNER JOIN dbo.Users u ON b.UserId = u.UserId
+  LEFT JOIN dbo.Users v ON b.VetId = v.UserId`;
+
 module.exports = (db) => {
   const getByOwner = async (id, ownerId) =>
     mapCustomer((await db.query(`${SELECT} WHERE b.BookingId = @id AND b.UserId = @owner`, { id: [T.guid, id], owner: [T.guid, ownerId] }))[0]);
@@ -157,6 +191,89 @@ module.exports = (db) => {
         return runInTx(executor);
       }
       return db.transaction(runInTx);
+    },
+    async getByIdForProvider(id, providerId) {
+      const rows = await db.query(
+        `${PROVIDER_SELECT} WHERE b.BookingId = @id AND b.ProviderId = @providerId`,
+        { id: [T.guid, id], providerId: [T.vstr(50), providerId] }
+      );
+      return mapProvider(rows[0]);
+    },
+    async listByProvider(providerId, filters = {}) {
+      const dateWhere = ['b.ProviderId = @providerId'];
+      const params = { providerId: [T.vstr(50), providerId] };
+
+      if (filters.date) {
+        dateWhere.push('b.BookingDate = CAST(@date AS DATE)');
+        params.date = [T.ymd, filters.date];
+      } else {
+        if (filters.from) {
+          dateWhere.push('b.BookingDate >= CAST(@from AS DATE)');
+          params.from = [T.ymd, filters.from];
+        }
+        if (filters.to) {
+          dateWhere.push('b.BookingDate <= CAST(@to AS DATE)');
+          params.to = [T.ymd, filters.to];
+        }
+      }
+
+      const itemWhere = [...dateWhere];
+      if (filters.status) {
+        itemWhere.push('b.Status = @status');
+        params.status = [T.vstr(15), filters.status];
+      }
+      if (filters.vetId) {
+        itemWhere.push('b.VetId = @vetId');
+        params.vetId = [T.guid, filters.vetId];
+      }
+      if (filters.q) {
+        itemWhere.push('(b.BookingCode LIKE @q OR b.PetName LIKE @q)');
+        params.q = [T.str(100), `%${filters.q}%`];
+      }
+
+      const rows = await db.query(
+        `${PROVIDER_SELECT.replace('SELECT ', 'SELECT TOP 200 ')}
+         WHERE ${itemWhere.join(' AND ')}
+         ORDER BY b.BookingDate ASC, b.BookingTime ASC, b.BookingId ASC`,
+        params
+      );
+
+      const summaryRows = await db.query(
+        `SELECT b.Status, COUNT(*) AS n
+         FROM dbo.Bookings b
+         WHERE ${dateWhere.join(' AND ')}
+         GROUP BY b.Status`,
+        params
+      );
+      const summary = { pending: 0, confirmed: 0, completed: 0, cancelled: 0, no_show: 0 };
+      for (const r of summaryRows) {
+        if (Object.prototype.hasOwnProperty.call(summary, r.Status)) {
+          summary[r.Status] = r.n;
+        }
+      }
+
+      return { items: rows.map(mapProvider), summary };
+    },
+    async hasMedicalRecordForBooking(bookingId, vetId) {
+      const rows = await db.query(
+        `SELECT TOP 1 RecordId FROM dbo.Medical_Records WHERE BookingId = @bookingId AND VetId = @vetId`,
+        { bookingId: [T.guid, bookingId], vetId: [T.guid, vetId] }
+      );
+      return rows.length > 0;
+    },
+    async isActiveVetOfProvider(vetId, providerId) {
+      const rows = await db.query(
+        `SELECT TOP 1 UserId FROM dbo.Users WHERE UserId = @vetId AND Role = 'vet' AND Status = 'active' AND ProviderId = @providerId`,
+        { vetId: [T.guid, vetId], providerId: [T.vstr(50), providerId] }
+      );
+      return rows.length > 0;
+    },
+    async isFacilityActive(providerId) {
+      const rows = await db.query(
+        `SELECT TOP 1 IsActive FROM dbo.Providers WHERE ProviderId = @providerId`,
+        { providerId: [T.vstr(50), providerId] }
+      );
+      return rows.length > 0 && Boolean(rows[0].IsActive);
     }
   };
 };

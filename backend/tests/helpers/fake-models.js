@@ -598,6 +598,75 @@ function createFakeModels() {
         if (fields.noShowAt !== undefined) b.noShowAt = fields.noShowAt;
         if (fields.vetId !== undefined) b.vetId = fields.vetId;
         return bookingOut(b);
+      },
+      async getByIdForProvider(id, providerId) {
+        const b = s.bookings.find((x) => x.id === id && x.providerId === providerId);
+        if (!b) return null;
+        const pet = s.pets.find((p) => p.id === b.petId);
+        const owner = s.users.find((u) => u.id === b.ownerId);
+        const vet = b.vetId ? s.users.find((u) => u.id === b.vetId) : null;
+        return {
+          id: b.id,
+          code: b.code,
+          date: b.date,
+          time: b.time,
+          status: b.status,
+          serviceName: b.serviceName,
+          priceVnd: b.priceVnd,
+          petName: b.petName,
+          petSpecies: pet ? pet.species : null,
+          customerName: owner ? owner.fullName : '',
+          customerPhone: owner ? (owner.phone || null) : null,
+          vet: vet ? { id: vet.id, name: vet.fullName } : null,
+          notes: b.notes || null,
+          cancelledBy: b.cancelledBy || null,
+          cancelReason: b.cancelReason || null,
+          createdAt: b.createdAt,
+          confirmedAt: b.confirmedAt || null,
+          completedAt: b.completedAt || null
+        };
+      },
+      async listByProvider(providerId, filters = {}) {
+        const dateFiltered = s.bookings.filter((b) => {
+          if (b.providerId !== providerId) return false;
+          if (filters.date && b.date !== filters.date) return false;
+          if (!filters.date) {
+            if (filters.from && b.date < filters.from) return false;
+            if (filters.to && b.date > filters.to) return false;
+          }
+          return true;
+        });
+
+        const summary = { pending: 0, confirmed: 0, completed: 0, cancelled: 0, no_show: 0 };
+        for (const b of dateFiltered) {
+          if (Object.prototype.hasOwnProperty.call(summary, b.status)) {
+            summary[b.status] += 1;
+          }
+        }
+
+        const filtered = dateFiltered.filter((b) => {
+          if (filters.status && b.status !== filters.status) return false;
+          if (filters.vetId && b.vetId !== filters.vetId) return false;
+          if (filters.q) {
+            const qLower = filters.q.toLowerCase();
+            if (!b.code.toLowerCase().includes(qLower) && !b.petName.toLowerCase().includes(qLower)) return false;
+          }
+          return true;
+        });
+
+        filtered.sort((a, b) => (a.date + a.time + a.id).localeCompare(b.date + b.time + b.id));
+        const items = await Promise.all(filtered.slice(0, 200).map((b) => this.getByIdForProvider(b.id, providerId)));
+        return { items, summary };
+      },
+      async hasMedicalRecordForBooking(bookingId, vetId) {
+        return (s.medicalRecords || []).some((r) => r.bookingId === bookingId && r.vetId === vetId);
+      },
+      async isActiveVetOfProvider(vetId, providerId) {
+        return s.users.some((u) => u.id === vetId && u.role === 'vet' && u.status === 'active' && u.providerId === providerId);
+      },
+      async isFacilityActive(providerId) {
+        const p = s.providers.find((x) => x.id === providerId);
+        return Boolean(p && p.isActive !== false);
       }
     },
     knowledge: {
