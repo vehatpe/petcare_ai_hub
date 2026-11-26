@@ -30,7 +30,10 @@ function createBookingService({ models, config, clock = () => new Date() }) {
     : 2;
 
   return {
-    list: (ownerId) => models.bookings.listByOwner(ownerId),
+    list: async (ownerId) => {
+      const rows = await models.bookings.listByOwner(ownerId);
+      return Array.isArray(rows) ? rows.map((b) => ({ ...b, cancelWindowHours })) : rows;
+    },
 
     async create(ownerId, input) {
       const now = nowInTz(clock(), config.timezone);

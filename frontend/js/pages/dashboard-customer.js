@@ -130,12 +130,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ---------- Bookings ---------- */
-  const CANCEL_WINDOW_MS = 2 * 60 * 60 * 1000;
+  let cancelWindowHours = 2;
 
   function canCancelConfirmed(b) {
     const slotMs = Date.parse(`${b.date}T${b.time}:00+07:00`);
     if (Number.isNaN(slotMs)) return false;
-    return (slotMs - Date.now()) >= CANCEL_WINDOW_MS;
+    const windowMs = (Number(b.cancelWindowHours ?? cancelWindowHours) || 2) * 60 * 60 * 1000;
+    return (slotMs - Date.now()) >= windowMs;
   }
 
   function bookingItem(b) {
@@ -180,7 +181,9 @@ document.addEventListener('DOMContentLoaded', () => {
       </li>`;
   }
 
-  function renderBookings(list) {
+  function renderBookings(res) {
+    const list = Array.isArray(res) ? res : (Array.isArray(res?.items) ? res.items : []);
+    cancelWindowHours = Number(res?.cancelWindowHours ?? list[0]?.cancelWindowHours ?? 2) || 2;
     document.getElementById('newBookingBtn').hidden = list.length === 0;
     if (!list.length) {
       const hasPets = pets.length > 0;
