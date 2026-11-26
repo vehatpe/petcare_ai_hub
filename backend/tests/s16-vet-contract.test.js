@@ -73,6 +73,7 @@ function createDom(bodyAuth = 'vet') {
     get textContent() { return this._text; }
     setAttribute(k, v) { this.attributes.set(k, String(v)); }
     getAttribute(k) { return this.attributes.get(k) ?? null; }
+    hasAttribute(k) { return this.attributes.has(k); }
     removeAttribute(k) { this.attributes.delete(k); }
     appendChild(c) { this.children.push(c); return c; }
     removeChild(c) { this.children = this.children.filter((x) => x !== c); return c; }
@@ -101,7 +102,7 @@ function createDom(bodyAuth = 'vet') {
     querySelector(sel) {
       if (sel.startsWith('#')) return getEl(sel.slice(1));
       if (sel.startsWith('[name="')) return getEl(sel.slice(7, -2));
-      return null;
+      return getEl(`__qs_${sel}`);
     }
     querySelectorAll() { return []; }
     closest() { return null; }
@@ -124,7 +125,7 @@ function createDom(bodyAuth = 'vet') {
     createElement: (tag) => new El('', tag),
     createTextNode: (text) => ({ textContent: String(text ?? '') }),
     getElementById: getEl,
-    querySelector: (s) => (s.startsWith('#') ? getEl(s.slice(1)) : null),
+    querySelector: (s) => (s.startsWith('#') ? getEl(s.slice(1)) : getEl(`__qs_${s}`)),
     querySelectorAll: () => [],
     addEventListener(t, fn) {
       if (!docListeners.has(t)) docListeners.set(t, []);
@@ -323,7 +324,10 @@ test('S16.1 contract: real HTML script chain for vet-bookings.js & vet-booking.j
     await flush();
 
     // Switch to "All" so tomorrow's booking is included
-    await dom1.document.fire('click', { target: { closest: () => ({ dataset: { action: 'filter-all' } }) } });
+    const allBtn = dom1.document.createElement('button');
+    allBtn.dataset.action = 'filter-all';
+    allBtn.closest = () => allBtn;
+    await dom1.document.fire('click', { target: allBtn });
     await flush();
 
     const listHtml = dom1.getEl('vetBookingsList').innerHTML;
