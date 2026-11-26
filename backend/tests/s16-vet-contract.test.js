@@ -177,7 +177,6 @@ test('S16.1 contract: real HTML script chain for vet-bookings.js & vet-booking.j
     );
     store.services.push({ id: serviceId, providerId, category: 'medical', name: 'Khám tổng quát S16.1', priceVnd: 180000, isActive: true, slotCapacity: 3 });
     store.pets.push({ id: petId, ownerId: custId, name: 'Milo S16.1', species: 'dog', breed: 'Poodle', weightKg: 4.5, deletedAt: null });
-    store.weights.push({ id: crypto.randomUUID(), petId, weightKg: 4.5, measuredOn: '2026-11-20', createdAt: new Date().toISOString() });
 
     const login = async (identifier) => {
       const r = await call('POST', '/auth/login', { body: { identifier, password: 'Pass1234!' } });
@@ -188,6 +187,12 @@ test('S16.1 contract: real HTML script chain for vet-bookings.js & vet-booking.j
     const custAuth = await login('cust-s161@example.com');
     const provAuth = await login('prov-s161@example.com');
     const vetAuth = await login('vet-s161@example.com');
+
+    const wRes = await call('POST', `/pets/${petId}/weights`, {
+      token: custAuth.token,
+      body: { weightKg: 4.5, measuredOn: '2026-11-20' }
+    });
+    assert.equal(wRes.status, 201, `Create weight failed: ${wRes.message}`);
 
     const futureDate = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Ho_Chi_Minh',
