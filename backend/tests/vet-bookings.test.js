@@ -131,4 +131,26 @@ test('Vet Bookings API: access control, detail audit, medical record & vaccinati
     // b2 đã có bệnh án hoặc petDeleted -> đều 409
     assert.equal(mrRes.status, 409);
   });
+
+  await t.test('audit failure rolls back medical-record transaction', async () => {
+    const pet2 = await app.createPet(custToken, { name: 'Lu', species: 'dog' });
+    const b4Res = await call('POST', '/bookings', { token: custToken, body: { petId: pet2.id, serviceId: svcId, date: '2026-06-18', time: '08:30' } });
+    assert.equal(b4Res.status, 201);
+    const b4 = b4Res.data;
+    assert.equal((await call('PATCH', `/bookings/${b4.id}/confirm`, { token: prov.token })).status, 200);
+    assert.equal((await call('PATCH', `/bookings/${b4.id}/vet`, { token: prov.token, body: { vetId: vet1.user.id } })).status, 200);
+
+    const origLog = app.models.audit.log;
+    app.models.audit.log = async () => { throw new Error('audit_boom'); };
+    try {
+      const res = await call('POST', `/vet/bookings/${b4.id}/medical-record`, {
+        token: vet1.token,
+        body: { subjective: 's', objective: 'o', assessment: 'a', plan: 'p' }
+      });
+      assert.equal(res.status, 500);
+      assert.equal(state.records.some((r) => r.bookingId === b4.id), false);
+    } finally {
+      app.models.audit.log = origLog;
+    }
+  });
 });

@@ -109,9 +109,9 @@ function createHealthService({ models, config, clock = () => new Date() }) {
       await models.audit.log({
         actorUserId: vet.id,
         action: 'health_record_viewed',
-        targetType: 'pet',
-        targetId: b.petId || null,
-        details: null
+        targetType: b.petId ? 'pet' : 'booking',
+        targetId: b.petId || b.id,
+        detail: null
       });
       if (!pet) {
         return {
@@ -179,7 +179,7 @@ function createHealthService({ models, config, clock = () => new Date() }) {
           action: 'medical_record_created',
           targetType: 'booking',
           targetId: b.id,
-          details: null
+          detail: null
         }, tx);
         return created;
       });
@@ -211,7 +211,7 @@ function createHealthService({ models, config, clock = () => new Date() }) {
         action: 'vaccination_created',
         targetType: 'booking',
         targetId: b.id,
-        details: null
+        detail: null
       });
       const all = evaluateVaccinations(await models.health.listVaccinations(b.petId), today());
       return all.list.find((v) => v.id === row.id);

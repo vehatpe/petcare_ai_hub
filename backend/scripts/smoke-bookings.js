@@ -267,7 +267,8 @@ async function run() {
     await pool.request().input('pa', sql.VarChar(50), provAId).query('UPDATE dbo.Providers SET IsActive = 1 WHERE ProviderId = @pa');
     record('13. Facility IsActive=0 -> 409 facility_inactive', inactiveRes.status === 409 && inactiveRes.body.code === 'facility_inactive');
 
-    // 15. Vet API: list, detail (no photo), medical-record (201 then 409), cross-vet 404, vaccination (201), customer reads back
+    // 15. Vet API: list, detail (no photo), medical-record (201 then 409), cross-vet 404, vaccination (201), customer reads back,
+    //     concurrent medical-record (Promise.all -> 201 + 409), pending -> 409 invalid_transition, SQL AuditLog check
     const vetListRes = await api('GET', '/vet/bookings', { token: tokenVetA });
     const vetDetailRes = await api('GET', `/vet/bookings/${bk1.id}`, { token: tokenVetA });
     const vetMr1 = await api('POST', `/vet/bookings/${bk1.id}/medical-record`, {
@@ -287,6 +288,48 @@ async function run() {
       body: { vaccineName: 'Rabies Smoke', administeredOn: todayYmd }
     });
     const custHealthRes = await api('GET', `/health-records?petId=${petId}`, { token: tokenCust });
+
+    // (a) Concurrent medical-record on a fresh confirmed booking
+    const bkConc = (await api('POST', '/bookings', {
+      token: tokenCust,
+      body: { petId, serviceId: svcAId, date: futureYmd, time: '14:00' }
+    })).data;
+    await api('PATCH', `/bookings/${bkConc.id}/confirm`, { token: tokenProvA });
+    await api('PATCH', `/bookings/${bkConc.id}/vet`, { token: tokenProvA, body: { vetId: vetAUserId } });
+    const [conc1, conc2] = await Promise.all([
+      api('POST', `/vet/bookings/${bkConc.id}/medical-record`, {
+        token: tokenVetA,
+        body: { subjective: 'Song song 1', objective: 'o', assessment: 'a', plan: 'p' }
+      }),
+      api('POST', `/vet/bookings/${bkConc.id}/medical-record`, {
+        token: tokenVetA,
+        body: { subjective: 'Song song 2', objective: 'o', assessment: 'a', plan: 'p' }
+      })
+    ]);
+    const concStatuses = [conc1.status, conc2.status].sort((a, b) => a - b);
+    const concConflict = conc1.status === 409 ? conc1 : conc2;
+
+    // (b) Pending booking -> 409 invalid_transition for both medical-record and vaccinations
+    const bkPend = (await api('POST', '/bookings', {
+      token: tokenCust,
+      body: { petId, serviceId: svcAId, date: futureYmd, time: '15:00' }
+    })).data;
+    await api('PATCH', `/bookings/${bkPend.id}/vet`, { token: tokenProvA, body: { vetId: vetAUserId } });
+    const pendMr = await api('POST', `/vet/bookings/${bkPend.id}/medical-record`, {
+      token: tokenVetA,
+      body: { subjective: 's', objective: 'o', assessment: 'a', plan: 'p' }
+    });
+    const pendVacc = await api('POST', `/vet/bookings/${bkPend.id}/vaccinations`, {
+      token: tokenVetA,
+      body: { vaccineName: 'Rabies Pending', administeredOn: todayYmd }
+    });
+
+    // (c) SQL AuditLog check: exactly 1 health_record_viewed for vetAUserId
+    const auditViewRes = await pool.request()
+      .input('uid', sql.UniqueIdentifier, vetAUserId)
+      .query("SELECT COUNT(*) AS cnt FROM dbo.AuditLog WHERE ActorUserId = @uid AND Action = 'health_record_viewed'");
+    const auditViewCount = auditViewRes.recordset[0].cnt;
+
     const vetApiOk = vetListRes.status === 200
       && vetDetailRes.status === 200 && vetDetailRes.data.pet && vetDetailRes.data.pet.photo === undefined
       && vetMr1.status === 201
@@ -295,8 +338,12 @@ async function run() {
       && vetVaccRes.status === 201 && vetVaccRes.data.source === 'clinic'
       && custHealthRes.status === 200
       && custHealthRes.data.medicalRecords.length >= 1
-      && custHealthRes.data.vaccinations.some((v) => v.vaccineName === 'Rabies Smoke');
-    record('15. Vet API (list, detail, MR 201/409, cross-vet 404, vacc 201, customer reads)', vetApiOk);
+      && custHealthRes.data.vaccinations.some((v) => v.vaccineName === 'Rabies Smoke')
+      && concStatuses[0] === 201 && concStatuses[1] === 409 && concConflict.body.code === 'already_recorded'
+      && pendMr.status === 409 && pendMr.body.code === 'invalid_transition'
+      && pendVacc.status === 409 && pendVacc.body.code === 'invalid_transition'
+      && auditViewCount === 1;
+    record('15. Vet API (list, detail, MR 201/409, concurrent, pending 409, SQL AuditLog)', vetApiOk);
   } finally {
     let cleanupFailed = false;
     try {

@@ -130,14 +130,37 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ---------- Bookings ---------- */
+  const CANCEL_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+  function canCancelConfirmed(b) {
+    const slotMs = Date.parse(`${b.date}T${b.time}:00+07:00`);
+    if (Number.isNaN(slotMs)) return false;
+    return (slotMs - Date.now()) >= CANCEL_WINDOW_MS;
+  }
+
   function bookingItem(b) {
     const d = Fmt.parseDate(b.date);
     const status = BookingService.STATUS[b.status] || BookingService.STATUS.pending;
     const cancelled = b.status === 'cancelled';
-    const closed = cancelled || b.status === 'completed';
-    const past = b.date < Fmt.todayIso();
     const day = d ? String(d.getDate()).padStart(2, '0') : '--';
     const month = d ? `Th${d.getMonth() + 1}` : '';
+
+    let cancelNote = '';
+    if (cancelled) {
+      const byLabel = b.cancelledBy === 'provider' ? 'Cơ sở đã hủy' : 'Bạn đã hủy';
+      cancelNote = `<p class="booking-meta">${esc(byLabel)}${b.cancelReason ? `: ${esc(b.cancelReason)}` : ''}</p>`;
+    }
+
+    const sampleNote = b.providerIsSample
+      ? '<p class="booking-meta">Cơ sở minh họa — lịch chỉ để trải nghiệm, không được xác nhận</p>'
+      : '';
+
+    let actionHtml = '';
+    if (b.status === 'pending' || (b.status === 'confirmed' && canCancelConfirmed(b))) {
+      actionHtml = `<button type="button" class="btn btn-ghost btn-sm" data-cancel-booking="${esc(b.id)}">Hủy lịch</button>`;
+    } else if (b.status === 'confirmed') {
+      actionHtml = '<span class="booking-meta">Lịch sát giờ hẹn, vui lòng liên hệ cơ sở</span>';
+    }
 
     return `
       <li class="booking-item${cancelled ? ' is-cancelled' : ''}">
@@ -146,10 +169,12 @@ document.addEventListener('DOMContentLoaded', () => {
           <p class="booking-title">${esc(b.serviceName)}</p>
           <p class="booking-meta">${esc(b.petName)} · ${esc(Fmt.dateLong(b.date))} lúc ${esc(b.time)}</p>
           <p class="booking-meta">${esc(b.providerName)}</p>
+          ${sampleNote}
+          ${cancelNote}
           <div class="booking-foot">
-            <span class="badge ${status.badge}">${esc(past && !closed ? 'Đã qua ngày hẹn' : status.label)}</span>
+            <span class="badge ${status.badge}">${esc(status.label)}</span>
             <span class="booking-code">Mã ${esc(b.code || b.id)}</span>
-            ${!closed && !past ? `<button type="button" class="btn btn-ghost btn-sm" data-cancel-booking="${esc(b.id)}">Hủy lịch</button>` : ''}
+            ${actionHtml}
           </div>
         </div>
       </li>`;
@@ -170,23 +195,76 @@ document.addEventListener('DOMContentLoaded', () => {
     bookingListEl.innerHTML = `<ul class="booking-list" data-reveal-group>${list.map(bookingItem).join('')}</ul>`;
   }
 
+  function openCancelModal(bookingId) {
+    return new Promise((resolve) => {
+      const prevFocus = document.activeElement;
+      const backdrop = document.createElement('div');
+      backdrop.className = 'dialog-backdrop';
+      backdrop.innerHTML = `
+        <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="cancelBookingTitle">
+          <h3 id="cancelBookingTitle">Hủy lịch hẹn này?</h3>
+          <p>Lịch hẹn sẽ được đánh dấu là đã hủy. Bạn có thể nhập lý do (không bắt buộc).</p>
+          <div class="form-group">
+            <label for="cancelReasonInput">Lý do hủy (tùy chọn)</label>
+            <textarea id="cancelReasonInput" class="form-control" rows="3" maxlength="300" placeholder="Ví dụ: Đổi kế hoạch, bận việc đột xuất..."></textarea>
+            <div class="form-hint" id="cancelReasonCount">0 / 300</div>
+          </div>
+          <div class="dialog-actions">
+            <button type="button" class="btn btn-outline" data-modal-cancel>Giữ lịch</button>
+            <button type="button" class="btn btn-danger" data-modal-confirm>Xác nhận hủy</button>
+          </div>
+        </div>`;
+      document.body.appendChild(backdrop);
+
+      const input = backdrop.querySelector('#cancelReasonInput');
+      const countEl = backdrop.querySelector('#cancelReasonCount');
+      const keepBtn = backdrop.querySelector('[data-modal-cancel]');
+      const confirmBtn = backdrop.querySelector('[data-modal-confirm]');
+      input.focus();
+
+      const close = (result) => {
+        document.removeEventListener('keydown', onKey);
+        backdrop.remove();
+        if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
+        resolve(result);
+      };
+
+      const onKey = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          close(null);
+        }
+      };
+      document.addEventListener('keydown', onKey);
+
+      input.addEventListener('input', () => {
+        countEl.textContent = `${input.value.length} / 300`;
+      });
+      keepBtn.addEventListener('click', () => close(null));
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) close(null);
+      });
+      confirmBtn.addEventListener('click', () => {
+        confirmBtn.disabled = true;
+        keepBtn.disabled = true;
+        close(input.value.trim());
+      });
+    });
+  }
+
   bookingListEl.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-cancel-booking]');
     if (!btn) return;
-    const ok = await Dialog.confirm({
-      title: 'Hủy lịch hẹn này?',
-      text: 'Lịch hẹn sẽ được đánh dấu là đã hủy. Bạn có thể đặt lịch mới bất cứ lúc nào.',
-      confirmLabel: 'Hủy lịch',
-      cancelLabel: 'Giữ lịch',
-      danger: true
-    });
-    if (!ok) return;
+    const reason = await openCancelModal(btn.dataset.cancelBooking);
+    if (reason === null) return;
+    btn.disabled = true;
     try {
-      await BookingService.cancel(btn.dataset.cancelBooking);
+      await BookingService.cancel(btn.dataset.cancelBooking, reason);
       Toast.show({ title: 'Đã hủy lịch hẹn', message: 'Lịch hẹn đã được đánh dấu là đã hủy.', type: 'success' });
       loadAll();
     } catch (err) {
       Toast.show({ title: 'Chưa hủy được lịch', message: err.message, type: 'danger' });
+      loadAll();
     }
   });
 

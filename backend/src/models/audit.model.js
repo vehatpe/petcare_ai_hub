@@ -2,8 +2,8 @@
 const { T } = require('./db');
 
 module.exports = (db) => ({
-  async log({ actorUserId, action, targetType, targetId, detail }) {
-    await db.query(
+  async log({ actorUserId, action, targetType, targetId, detail }, executor = db) {
+    await executor.query(
       `INSERT INTO dbo.AuditLog (ActorUserId, Action, TargetType, TargetId, Detail)
        VALUES (@actorUserId, @action, @targetType, @targetId, @detail)`,
       {
