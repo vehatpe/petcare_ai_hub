@@ -111,7 +111,8 @@ test('S16 static nav: header.js and landing.js expose vet-bookings.html for vet 
 });
 
 test('S16 contract: vet-bookings.js & vet-booking.js with real app data', async () => {
-  const { baseUrl, store, close } = await startTestApp({ rateLimit: { max: 500 } });
+  const app = await startTestApp({ rateLimit: { max: 500 } });
+  const { baseUrl, close, testHelpers: { state: store } } = app;
   try {
     const providerId = crypto.randomUUID();
     const provUserId = crypto.randomUUID();
@@ -126,6 +127,7 @@ test('S16 contract: vet-bookings.js & vet-booking.js with real app data', async 
       name: 'Phòng khám Vet S16',
       area: 'Quận 1',
       status: 'active',
+      isActive: true,
       isSample: false
     });
     store.users.push(
