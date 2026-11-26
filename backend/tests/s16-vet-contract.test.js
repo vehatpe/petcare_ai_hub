@@ -26,6 +26,22 @@ function extractPageScripts(htmlFile) {
   return out;
 }
 
+function makeEvent(type, init = {}, defaultTarget = null) {
+  const ev = {
+    type,
+    target: init.target || defaultTarget,
+    currentTarget: init.currentTarget || defaultTarget,
+    defaultPrevented: false,
+    key: init.key || '',
+    code: init.code || '',
+    button: init.button ?? 0,
+    ...init,
+    preventDefault() { this.defaultPrevented = true; },
+    stopPropagation() {}
+  };
+  return ev;
+}
+
 function createDom(bodyAuth = 'vet') {
   const els = new Map();
   class El {
@@ -36,9 +52,10 @@ function createDom(bodyAuth = 'vet') {
       this._text = '';
       this.hidden = false;
       this.disabled = false;
+      this.checked = false;
       this.value = '';
       this.dataset = {};
-      this.attrs = new Map();
+      this.attributes = new Map();
       this._listeners = new Map();
       this.children = [];
       this.style = {};
@@ -46,7 +63,7 @@ function createDom(bodyAuth = 'vet') {
         _s: new Set(),
         add: (...c) => c.forEach((x) => this.classList._s.add(x)),
         remove: (...c) => c.forEach((x) => this.classList._s.delete(x)),
-        toggle: (c, f) => (f ? this.classList._s.add(c) : this.classList._s.delete(c)),
+        toggle: (c, f) => (f === undefined ? (this.classList._s.has(c) ? (this.classList._s.delete(c), false) : (this.classList._s.add(c), true)) : (f ? this.classList._s.add(c) : this.classList._s.delete(c), !!f)),
         contains: (c) => this.classList._s.has(c)
       };
     }
@@ -54,18 +71,32 @@ function createDom(bodyAuth = 'vet') {
     get innerHTML() { return this._html; }
     set textContent(v) { this._text = String(v ?? ''); this._html = this._text; }
     get textContent() { return this._text; }
-    setAttribute(k, v) { this.attrs.set(k, String(v)); }
-    getAttribute(k) { return this.attrs.get(k) ?? null; }
+    setAttribute(k, v) { this.attributes.set(k, String(v)); }
+    getAttribute(k) { return this.attributes.get(k) ?? null; }
+    removeAttribute(k) { this.attributes.delete(k); }
     appendChild(c) { this.children.push(c); return c; }
+    removeChild(c) { this.children = this.children.filter((x) => x !== c); return c; }
     remove() {}
     focus() {}
+    blur() {}
+    showModal() {}
+    close() {}
+    matches() { return false; }
     addEventListener(t, fn) {
       if (!this._listeners.has(t)) this._listeners.set(t, []);
       this._listeners.get(t).push(fn);
     }
+    removeEventListener(t, fn) {
+      const list = this._listeners.get(t);
+      if (list) this._listeners.set(t, list.filter((f) => f !== fn));
+    }
+    async dispatchEvent(ev) {
+      const e = typeof ev === 'string' ? makeEvent(ev, {}, this) : makeEvent(ev.type, ev, this);
+      for (const fn of this._listeners.get(e.type) || []) await fn(e);
+      return !e.defaultPrevented;
+    }
     async dispatch(t, ev = {}) {
-      const list = this._listeners.get(t) || [];
-      for (const fn of list) await fn({ preventDefault() {}, target: this, ...ev });
+      return this.dispatchEvent(makeEvent(t, ev, this));
     }
     querySelector(sel) {
       if (sel.startsWith('#')) return getEl(sel.slice(1));
@@ -83,12 +114,15 @@ function createDom(bodyAuth = 'vet') {
 
   const body = new El('body', 'BODY');
   body.dataset.pageAuth = bodyAuth;
+  const head = new El('head', 'HEAD');
   const docListeners = new Map();
   const document = {
     documentElement: { dataset: {}, classList: body.classList },
     body,
+    head,
     readyState: 'loading',
     createElement: (tag) => new El('', tag),
+    createTextNode: (text) => ({ textContent: String(text ?? '') }),
     getElementById: getEl,
     querySelector: (s) => (s.startsWith('#') ? getEl(s.slice(1)) : null),
     querySelectorAll: () => [],
@@ -96,8 +130,17 @@ function createDom(bodyAuth = 'vet') {
       if (!docListeners.has(t)) docListeners.set(t, []);
       docListeners.get(t).push(fn);
     },
+    removeEventListener(t, fn) {
+      const list = docListeners.get(t);
+      if (list) docListeners.set(t, list.filter((f) => f !== fn));
+    },
+    async dispatchEvent(ev) {
+      const e = typeof ev === 'string' ? makeEvent(ev, {}, body) : makeEvent(ev.type, ev, body);
+      for (const fn of docListeners.get(e.type) || []) await fn(e);
+      return !e.defaultPrevented;
+    },
     async fire(t, ev = {}) {
-      for (const fn of docListeners.get(t) || []) await fn({ target: body, ...ev });
+      return this.dispatchEvent(makeEvent(t, ev, body));
     }
   };
   return { document, getEl };
@@ -133,6 +176,7 @@ function runHtmlScripts(htmlPath, { dom, storage, locationSearch = '', fetchImpl
     decodeURIComponent,
     setTimeout,
     clearTimeout,
+    requestAnimationFrame: (cb) => setTimeout(cb, 0),
     document: dom.document,
     localStorage: storage,
     sessionStorage: storage,
