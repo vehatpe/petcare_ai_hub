@@ -148,10 +148,15 @@ test('S16 contract: vet-bookings.js & vet-booking.js with real app data', async 
     const provToken = await login('prov-s16@example.com');
     const vetToken = await login('vet-s16@example.com');
 
-    const futureDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const futureDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date(Date.now() + 86400000));
     const createRes = await call('POST', '/bookings', {
       token: custToken,
-      body: { petId, serviceId, date: futureDate, time: '10:00', notes: 'Bé ho nhẹ' }
+      body: { petId, serviceId, date: futureDate, time: '14:00', notes: 'Bé ho nhẹ' }
     });
     assert.equal(createRes.status, 201, `Create booking failed: ${createRes.message}`);
     const bookingId = createRes.data.id;
