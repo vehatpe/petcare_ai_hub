@@ -171,11 +171,27 @@ function runHtmlScripts(htmlPath, { dom, storage, locationSearch = '', fetchImpl
     console,
     Intl,
     Date,
+    Event,
+    CustomEvent,
+    EventTarget,
+    URL,
     URLSearchParams,
+    AbortController,
+    Headers,
+    Request,
+    Response,
+    FormData,
+    TextEncoder,
+    TextDecoder,
+    crypto,
+    structuredClone,
+    queueMicrotask,
     encodeURIComponent,
     decodeURIComponent,
     setTimeout,
     clearTimeout,
+    setInterval,
+    clearInterval,
     requestAnimationFrame: (cb) => setTimeout(cb, 0),
     document: dom.document,
     localStorage: storage,
@@ -202,6 +218,7 @@ function runHtmlScripts(htmlPath, { dom, storage, locationSearch = '', fetchImpl
   });
   ctx.window = ctx;
   ctx.self = ctx;
+  ctx.globalThis = ctx;
   for (const scriptPath of scripts) {
     const code = fs.readFileSync(scriptPath, 'utf8');
     vm.runInContext(code, ctx, { filename: scriptPath });
