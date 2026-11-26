@@ -294,10 +294,10 @@ async function run() {
     // (a) Concurrent medical-record on a fresh confirmed booking
     const bkConc = (await api('POST', '/bookings', {
       token: tokenCust,
-      body: { petId, serviceId: svcAId, date: futureYmd, time: '14:00' }
+      body: { petId, serviceId: svcId, date: tomorrowYmd, time: '14:00' }
     })).data;
-    await api('PATCH', `/bookings/${bkConc.id}/confirm`, { token: tokenProvA });
-    await api('PATCH', `/bookings/${bkConc.id}/vet`, { token: tokenProvA, body: { vetId: vetAUserId } });
+    await api('PATCH', `/bookings/${bkConc.id}/confirm`, { token: tokenPA });
+    await api('PATCH', `/bookings/${bkConc.id}/vet`, { token: tokenPA, body: { vetId: vetAUserId } });
     const [conc1, conc2] = await Promise.all([
       api('POST', `/vet/bookings/${bkConc.id}/medical-record`, {
         token: tokenVetA,
@@ -314,9 +314,9 @@ async function run() {
     // (b) Pending booking -> 409 invalid_transition for both medical-record and vaccinations
     const bkPend = (await api('POST', '/bookings', {
       token: tokenCust,
-      body: { petId, serviceId: svcAId, date: futureYmd, time: '15:00' }
+      body: { petId, serviceId: svcId, date: tomorrowYmd, time: '15:30' }
     })).data;
-    await api('PATCH', `/bookings/${bkPend.id}/vet`, { token: tokenProvA, body: { vetId: vetAUserId } });
+    await api('PATCH', `/bookings/${bkPend.id}/vet`, { token: tokenPA, body: { vetId: vetAUserId } });
     const pendMr = await api('POST', `/vet/bookings/${bkPend.id}/medical-record`, {
       token: tokenVetA,
       body: { subjective: 's', objective: 'o', assessment: 'a', plan: 'p' }
