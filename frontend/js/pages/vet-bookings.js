@@ -5,8 +5,8 @@
   'use strict';
 
   document.addEventListener('DOMContentLoaded', () => {
-    const user = AuthService.requireRole(['vet']);
-    if (!user) return;
+    const user = AuthService.currentUser();
+    if (!user || user.role !== 'vet') return;
     if (user.mustChangePassword) {
       window.location.replace('change-password.html');
       return;
@@ -31,7 +31,7 @@
       }).format(new Date());
     }
 
-    let allItems = [];
+    let searchTimer = null;
     const today = todayVnIso();
     fromEl.value = today;
     toEl.value = today;
@@ -46,27 +46,15 @@
       allBtn.classList.toggle('btn-ghost', !isAll);
     }
 
-    function applyFilters() {
-      const status = statusEl.value;
-      const from = fromEl.value;
-      const to = toEl.value;
-      const q = (searchEl.value || '').trim().toLowerCase();
-
-      const filtered = allItems.filter((b) => {
-        if (status && b.status !== status) return false;
-        if (from && b.date < from) return false;
-        if (to && b.date > to) return false;
-        if (q) {
-          const hay = [b.petName, b.petSpecies, b.serviceName, b.ownerName, b.code]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase();
-          if (!hay.includes(q)) return false;
-        }
-        return true;
-      });
-
-      renderList(filtered);
+    function buildQuery() {
+      const qs = new URLSearchParams();
+      if (statusEl.value) qs.set('status', statusEl.value);
+      if (fromEl.value) qs.set('from', fromEl.value);
+      if (toEl.value) qs.set('to', toEl.value);
+      const q = (searchEl.value || '').trim();
+      if (q) qs.set('q', q);
+      const s = qs.toString();
+      return s ? `?${s}` : '';
     }
 
     function renderItem(b) {
@@ -79,7 +67,7 @@
         : '<span class="badge badge-warning">Chưa có bệnh án</span>';
 
       const petInfo = b.petSpecies ? `${esc(b.petName)} (${esc(b.petSpecies)})` : esc(b.petName || 'Thú cưng');
-      const ownerInfo = b.ownerName ? `Chủ nuôi: ${esc(b.ownerName)}` : '';
+      const ownerInfo = b.customerName ? `Chủ nuôi: ${esc(b.customerName)}` : '';
       const dateStr = b.date ? Fmt.dateLong(b.date) : '';
       const timeStr = b.time ? `lúc ${esc(b.time)}` : '';
 
@@ -100,7 +88,8 @@
         </li>`;
     }
 
-    function renderList(items) {
+    function renderList(data) {
+      const items = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
       if (!items.length) {
         listEl.innerHTML = `
           <div class="empty-state">
@@ -116,23 +105,24 @@
       updateQuickButtons();
       return Panel.load(
         listEl,
-        () => Api.get('/vet/bookings'),
-        (data) => {
-          allItems = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
-          applyFilters();
-        },
+        () => Api.get(`/vet/bookings${buildQuery()}`),
+        renderList,
         { loading: 'Đang tải lịch khám…' }
       );
     }
 
     filterForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      updateQuickButtons();
-      applyFilters();
+      loadBookings();
     });
 
-    statusEl.addEventListener('change', applyFilters);
-    searchEl.addEventListener('input', applyFilters);
+    statusEl.addEventListener('change', loadBookings);
+    fromEl.addEventListener('change', loadBookings);
+    toEl.addEventListener('change', loadBookings);
+    searchEl.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(loadBookings, 300);
+    });
 
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action]');
@@ -142,13 +132,11 @@
         const t = todayVnIso();
         fromEl.value = t;
         toEl.value = t;
-        updateQuickButtons();
-        applyFilters();
+        loadBookings();
       } else if (action === 'filter-all') {
         fromEl.value = '';
         toEl.value = '';
-        updateQuickButtons();
-        applyFilters();
+        loadBookings();
       }
     });
 

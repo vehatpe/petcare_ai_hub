@@ -5,8 +5,8 @@
   'use strict';
 
   document.addEventListener('DOMContentLoaded', () => {
-    const user = AuthService.requireRole(['vet']);
-    if (!user) return;
+    const user = AuthService.currentUser();
+    if (!user || user.role !== 'vet') return;
     if (user.mustChangePassword) {
       window.location.replace('change-password.html');
       return;
@@ -113,7 +113,7 @@
         <ul class="history-list">
           ${weights.slice(0, 5).map((w) => `
             <li class="history-item">
-              <span>${esc(w.recordedOn ? Fmt.dateLong(w.recordedOn) : '')}</span>:
+              <span>${esc(w.measuredOn ? Fmt.dateLong(w.measuredOn) : '')}</span>:
               <strong>${esc(Fmt.kg(w.weightKg))}</strong>
             </li>`).join('')}
         </ul>`;

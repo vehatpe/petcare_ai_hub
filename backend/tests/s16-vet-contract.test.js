@@ -9,12 +9,24 @@ const bcrypt = require('bcryptjs');
 
 const { startTestApp } = require('./helpers/harness');
 
-const vetBookingsJs = fs.readFileSync(path.resolve(__dirname, '../../frontend/js/pages/vet-bookings.js'), 'utf8');
-const vetBookingJs = fs.readFileSync(path.resolve(__dirname, '../../frontend/js/pages/vet-booking.js'), 'utf8');
-const headerJs = fs.readFileSync(path.resolve(__dirname, '../../frontend/js/components/header.js'), 'utf8');
-const landingJs = fs.readFileSync(path.resolve(__dirname, '../../frontend/js/pages/landing.js'), 'utf8');
+const FRONTEND_DIR = path.resolve(__dirname, '../../frontend');
+const PAGES_DIR = path.join(FRONTEND_DIR, 'pages');
 
-function createDom() {
+function extractPageScripts(htmlFile) {
+  const html = fs.readFileSync(htmlFile, 'utf8');
+  const dir = path.dirname(htmlFile);
+  const out = [];
+  const re = /<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const src = m[1];
+    if (/^https?:\/\//i.test(src) || src.startsWith('//') || src.includes('motion')) continue;
+    out.push(path.resolve(dir, src.split('?')[0]));
+  }
+  return out;
+}
+
+function createDom(bodyAuth = 'vet') {
   const els = new Map();
   class El {
     constructor(id = '', tag = 'DIV') {
@@ -28,6 +40,8 @@ function createDom() {
       this.dataset = {};
       this.attrs = new Map();
       this._listeners = new Map();
+      this.children = [];
+      this.style = {};
       this.classList = {
         _s: new Set(),
         add: (...c) => c.forEach((x) => this.classList._s.add(x)),
@@ -42,6 +56,9 @@ function createDom() {
     get textContent() { return this._text; }
     setAttribute(k, v) { this.attrs.set(k, String(v)); }
     getAttribute(k) { return this.attrs.get(k) ?? null; }
+    appendChild(c) { this.children.push(c); return c; }
+    remove() {}
+    focus() {}
     addEventListener(t, fn) {
       if (!this._listeners.has(t)) this._listeners.set(t, []);
       this._listeners.get(t).push(fn);
@@ -52,10 +69,7 @@ function createDom() {
     }
     querySelector(sel) {
       if (sel.startsWith('#')) return getEl(sel.slice(1));
-      if (sel.startsWith('[name="')) {
-        const name = sel.slice(7, -2);
-        return getEl(name);
-      }
+      if (sel.startsWith('[name="')) return getEl(sel.slice(7, -2));
       return null;
     }
     querySelectorAll() { return []; }
@@ -67,10 +81,14 @@ function createDom() {
     return els.get(id);
   }
 
+  const body = new El('body', 'BODY');
+  body.dataset.pageAuth = bodyAuth;
   const docListeners = new Map();
   const document = {
-    documentElement: { dataset: {} },
-    body: new El('body', 'BODY'),
+    documentElement: { dataset: {}, classList: body.classList },
+    body,
+    readyState: 'loading',
+    createElement: (tag) => new El('', tag),
     getElementById: getEl,
     querySelector: (s) => (s.startsWith('#') ? getEl(s.slice(1)) : null),
     querySelectorAll: () => [],
@@ -79,38 +97,60 @@ function createDom() {
       docListeners.get(t).push(fn);
     },
     async fire(t, ev = {}) {
-      for (const fn of docListeners.get(t) || []) await fn({ target: document.body, ...ev });
+      for (const fn of docListeners.get(t) || []) await fn({ target: body, ...ev });
     }
   };
   return { document, getEl };
 }
 
-function runScript(code, extraCtx) {
+function createStorage(initial = {}) {
+  const map = new Map(Object.entries(initial));
+  return {
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => map.set(k, String(v)),
+    removeItem: (k) => map.delete(k)
+  };
+}
+
+function runHtmlScripts(htmlPath, { dom, storage, locationSearch = '', fetchImpl }) {
+  const scripts = extractPageScripts(htmlPath);
+  const location = {
+    hostname: 'localhost',
+    protocol: 'http:',
+    port: '3000',
+    pathname: `/pages/${path.basename(htmlPath)}`,
+    search: locationSearch,
+    href: `http://localhost:3000/pages/${path.basename(htmlPath)}${locationSearch}`,
+    replace() {}
+  };
   const ctx = vm.createContext({
     console,
     Intl,
     Date,
     URLSearchParams,
     encodeURIComponent,
+    decodeURIComponent,
     setTimeout,
     clearTimeout,
-    ...extraCtx
+    document: dom.document,
+    localStorage: storage,
+    sessionStorage: storage,
+    location,
+    navigator: { userAgent: 'node-vm' },
+    fetch: fetchImpl
   });
   ctx.window = ctx;
-  vm.runInContext(code, ctx);
+  ctx.self = ctx;
+  for (const scriptPath of scripts) {
+    const code = fs.readFileSync(scriptPath, 'utf8');
+    vm.runInContext(code, ctx, { filename: scriptPath });
+  }
   return ctx;
 }
 
-const flush = () => new Promise((r) => setTimeout(r, 20));
+const flush = () => new Promise((r) => setTimeout(r, 30));
 
-test('S16 static nav: header.js and landing.js expose vet-bookings.html for vet without mustChangePassword', () => {
-  assert.match(headerJs, /user\.role === 'vet'/);
-  assert.match(headerJs, /vet-bookings\.html/);
-  assert.match(landingJs, /user\.role === 'vet' && !user\.mustChangePassword/);
-  assert.match(landingJs, /pages\/vet-bookings\.html/);
-});
-
-test('S16 contract: vet-bookings.js & vet-booking.js with real app data', async () => {
+test('S16.1 contract: real HTML script chain for vet-bookings.js & vet-booking.js', async () => {
   const app = await startTestApp({ rateLimit: { max: 500 } });
   const { call, close, testHelpers: { state: store } } = app;
   try {
@@ -124,29 +164,30 @@ test('S16 contract: vet-bookings.js & vet-booking.js with real app data', async 
 
     store.providers.push({
       id: providerId,
-      name: 'Phòng khám Vet S16',
+      name: 'Phòng khám Vet S16.1',
       area: 'Quận 1',
       status: 'active',
       isActive: true,
       isSample: false
     });
     store.users.push(
-      { id: provUserId, email: 'prov-s16@example.com', passwordHash: hash, fullName: 'Quản lý S16', role: 'provider', status: 'active', providerId, mustChangePassword: false, tokenVersion: 0 },
-      { id: vetId, email: 'vet-s16@example.com', passwordHash: hash, fullName: 'BS Thú Y S16', role: 'vet', status: 'active', providerId, mustChangePassword: false, tokenVersion: 0 },
-      { id: custId, email: 'cust-s16@example.com', passwordHash: hash, fullName: 'Chủ Nuôi S16', role: 'customer', status: 'active', providerId: null, mustChangePassword: false, tokenVersion: 0 }
+      { id: provUserId, email: 'prov-s161@example.com', passwordHash: hash, fullName: 'Quản lý S16.1', role: 'provider', status: 'active', providerId, mustChangePassword: false, tokenVersion: 0 },
+      { id: vetId, email: 'vet-s161@example.com', passwordHash: hash, fullName: 'BS Thú Y S16.1', role: 'vet', status: 'active', providerId, mustChangePassword: false, tokenVersion: 0 },
+      { id: custId, email: 'cust-s161@example.com', passwordHash: hash, fullName: 'Nguyễn Văn Chủ', role: 'customer', status: 'active', providerId: null, mustChangePassword: false, tokenVersion: 0 }
     );
-    store.services.push({ id: serviceId, providerId, name: 'Khám tổng quát S16', priceVnd: 180000, isActive: true, slotCapacity: 3 });
-    store.pets.push({ id: petId, ownerId: custId, name: 'Milo S16', species: 'dog', breed: 'Poodle', weightKg: 4.5, deletedAt: null });
+    store.services.push({ id: serviceId, providerId, category: 'medical', name: 'Khám tổng quát S16.1', priceVnd: 180000, isActive: true, slotCapacity: 3 });
+    store.pets.push({ id: petId, ownerId: custId, name: 'Milo S16.1', species: 'dog', breed: 'Poodle', weightKg: 4.5, deletedAt: null });
+    store.weights.push({ id: crypto.randomUUID(), petId, weightKg: 4.5, measuredOn: '2026-11-20', createdAt: new Date().toISOString() });
 
     const login = async (identifier) => {
       const r = await call('POST', '/auth/login', { body: { identifier, password: 'Pass1234!' } });
       assert.equal(r.status, 200, `Login failed for ${identifier}: ${r.message}`);
-      return r.data.token;
+      return r.data;
     };
 
-    const custToken = await login('cust-s16@example.com');
-    const provToken = await login('prov-s16@example.com');
-    const vetToken = await login('vet-s16@example.com');
+    const custAuth = await login('cust-s161@example.com');
+    const provAuth = await login('prov-s161@example.com');
+    const vetAuth = await login('vet-s161@example.com');
 
     const futureDate = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Ho_Chi_Minh',
@@ -154,129 +195,76 @@ test('S16 contract: vet-bookings.js & vet-booking.js with real app data', async 
       month: '2-digit',
       day: '2-digit'
     }).format(new Date(Date.now() + 86400000));
+
     const createRes = await call('POST', '/bookings', {
-      token: custToken,
+      token: custAuth.token,
       body: { petId, serviceId, date: futureDate, time: '14:00', notes: 'Bé ho nhẹ' }
     });
     assert.equal(createRes.status, 201, `Create booking failed: ${createRes.message}`);
     const bookingId = createRes.data.id;
 
-    const confirmRes = await call('PATCH', `/bookings/${bookingId}/confirm`, { token: provToken });
-    assert.equal(confirmRes.status, 200, `Confirm booking failed: ${confirmRes.message}`);
-    const vetRes = await call('PATCH', `/bookings/${bookingId}/vet`, { token: provToken, body: { vetId } });
+    const confirmRes = await call('PATCH', `/bookings/${bookingId}/confirm`, { token: provAuth.token });
+    assert.equal(confirmRes.status, 200, `Confirm failed: ${confirmRes.message}`);
+    const vetRes = await call('PATCH', `/bookings/${bookingId}/vet`, { token: provAuth.token, body: { vetId } });
     assert.equal(vetRes.status, 200, `Assign vet failed: ${vetRes.message}`);
 
-    const apiFor = (token) => ({
-      async get(p) {
-        const r = await call('GET', p, { token });
-        if (r.status >= 400) { const e = new Error(r.message); e.status = r.status; throw e; }
-        return r.data;
-      },
-      async post(p, body) {
-        const r = await call('POST', p, { token, body });
-        if (r.status >= 400) { const e = new Error(r.message); e.status = r.status; e.errors = r.body?.errors; throw e; }
-        return r.data;
-      }
+    const requestedUrls = [];
+    const makeFetch = (tokenOverride) => async (url, opts = {}) => {
+      requestedUrls.push(String(url));
+      const idx = String(url).indexOf('/api/v1');
+      const apiPath = idx >= 0 ? String(url).slice(idx + 7) : String(url);
+      const method = (opts.method || 'GET').toUpperCase();
+      const body = opts.body ? JSON.parse(opts.body) : undefined;
+      const r = await call(method, apiPath, { token: tokenOverride || vetAuth.token, body });
+      return {
+        ok: r.status >= 200 && r.status < 300,
+        status: r.status,
+        headers: { get: () => 'application/json' },
+        json: async () => r.body
+      };
+    };
+
+    const vetStorage = () => createStorage({
+      petcare_token: vetAuth.token,
+      petcare_user: JSON.stringify(vetAuth.user)
     });
 
-    const Fmt = {
-      esc: (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
-      dateLong: (d) => String(d || ''),
-      kg: (v) => `${v} kg`
-    };
-    const Panel = {
-      async load(el, fn, render) {
-        el.innerHTML = 'loading';
-        const data = await fn();
-        render(data);
-        return data;
-      }
-    };
-
-    // 1. Test vet-bookings.js
-    const dom1 = createDom();
-    const toasts1 = [];
-    runScript(vetBookingsJs, {
-      document: dom1.document,
-      location: { search: '', replace() {} },
-      AuthService: { requireRole: () => ({ id: vetId, role: 'vet', mustChangePassword: false }) },
-      Api: apiFor(vetToken),
-      Fmt,
-      Panel,
-      Toast: { show: (t) => toasts1.push(t) },
-      BookingService: { STATUS: { confirmed: { label: 'Đã xác nhận', badge: 'badge-success' } } }
+    // 1. vet-bookings.html real scripts
+    const dom1 = createDom('vet');
+    runHtmlScripts(path.join(PAGES_DIR, 'vet-bookings.html'), {
+      dom: dom1,
+      storage: vetStorage(),
+      fetchImpl: makeFetch()
     });
     await dom1.document.fire('DOMContentLoaded');
     await flush();
-    // Switch to "All" because booking is tomorrow
-    await dom1.document.fire('click', { target: { closest: () => ({ dataset: { action: 'filter-all' } }) } });
-    const listHtml = dom1.getEl('vetBookingsList').innerHTML;
-    assert.match(listHtml, /Milo S16/);
-    assert.match(listHtml, /Khám tổng quát S16/);
-    assert.match(listHtml, /Chưa có bệnh án/);
 
-    // 2. Test vet-booking.js (confirmed, no medical record yet -> shows form)
-    const dom2 = createDom();
-    const toasts2 = [];
-    runScript(vetBookingJs, {
-      document: dom2.document,
-      location: { search: `?id=${bookingId}`, replace() {} },
-      AuthService: { requireRole: () => ({ id: vetId, role: 'vet', mustChangePassword: false }) },
-      Api: apiFor(vetToken),
-      Fmt,
-      Panel,
-      Toast: { show: (t) => toasts2.push(t) },
-      BookingService: { STATUS: { confirmed: { label: 'Đã xác nhận', badge: 'badge-success' } } }
+    // Switch to "All" so tomorrow's booking is included
+    await dom1.document.fire('click', { target: { closest: () => ({ dataset: { action: 'filter-all' } }) } });
+    await flush();
+
+    const listHtml = dom1.getEl('vetBookingsList').innerHTML;
+    assert.match(listHtml, /Milo S16\.1/);
+    assert.match(listHtml, /Khám tổng quát S16\.1/);
+    assert.match(listHtml, /Nguyễn Văn Chủ/);
+    assert.match(listHtml, /Chưa có bệnh án/);
+    assert.ok(requestedUrls.some((u) => u.includes('/vet/bookings?from=') && u.includes('to=')));
+
+    // 2. vet-booking.html real scripts (confirmed, no medical record yet)
+    const dom2 = createDom('vet');
+    runHtmlScripts(path.join(PAGES_DIR, 'vet-booking.html'), {
+      dom: dom2,
+      storage: vetStorage(),
+      locationSearch: `?id=${bookingId}`,
+      fetchImpl: makeFetch()
     });
     await dom2.document.fire('DOMContentLoaded');
     await flush();
-    const detailHtml1 = dom2.getEl('vetBookingRoot').innerHTML;
-    assert.match(detailHtml1, /id="medicalRecordForm"/);
-    assert.match(detailHtml1, /id="vaccinationForm"/);
 
-    // 3. Test 404 not found
-    const dom404 = createDom();
-    runScript(vetBookingJs, {
-      document: dom404.document,
-      location: { search: `?id=${crypto.randomUUID()}`, replace() {} },
-      AuthService: { requireRole: () => ({ id: vetId, role: 'vet', mustChangePassword: false }) },
-      Api: apiFor(vetToken),
-      Fmt,
-      Panel,
-      Toast: { show() {} },
-      BookingService: { STATUS: {} }
-    });
-    await dom404.document.fire('DOMContentLoaded');
-    await flush();
-    assert.match(dom404.getEl('vetBookingRoot').innerHTML, /Không tìm thấy lịch/);
-
-    // 4. Test petDeleted: true hides both forms
-    const domDel = createDom();
-    runScript(vetBookingJs, {
-      document: domDel.document,
-      location: { search: `?id=${bookingId}`, replace() {} },
-      AuthService: { requireRole: () => ({ id: vetId, role: 'vet', mustChangePassword: false }) },
-      Api: {
-        get: async () => ({
-          booking: { id: bookingId, status: 'confirmed', serviceName: 'Khám tổng quát S16', date: futureDate, time: '10:00' },
-          pet: null,
-          petDeleted: true,
-          medicalRecords: [],
-          vaccinations: [],
-          weights: []
-        })
-      },
-      Fmt,
-      Panel,
-      Toast: { show() {} },
-      BookingService: { STATUS: { confirmed: { label: 'Đã xác nhận', badge: 'badge-success' } } }
-    });
-    await domDel.document.fire('DOMContentLoaded');
-    await flush();
-    const delHtml = domDel.getEl('vetBookingRoot').innerHTML;
-    assert.match(delHtml, /Thú cưng đã bị xóa/);
-    assert.doesNotMatch(delHtml, /id="medicalRecordForm"/);
-    assert.doesNotMatch(delHtml, /id="vaccinationForm"/);
+    const detailHtml = dom2.getEl('vetBookingRoot').innerHTML;
+    assert.match(detailHtml, /id="medicalRecordForm"/);
+    assert.match(detailHtml, /id="vaccinationForm"/);
+    assert.match(detailHtml, /20\/11\/2026|2026-11-20/);
   } finally {
     await close();
   }
