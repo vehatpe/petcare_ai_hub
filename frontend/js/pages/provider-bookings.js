@@ -44,12 +44,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderSummary(summary) {
     if (!summaryEl) return;
-    const s = summary || { total: 0, pending: 0, confirmed: 0, completed: 0, cancelled: 0, noShow: 0 };
+    const s = summary || {};
+    const pending = s.pending || 0;
+    const confirmed = s.confirmed || 0;
+    const completed = s.completed || 0;
+    const cancelled = s.cancelled || 0;
+    const noShow = s.no_show || 0;
+    const total = pending + confirmed + completed + cancelled + noShow;
     summaryEl.innerHTML = `
-      <div class="today-fact"><span class="today-label">Tổng lịch</span><strong>${esc(s.total)}</strong></div>
-      <div class="today-fact"><span class="today-label">Chờ xác nhận</span><strong>${esc(s.pending)}</strong></div>
-      <div class="today-fact"><span class="today-label">Đã xác nhận</span><strong>${esc(s.confirmed)}</strong></div>
-      <div class="today-fact"><span class="today-label">Đã hoàn tất</span><strong>${esc(s.completed)}</strong></div>`;
+      <div class="today-fact"><span class="today-label">Tổng lịch</span><strong>${esc(total)}</strong></div>
+      <div class="today-fact"><span class="today-label">Chờ xác nhận</span><strong>${esc(pending)}</strong></div>
+      <div class="today-fact"><span class="today-label">Đã xác nhận</span><strong>${esc(confirmed)}</strong></div>
+      <div class="today-fact"><span class="today-label">Đã hoàn tất</span><strong>${esc(completed)}</strong></div>
+      <div class="today-fact"><span class="today-label">Đã hủy</span><strong>${esc(cancelled)}</strong></div>
+      <div class="today-fact"><span class="today-label">Vắng mặt</span><strong>${esc(noShow)}</strong></div>`;
   }
 
   function renderVetOptions() {
@@ -78,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function bookingRow(b) {
     const st = (window.BookingService && BookingService.STATUS[b.status]) || { label: b.status, badge: 'badge-mint' };
-    const vetText = b.vetName ? esc(b.vetName) : 'Chưa gán';
+    const vetText = b.vet && b.vet.name ? esc(b.vet.name) : 'Chưa gán';
     const phoneHtml = b.customerPhone
       ? `<a href="tel:${esc(b.customerPhone)}" class="btn btn-ghost btn-sm">${esc(b.customerPhone)}</a>`
       : '<span>Chưa có SĐT</span>';
@@ -217,11 +225,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const prevFocus = document.activeElement;
       const backdrop = document.createElement('div');
       backdrop.className = 'dialog-backdrop';
+      const currentVetId = booking.vet && booking.vet.id ? booking.vet.id : '';
       const bodyHtml = activeVets.length
         ? `<div class="form-group">
              <label for="assignVetSelect">Chọn bác sĩ phụ trách</label>
              <select id="assignVetSelect" class="form-control">
-               ${activeVets.map((v) => `<option value="${esc(v.id)}"${v.id === booking.vetId ? ' selected' : ''}>${esc(v.fullName)}</option>`).join('')}
+               ${activeVets.map((v) => `<option value="${esc(v.id)}"${v.id === currentVetId ? ' selected' : ''}>${esc(v.fullName)}</option>`).join('')}
              </select>
            </div>`
         : `<p>Cơ sở chưa có bác sĩ đang hoạt động. <a href="provider-vets.html">Thêm bác sĩ ngay</a>.</p>`;

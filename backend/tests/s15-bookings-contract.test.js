@@ -50,7 +50,10 @@ function createDom() {
     querySelectorAll() { return []; }
     querySelector(sel) { return new El(sel); }
     closest() { return null; }
-    appendChild() {}
+    appendChild(child) {
+      if (!this._children) this._children = [];
+      this._children.push(child);
+    }
     focus() {}
     remove() {}
   }
@@ -127,7 +130,14 @@ test('S15 Contract: Customer bookings, Provider bookings, and Header nav', async
   if (provUser) { provUser.providerId = 'prov-s15'; provUser.status = 'active'; }
   const provToken = (await call('POST', '/auth/login', { body: { identifier: 'prov@s15.vn', password: 'matkhau123' } })).data.token;
 
-  // Tạo 3 lịch: b1 (confirmed >= 2h: 14:00), b2 (cancelled by provider: 15:30), b3 (sample pending: 16:00)
+  const vetId = crypto.randomUUID();
+  await app.testHelpers.addStaff('vet', {
+    id: vetId, email: 'vet@s15.vn', phone: '0977151515', fullName: 'BS. Minh S15', status: 'active', providerId: 'prov-s15', passwordHash: pwHash
+  });
+  const vetUser = state.users.find((u) => u.id === vetId);
+  if (vetUser) { vetUser.providerId = 'prov-s15'; vetUser.status = 'active'; }
+
+  // Tạo 3 lịch: b1 (confirmed >= 2h: 14:00, gán BS. Minh S15), b2 (cancelled by provider: 15:30), b3 (sample pending: 16:00)
   const b1Res = await call('POST', '/bookings', { token: custToken, body: { petId: pet.id, serviceId: svcId, date: '2026-06-15', time: '14:00' } });
   const b2Res = await call('POST', '/bookings', { token: custToken, body: { petId: pet.id, serviceId: svcId, date: '2026-06-15', time: '15:30' } });
   const b3Res = await call('POST', '/bookings', { token: custToken, body: { petId: pet.id, serviceId: svcSampleId, date: '2026-06-16', time: '08:30' } });
@@ -138,6 +148,7 @@ test('S15 Contract: Customer bookings, Provider bookings, and Header nav', async
   const b2 = b2Res.data;
 
   await call('PATCH', `/bookings/${b1.id}/confirm`, { token: provToken });
+  await call('PATCH', `/bookings/${b1.id}/vet`, { token: provToken, body: { vetId } });
   await call('PATCH', `/bookings/${b2.id}/cancel`, { token: provToken, body: { reason: 'Bác sĩ bận đột xuất' } });
 
   const custBookingsData = (await call('GET', '/bookings', { token: custToken })).data;
@@ -223,7 +234,7 @@ test('S15 Contract: Customer bookings, Provider bookings, and Header nav', async
       Api: {
         get: async (url) => {
           if (url === '/provider/profile') return { isActive: true };
-          if (url.startsWith('/provider/vets')) return { vets: [] };
+          if (url.startsWith('/provider/vets')) return { vets: [{ id: vetId, fullName: 'BS. Minh S15', status: 'active' }] };
           if (url.startsWith('/provider/bookings')) return provBookingsData;
           return {};
         },
@@ -242,6 +253,34 @@ test('S15 Contract: Customer bookings, Provider bookings, and Header nav', async
     assert.ok(listHtml.includes('Khám S15'), `listHtml was: ${listHtml.slice(0, 200)}`);
     assert.ok(listHtml.includes('data-action="complete"'));
     assert.equal(getEl('providerLockBanner').hidden, true, 'active facility must not be locked');
+
+    // 1. Tên bác sĩ được gán hiển thị đúng trên DOM (không hiện "Chưa gán" cho b1)
+    assert.ok(listHtml.includes('BS. Minh S15'), 'assigned vet name must be rendered');
+    const b1RowHtml = listHtml.split(`data-booking-id="${b1.id}"`)[1].split('</li>')[0];
+    assert.ok(!b1RowHtml.includes('Chưa gán'), 'assigned booking must not show Chưa gán');
+
+    // 2. Mở modal gán bác sĩ cho b1 -> <select> chọn sẵn đúng vet.id
+    const clickHandlers = getEl('providerBookingList')._listeners.get('click') || [];
+    assert.ok(clickHandlers.length > 0, 'providerBookingList must have click listener');
+    clickHandlers[0]({
+      target: {
+        closest: (sel) => (sel === '[data-action]' ? { dataset: { action: 'assign-vet', id: b1.id } } : null)
+      }
+    });
+    const modalEl = (document.body._children || []).pop();
+    assert.ok(modalEl, 'assign-vet modal must be appended to body');
+    assert.ok(
+      modalEl.innerHTML.includes(`<option value="${vetId}" selected>BS. Minh S15</option>`),
+      'assign-vet modal must preselect current vet.id'
+    );
+
+    // 3. Summary strip: Tổng lịch = tổng 5 khóa, có Đã hủy và Vắng mặt
+    const s = provBookingsData.summary || {};
+    const expectedTotal = (s.pending || 0) + (s.confirmed || 0) + (s.completed || 0) + (s.cancelled || 0) + (s.no_show || 0);
+    const summaryHtml = getEl('bookingSummaryStrip').innerHTML;
+    assert.ok(summaryHtml.includes(`<span class="today-label">Tổng lịch</span><strong>${expectedTotal}</strong>`), 'Tổng lịch must equal sum of 5 keys');
+    assert.ok(summaryHtml.includes(`<span class="today-label">Đã hủy</span><strong>${s.cancelled || 0}</strong>`), 'Đã hủy must be rendered');
+    assert.ok(summaryHtml.includes(`<span class="today-label">Vắng mặt</span><strong>${s.no_show || 0}</strong>`), 'Vắng mặt must be rendered');
   });
 
   await t.test('Header nav: Customer has Lịch hẹn của tôi in account/drawer/footer; Provider has 5 nav items', () => {
