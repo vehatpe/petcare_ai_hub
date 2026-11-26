@@ -309,8 +309,7 @@ test('S16.1 contract: real HTML script chain for vet-bookings.js & vet-booking.j
     };
 
     const vetStorage = () => createStorage({
-      petcare_token: vetAuth.token,
-      petcare_user: JSON.stringify(vetAuth.user)
+      petcare_session: JSON.stringify({ token: vetAuth.token, user: vetAuth.user })
     });
 
     // 1. vet-bookings.html real scripts
@@ -351,7 +350,14 @@ test('S16.1 contract: real HTML script chain for vet-bookings.js & vet-booking.j
     const detailHtml = dom2.getEl('vetBookingRoot').innerHTML;
     assert.match(detailHtml, /id="medicalRecordForm"/);
     assert.match(detailHtml, /id="vaccinationForm"/);
+    assert.match(detailHtml, /Nguyễn Văn Chủ/);
     assert.match(detailHtml, /4[.,]5\s*kg/);
+    const measuredOn = wRes.data.measuredOn;
+    const [my, mm, md] = String(measuredOn).split('-');
+    assert.ok(
+      detailHtml.includes(measuredOn) || (md && detailHtml.includes(`${Number(md)}`) && detailHtml.includes(`${Number(mm)}`)),
+      `Expected measuredOn (${measuredOn}) in detailHtml`
+    );
   } finally {
     await close();
   }

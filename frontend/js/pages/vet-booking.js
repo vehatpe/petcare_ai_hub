@@ -255,7 +255,7 @@
           </div>
           <div class="panel-body">
             <p class="booking-meta">Ngày hẹn: ${esc(booking.date ? Fmt.dateLong(booking.date) : '')} lúc ${esc(booking.time || '')}</p>
-            <p class="booking-meta">Chủ nuôi: ${esc(booking.ownerName || '—')}</p>
+            <p class="booking-meta">Chủ nuôi: ${esc(booking.customerName || '—')}</p>
             ${booking.notes ? `<p class="booking-meta">Ghi chú: ${esc(booking.notes)}</p>` : ''}
           </div>
         </section>
