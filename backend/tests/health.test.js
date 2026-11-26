@@ -91,23 +91,12 @@ test('health records', async (t) => {
     assert.equal((await call('DELETE', `/pets/${pet.id}/vaccinations/${mine.id}`, { token })).status, 404);
   });
 
-  await t.test('medical records: vet/admin only, newest first, vetName from DB; owner sees them', async () => {
+  await t.test('medical records: old route removed (404); vet writes via booking, owner sees them', async () => {
     const pet = await app.createPet(token, { name: 'M' });
     const vet = await app.loginStaff('vet');
-    const body = (d) => ({ visitDate: d, subjective: 'Bỏ ăn', objective: 'Sốt nhẹ', assessment: 'Theo dõi', plan: 'Tái khám' });
-    assert.equal((await call('POST', `/pets/${pet.id}/medical-records`, { token, body: body('2026-05-01') })).status, 403);
-    const r1 = await call('POST', `/pets/${pet.id}/medical-records`, { token: vet.token, body: body('2026-05-01') });
-    assert.equal(r1.status, 201); assert.equal(r1.data.vetName, 'Bác sĩ Test');
-    await call('POST', `/pets/${pet.id}/medical-records`, { token: vet.token, body: body('2026-06-01') });
-    const admin = await app.loginStaff('admin');
-    assert.equal((await call('POST', `/pets/${pet.id}/medical-records`, { token: admin.token, body: body('2026-06-02') })).status, 201);
-    const bad = await call('POST', `/pets/${pet.id}/medical-records`, { token: vet.token, body: { visitDate: '2027-01-01' } });
-    assert.equal(bad.status, 422); assert.ok(bad.body.errors.subjective && bad.body.errors.visitDate);
-    const unknownPet = await call('POST', '/pets/11111111-1111-4111-8111-111111111111/medical-records', { token: vet.token, body: body('2026-06-01') });
-    assert.equal(unknownPet.status, 404);
-    const r = (await agg(pet.id)).data;
-    assert.deepEqual(r.medicalRecords.map((m) => m.visitDate), ['2026-06-02', '2026-06-01', '2026-05-01']);
-    const badBooking = await call('POST', `/pets/${pet.id}/medical-records`, { token: vet.token, body: { ...body('2026-06-01'), bookingId: '22222222-2222-4222-8222-222222222222' } });
-    assert.equal(badBooking.status, 422);
+    const body = { subjective: 'Bỏ ăn', objective: 'Sốt nhẹ', assessment: 'Theo dõi', plan: 'Tái khám' };
+    assert.equal((await call('POST', `/pets/${pet.id}/medical-records`, { token: vet.token, body })).status, 404);
+    assert.equal((await call('POST', '/vet/bookings/11111111-1111-4111-8111-111111111111/medical-record', { token, body })).status, 403);
+    assert.equal((await call('POST', '/vet/bookings/11111111-1111-4111-8111-111111111111/medical-record', { token: vet.token, body })).status, 404);
   });
 });

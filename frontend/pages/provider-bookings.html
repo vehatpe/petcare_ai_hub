@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="../js/components/motion-boot.js"></script>
+  <title>Quản lý lịch hẹn - PetCare AI Hub</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/pages.css">
+  <link rel="stylesheet" href="../css/dashboard.css">
+  <script src="../js/components/motion.js" defer></script>
+</head>
+<body data-page-auth="provider">
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="../index.html" class="brand-logo">
+        <div class="logo-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 2a4 4 0 0 0-4 4c0 1.6 1 3 2.5 3.7A5 5 0 0 0 6 14v1a5 5 0 0 0 5 5h2a5 5 0 0 0 5-5v-1a5 5 0 0 0-4.5-4.3C15 9 16 7.6 16 6a4 4 0 0 0-4-4Z"></path></svg>
+        </div>
+        <span>PetCare AI Hub</span>
+      </a>
+      <nav class="main-nav" aria-label="Điều hướng chính">
+        <a href="../index.html" class="nav-link">Trang chủ</a>
+        <a href="provider-bookings.html" class="nav-link active" aria-current="page">Lịch hẹn</a>
+        <a href="provider-services.html" class="nav-link">Dịch vụ của tôi</a>
+        <a href="provider-profile.html" class="nav-link">Hồ sơ cơ sở</a>
+        <a href="provider-vets.html" class="nav-link">Quản lý bác sĩ</a>
+      </nav>
+      <div class="header-actions">
+        <div class="header-account" data-auth-slot="header"></div>
+        <button type="button" class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Mở menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-head">
+      <div class="container">
+        <div class="page-head-row">
+          <div>
+            <h1>Quản lý lịch hẹn</h1>
+            <p class="page-subtitle">Theo dõi, xác nhận, gán bác sĩ và cập nhật trạng thái các lịch hẹn tại cơ sở.</p>
+          </div>
+          <div class="page-head-actions">
+            <button type="button" class="btn btn-outline btn-sm" id="refreshBookingsBtn">Làm mới</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div id="providerLockBanner" class="form-alert form-alert-error" hidden></div>
+
+        <div id="bookingSummaryStrip" class="today-strip" aria-label="Thống kê lịch hẹn"></div>
+
+        <div class="card">
+          <div class="filter-bar">
+            <div class="filter-tabs" id="statusTabs" role="tablist" aria-label="Lọc theo trạng thái">
+              <button type="button" class="btn btn-sm btn-primary" role="tab" aria-selected="true" data-status="">Tất cả</button>
+              <button type="button" class="btn btn-sm btn-outline" role="tab" aria-selected="false" data-status="pending">Chờ xác nhận</button>
+              <button type="button" class="btn btn-sm btn-outline" role="tab" aria-selected="false" data-status="confirmed">Đã xác nhận</button>
+              <button type="button" class="btn btn-sm btn-outline" role="tab" aria-selected="false" data-status="completed">Đã hoàn tất</button>
+              <button type="button" class="btn btn-sm btn-outline" role="tab" aria-selected="false" data-status="cancelled">Đã hủy</button>
+              <button type="button" class="btn btn-sm btn-outline" role="tab" aria-selected="false" data-status="no_show">Vắng mặt</button>
+            </div>
+            <div class="filter-controls">
+              <label class="filter-field">
+                <span>Từ ngày</span>
+                <input type="date" id="filterFromDate" class="form-control">
+              </label>
+              <label class="filter-field">
+                <span>Đến ngày</span>
+                <input type="date" id="filterToDate" class="form-control">
+              </label>
+              <label class="filter-field">
+                <span>Bác sĩ</span>
+                <select id="filterVet" class="form-control">
+                  <option value="">Tất cả bác sĩ</option>
+                </select>
+              </label>
+              <label class="filter-field">
+                <span>Tìm kiếm</span>
+                <input type="search" id="filterSearch" class="form-control" placeholder="Tên khách, SĐT, mã lịch..." maxlength="60">
+              </label>
+            </div>
+          </div>
+
+          <div id="providerBookingList"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-col">
+          <h4>PetCare AI Hub</h4>
+          <p class="footer-tagline">Nền tảng chăm sóc thú cưng toàn diện: đặt lịch khám, lưu sổ sức khỏe và tư vấn AI an toàn.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Tài khoản</h5>
+          <ul class="footer-links" data-auth-slot="footer-account"></ul>
+        </div>
+        <div class="footer-col">
+          <h5>Quản lý cơ sở</h5>
+          <ul class="footer-links">
+            <li><a href="provider-bookings.html">Lịch hẹn</a></li>
+            <li><a href="provider-services.html">Dịch vụ của tôi</a></li>
+            <li><a href="provider-profile.html">Hồ sơ cơ sở</a></li>
+            <li><a href="provider-vets.html">Quản lý bác sĩ</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Khuyến nghị Y tế</h5>
+          <div class="medical-disclaimer-card">
+            <strong>Cảnh báo an toàn:</strong> AI chỉ đóng vai trò tư vấn &amp; sàng lọc ban đầu, không thay thế chẩn đoán lâm sàng của Bác sĩ thú y chuyên môn.
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 PetCare AI Hub. Bản quyền thuộc về dự án nghiên cứu.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../js/utils/format.js"></script>
+  <script src="../js/components/toast.js"></script>
+  <script src="../js/components/dialog.js"></script>
+  <script src="../js/components/panel.js"></script>
+  <script src="../js/config/api.config.js"></script>
+  <script src="../js/services/auth.service.js"></script>
+  <script src="../js/services/booking.service.js"></script>
+  <script src="../js/components/auth-gate.js"></script>
+  <script src="../js/components/header.js"></script>
+  <script src="../js/pages/provider-bookings.js"></script>
+</body>
+</html>

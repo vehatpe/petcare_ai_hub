@@ -9,10 +9,11 @@
   'use strict';
 
   const STATUS = {
-    pending: { label: 'Chờ cơ sở xác nhận', badge: 'badge-warning' },
-    confirmed: { label: 'Cơ sở đã xác nhận', badge: 'badge-success' },
+    pending: { label: 'Chờ xác nhận', badge: 'badge-warning' },
+    confirmed: { label: 'Đã xác nhận', badge: 'badge-success' },
     completed: { label: 'Đã hoàn tất', badge: 'badge-mint' },
-    cancelled: { label: 'Đã hủy', badge: 'badge-danger' }
+    cancelled: { label: 'Đã hủy', badge: 'badge-danger' },
+    no_show: { label: 'Vắng mặt', badge: 'badge-danger' }
   };
 
   const BookingService = {
@@ -29,8 +30,9 @@
       return Api.post('/bookings', { petId, serviceId, date, time, notes: String(notes || '').trim().slice(0, 500) });
     },
 
-    cancel(id) {
-      return Api.patch('/bookings/' + encodeURIComponent(id) + '/cancel');
+    cancel(id, reason) {
+      const body = reason ? { reason: String(reason).trim().slice(0, 300) } : {};
+      return Api.patch('/bookings/' + encodeURIComponent(id) + '/cancel', body);
     }
   };
 
