@@ -123,6 +123,7 @@ function runHtmlScripts(htmlPath, { dom, storage, locationSearch = '', fetchImpl
     href: `http://localhost:3000/pages/${path.basename(htmlPath)}${locationSearch}`,
     replace() {}
   };
+  const winListeners = new Map();
   const ctx = vm.createContext({
     console,
     Intl,
@@ -136,7 +137,23 @@ function runHtmlScripts(htmlPath, { dom, storage, locationSearch = '', fetchImpl
     localStorage: storage,
     sessionStorage: storage,
     location,
+    history: { replaceState() {}, pushState() {} },
     navigator: { userAgent: 'node-vm' },
+    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+    scrollTo() {},
+    addEventListener(t, fn) {
+      if (!winListeners.has(t)) winListeners.set(t, []);
+      winListeners.get(t).push(fn);
+    },
+    removeEventListener(t, fn) {
+      const list = winListeners.get(t);
+      if (list) winListeners.set(t, list.filter((f) => f !== fn));
+    },
+    dispatchEvent(ev) {
+      const list = winListeners.get(ev?.type) || [];
+      list.forEach((fn) => fn(ev));
+      return true;
+    },
     fetch: fetchImpl
   });
   ctx.window = ctx;
