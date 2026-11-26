@@ -138,8 +138,9 @@ test('S16 contract: vet-bookings.js & vet-booking.js with real app data', async 
     store.services.push({ id: serviceId, providerId, name: 'Khám tổng quát S16', priceVnd: 180000, isActive: true, slotCapacity: 3 });
     store.pets.push({ id: petId, ownerId: custId, name: 'Milo S16', species: 'dog', breed: 'Poodle', weightKg: 4.5, deletedAt: null });
 
-    const login = async (email) => {
-      const r = await call('POST', '/auth/login', { body: { email, password: 'Pass1234!' } });
+    const login = async (identifier) => {
+      const r = await call('POST', '/auth/login', { body: { identifier, password: 'Pass1234!' } });
+      assert.equal(r.status, 200, `Login failed for ${identifier}: ${r.message}`);
       return r.data.token;
     };
 
@@ -152,10 +153,13 @@ test('S16 contract: vet-bookings.js & vet-booking.js with real app data', async 
       token: custToken,
       body: { petId, serviceId, date: futureDate, time: '10:00', notes: 'Bé ho nhẹ' }
     });
+    assert.equal(createRes.status, 201, `Create booking failed: ${createRes.message}`);
     const bookingId = createRes.data.id;
 
-    await call('PATCH', `/bookings/${bookingId}/confirm`, { token: provToken });
-    await call('PATCH', `/bookings/${bookingId}/vet`, { token: provToken, body: { vetId } });
+    const confirmRes = await call('PATCH', `/bookings/${bookingId}/confirm`, { token: provToken });
+    assert.equal(confirmRes.status, 200, `Confirm booking failed: ${confirmRes.message}`);
+    const vetRes = await call('PATCH', `/bookings/${bookingId}/vet`, { token: provToken, body: { vetId } });
+    assert.equal(vetRes.status, 200, `Assign vet failed: ${vetRes.message}`);
 
     const apiFor = (token) => ({
       async get(p) {
