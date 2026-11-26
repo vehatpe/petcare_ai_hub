@@ -190,7 +190,7 @@ test('S16.1 contract: real HTML script chain for vet-bookings.js & vet-booking.j
 
     const wRes = await call('POST', `/pets/${petId}/weights`, {
       token: custAuth.token,
-      body: { weightKg: 4.5, measuredOn: '2026-11-20' }
+      body: { weightKg: 4.5 }
     });
     assert.equal(wRes.status, 201, `Create weight failed: ${wRes.message}`);
 
@@ -269,7 +269,7 @@ test('S16.1 contract: real HTML script chain for vet-bookings.js & vet-booking.j
     const detailHtml = dom2.getEl('vetBookingRoot').innerHTML;
     assert.match(detailHtml, /id="medicalRecordForm"/);
     assert.match(detailHtml, /id="vaccinationForm"/);
-    assert.match(detailHtml, /20\/11\/2026|2026-11-20/);
+    assert.match(detailHtml, /4[.,]5\s*kg/);
   } finally {
     await close();
   }
