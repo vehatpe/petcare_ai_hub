@@ -112,7 +112,7 @@ test('S16 static nav: header.js and landing.js expose vet-bookings.html for vet 
 
 test('S16 contract: vet-bookings.js & vet-booking.js with real app data', async () => {
   const app = await startTestApp({ rateLimit: { max: 500 } });
-  const { baseUrl, close, testHelpers: { state: store } } = app;
+  const { call, close, testHelpers: { state: store } } = app;
   try {
     const providerId = crypto.randomUUID();
     const provUserId = crypto.randomUUID();
@@ -139,12 +139,8 @@ test('S16 contract: vet-bookings.js & vet-booking.js with real app data', async 
     store.pets.push({ id: petId, ownerId: custId, name: 'Milo S16', species: 'dog', breed: 'Poodle', weightKg: 4.5, deletedAt: null });
 
     const login = async (email) => {
-      const r = await fetch(`${baseUrl}/api/v1/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: 'Pass1234!' })
-      });
-      return (await r.json()).data.token;
+      const r = await call('POST', '/auth/login', { body: { email, password: 'Pass1234!' } });
+      return r.data.token;
     };
 
     const custToken = await login('cust-s16@example.com');
@@ -152,39 +148,25 @@ test('S16 contract: vet-bookings.js & vet-booking.js with real app data', async 
     const vetToken = await login('vet-s16@example.com');
 
     const futureDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-    const createRes = await fetch(`${baseUrl}/api/v1/bookings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${custToken}` },
-      body: JSON.stringify({ petId, serviceId, date: futureDate, time: '10:00', notes: 'Bé ho nhẹ' })
+    const createRes = await call('POST', '/bookings', {
+      token: custToken,
+      body: { petId, serviceId, date: futureDate, time: '10:00', notes: 'Bé ho nhẹ' }
     });
-    const bookingId = (await createRes.json()).data.id;
+    const bookingId = createRes.data.id;
 
-    await fetch(`${baseUrl}/api/v1/bookings/${bookingId}/confirm`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${provToken}` }
-    });
-    await fetch(`${baseUrl}/api/v1/bookings/${bookingId}/vet`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${provToken}` },
-      body: JSON.stringify({ vetId })
-    });
+    await call('PATCH', `/bookings/${bookingId}/confirm`, { token: provToken });
+    await call('PATCH', `/bookings/${bookingId}/vet`, { token: provToken, body: { vetId } });
 
     const apiFor = (token) => ({
       async get(p) {
-        const r = await fetch(`${baseUrl}/api/v1${p}`, { headers: { Authorization: `Bearer ${token}` } });
-        const j = await r.json();
-        if (!r.ok) { const e = new Error(j.message); e.status = r.status; throw e; }
-        return j.data;
+        const r = await call('GET', p, { token });
+        if (r.status >= 400) { const e = new Error(r.message); e.status = r.status; throw e; }
+        return r.data;
       },
       async post(p, body) {
-        const r = await fetch(`${baseUrl}/api/v1${p}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(body)
-        });
-        const j = await r.json();
-        if (!r.ok) { const e = new Error(j.message); e.status = r.status; e.errors = j.errors; throw e; }
-        return j.data;
+        const r = await call('POST', p, { token, body });
+        if (r.status >= 400) { const e = new Error(r.message); e.status = r.status; e.errors = r.body?.errors; throw e; }
+        return r.data;
       }
     });
 
