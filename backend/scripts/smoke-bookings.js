@@ -269,8 +269,8 @@ async function run() {
 
     // 15. Vet API: list, detail (no photo), medical-record (201 then 409), cross-vet 404, vaccination (201), customer reads back,
     //     concurrent medical-record (Promise.all -> 201 + 409), pending -> 409 invalid_transition, SQL AuditLog check
-    const tokenVetA = await login(vetAEmail);
-    const tokenVetB = await login(vetBEmail);
+    const tokenVetA = (await api('POST', '/auth/login', { body: { identifier: vetAEmail, password: 'SmokePass123!' } })).data.token;
+    const tokenVetB = (await api('POST', '/auth/login', { body: { identifier: vetBEmail, password: 'SmokePass123!' } })).data.token;
     const vetListRes = await api('GET', '/vet/bookings', { token: tokenVetA });
     const vetDetailRes = await api('GET', `/vet/bookings/${bk1.id}`, { token: tokenVetA });
     const vetMr1 = await api('POST', `/vet/bookings/${bk1.id}/medical-record`, {
