@@ -55,6 +55,7 @@ function createDomStub() {
       querySelector() { return makeEl(); },
       querySelectorAll() { return []; },
       closest() { return null; },
+      remove() {},
       focus() {}
     };
     return el;
@@ -87,6 +88,7 @@ function createDomStub() {
         getAttribute() { return null; },
         setAttribute() {},
         removeAttribute() {},
+        appendChild() {},
         classList: { contains() { return false; }, add() {}, remove() {} },
         dataset: {}
       },
@@ -189,6 +191,7 @@ test('admin-users.html scripts load with Pager and render page 2 from real app',
     clearTimeout,
     MutationObserver: class { observe() {} disconnect() {} },
     requestAnimationFrame: (cb) => setTimeout(cb, 0),
+    matchMedia: () => ({ matches: false, addEventListener() {} }),
     fetch: async () => ({ ok: true, status: 200, json: async () => ({ success: true, data: { users: [] }, meta: { page: 1, limit: 20, total: 0, totalPages: 1 } }) })
   });
   ctx.window = ctx;
@@ -222,7 +225,7 @@ test('GET /provider/bookings and GET /vet/bookings return paginated items and me
   const { call, testHelpers } = app;
   const { state } = testHelpers;
   const jwt = require('jsonwebtoken');
-  const { config } = require('../src/config');
+  const { config } = app;
   state.users.push(
     { id: 'prov-s19', email: 'prov-s19@test.local', fullName: 'Prov S19', role: 'provider', status: 'active', providerId: 'clinic-a', tokenVersion: 0 },
     { id: 'vet-s19', email: 'vet-s19@test.local', fullName: 'Vet S19', role: 'vet', status: 'active', providerId: 'clinic-a', tokenVersion: 0 }

@@ -349,8 +349,8 @@ async function run() {
 
     // 16. D1 Pagination check on GET /bookings, /provider/bookings, /vet/bookings
     const cPage = await api('GET', '/bookings?page=1&limit=2', { token: tokenCust });
-    const pPage = await api('GET', '/provider/bookings?page=1&limit=2', { token: tokenProv });
-    const vPage = await api('GET', '/vet/bookings?page=1&limit=2', { token: tokenVet });
+    const pPage = await api('GET', '/provider/bookings?page=1&limit=2', { token: tokenPA });
+    const vPage = await api('GET', '/vet/bookings?page=1&limit=2', { token: tokenVetA });
     const d1Ok = cPage.status === 200 && cPage.body?.meta?.limit === 2 && Array.isArray(cPage.body?.data?.items)
       && pPage.status === 200 && pPage.body?.meta?.limit === 2 && Array.isArray(pPage.body?.data?.items)
       && vPage.status === 200 && vPage.body?.meta?.limit === 2 && Array.isArray(vPage.body?.data?.items);
