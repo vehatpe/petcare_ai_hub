@@ -1,11 +1,10 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { startTestApp } = require('./helpers/app-harness');
+const { startTestApp } = require('./helpers/harness');
 
 test('S18: GET /bookings pagination, scope, petId, ordering, authz, and dashboard SQL counts', async (t) => {
-  const fixedNow = new Date('2026-06-10T10:00:00+07:00');
-  const app = await startTestApp({ clock: () => fixedNow });
+  const app = await startTestApp({ now: '2026-06-10T10:00:00+07:00' });
   t.after(app.close);
   const { call } = app;
 
