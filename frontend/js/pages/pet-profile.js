@@ -18,11 +18,30 @@ document.addEventListener('DOMContentLoaded', () => {
   const submitBtn = document.getElementById('submitBtn');
   const breedList = document.getElementById('breedOptions');
   const photoInput = document.getElementById('photoInput');
+  const photoPick = document.getElementById('photoPick');
   const photoRemove = document.getElementById('photoRemove');
   const photoError = document.getElementById('photo-error');
+  const previewAvatar = document.getElementById('previewAvatar');
 
-  let photo = null;
+  const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+  const MAX_BYTES = 5 * 1024 * 1024;
+  const MAX_EDGE = 1024;
+
+  let photoUrl = null;
+  let pendingFile = null;
+  let pendingPreviewUrl = null;
   let editing = null;
+
+  function revokePendingPreview() {
+    if (pendingPreviewUrl && typeof URL.revokeObjectURL === 'function') {
+      URL.revokeObjectURL(pendingPreviewUrl);
+    }
+    pendingPreviewUrl = null;
+  }
+
+  function currentPhotoSrc() {
+    return pendingPreviewUrl || photoUrl;
+  }
 
   document.getElementById('cancelLink').href = returnUrl;
   form.birthDate.max = Fmt.todayIso();
@@ -57,10 +76,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const avatar = document.getElementById('previewAvatar');
     const nameEl = document.getElementById('previewName');
 
+    const src = currentPhotoSrc();
     avatar.textContent = '';
-    if (photo) {
+    if (src) {
       const img = document.createElement('img');
-      img.src = photo;
+      img.src = src;
       img.alt = '';
       avatar.appendChild(img);
     } else {
@@ -79,7 +99,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (form.weightKg.value) parts.push(String(form.weightKg.value).replace('.', ',') + ' kg');
     document.getElementById('previewSummary').textContent = parts.length ? parts.join(' · ') : 'Loài · giống · tuổi · cân nặng';
 
-    photoRemove.hidden = !photo;
+    photoRemove.hidden = !src;
+  }
+
+  if (previewAvatar) {
+    previewAvatar.addEventListener('error', (e) => {
+      if (!e.target || e.target.tagName !== 'IMG') return;
+      const name = form.elements.name.value.trim();
+      previewAvatar.textContent = name ? name.charAt(0).toUpperCase() : '?';
+    }, true);
   }
 
   /* ---------- Errors ---------- */
@@ -113,40 +141,108 @@ document.addEventListener('DOMContentLoaded', () => {
     if (first) first.focus();
   }
 
-  /* ---------- Photo upload (resized to 320px square) ---------- */
-  function toAvatar(file) {
-    return new Promise((resolve, reject) => {
+  /* ---------- Photo upload (resized to max 1024px Blob; fallback to original file) ---------- */
+  function resizeToBlob(file) {
+    return new Promise((resolve) => {
+      if (typeof Image === 'undefined' || typeof URL.createObjectURL !== 'function') {
+        resolve(file);
+        return;
+      }
       const url = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
-        const size = 320;
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = size;
-        const side = Math.min(img.width, img.height);
-        canvas.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
-        URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
+        try {
+          const w = img.width || 0;
+          const h = img.height || 0;
+          if (!w || !h) {
+            URL.revokeObjectURL(url);
+            resolve(file);
+            return;
+          }
+          const scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(w * scale));
+          canvas.height = Math.max(1, Math.round(h * scale));
+          const ctx = canvas.getContext && canvas.getContext('2d');
+          if (!ctx || typeof canvas.toBlob !== 'function') {
+            URL.revokeObjectURL(url);
+            resolve(file);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const outType = file.type === 'image/webp' ? 'image/webp' : 'image/jpeg';
+          canvas.toBlob((blob) => {
+            URL.revokeObjectURL(url);
+            resolve(blob || file);
+          }, outType, 0.85);
+        } catch (_) {
+          URL.revokeObjectURL(url);
+          resolve(file);
+        }
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
-        reject(new Error('Không đọc được ảnh này. Vui lòng chọn tệp JPG, PNG hoặc WebP.'));
+        resolve(file);
       };
       img.src = url;
     });
   }
 
-  document.getElementById('photoPick').addEventListener('click', () => photoInput.click());
-  photoRemove.addEventListener('click', () => { photo = null; photoInput.value = ''; renderPreview(); });
+  function setBusy(busy, label) {
+    submitBtn.disabled = busy;
+    submitBtn.classList.toggle('is-loading', busy);
+    if (photoPick) photoPick.disabled = busy;
+    if (photoRemove) photoRemove.disabled = busy;
+    if (label) submitBtn.textContent = label;
+    else submitBtn.textContent = editing ? 'Lưu thay đổi' : 'Lưu hồ sơ';
+  }
+
+  photoPick.addEventListener('click', () => photoInput.click());
+  photoRemove.addEventListener('click', async () => {
+    photoError.hidden = true;
+    if (pendingFile) {
+      pendingFile = null;
+      revokePendingPreview();
+      photoInput.value = '';
+      renderPreview();
+      return;
+    }
+    if (!editing || !photoUrl) return;
+    setBusy(true);
+    try {
+      const updated = await PetService.removePhoto(editing.id);
+      editing = updated;
+      photoUrl = updated.photo || null;
+      photoInput.value = '';
+      renderPreview();
+      if (window.Toast) Toast.info('Đã xóa ảnh thú cưng.');
+    } catch (err) {
+      photoError.textContent = err.message || 'Không xóa được ảnh.';
+      photoError.hidden = false;
+    } finally {
+      setBusy(false);
+    }
+  });
   photoInput.addEventListener('change', async () => {
     const file = photoInput.files[0];
     photoError.hidden = true;
     if (!file) return;
     try {
-      if (!file.type.startsWith('image/')) throw new Error('Vui lòng chọn một tệp ảnh.');
-      if (file.size > 8 * 1024 * 1024) throw new Error('Ảnh lớn hơn 8 MB, vui lòng chọn ảnh nhỏ hơn.');
-      photo = await toAvatar(file);
+      if (ALLOWED_TYPES.indexOf(file.type) === -1) {
+        throw new Error('Chỉ hỗ trợ ảnh PNG, JPEG hoặc WebP.');
+      }
+      if (file.size > MAX_BYTES) {
+        throw new Error('Ảnh lớn hơn 5 MB, vui lòng chọn ảnh nhỏ hơn.');
+      }
+      const processed = await resizeToBlob(file);
+      revokePendingPreview();
+      pendingFile = processed;
+      if (typeof URL.createObjectURL === 'function') {
+        pendingPreviewUrl = URL.createObjectURL(processed);
+      }
       renderPreview();
     } catch (err) {
+      photoInput.value = '';
       photoError.textContent = err.message;
       photoError.hidden = false;
     }
@@ -168,11 +264,12 @@ document.addEventListener('DOMContentLoaded', () => {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     clearErrors();
-    submitBtn.disabled = true;
-    submitBtn.classList.add('is-loading');
+    const wasEditing = Boolean(editing);
+    setBusy(true);
 
+    let saved;
     try {
-      const saved = await PetService.save({
+      saved = await PetService.save({
         id: editing ? editing.id : undefined,
         name: form.elements.name.value,
         species: form.elements.species.value,
@@ -183,19 +280,10 @@ document.addEventListener('DOMContentLoaded', () => {
         color: form.color.value,
         neutered: form.neutered.value,
         conditions: form.conditions.value,
-        microchip: form.microchip.value,
-        photo
+        microchip: form.microchip.value
       });
-      try {
-        sessionStorage.setItem('petcare_flash', JSON.stringify({
-          title: editing ? 'Đã cập nhật hồ sơ' : 'Đã thêm thú cưng',
-          message: `Hồ sơ của ${saved.name} đã được lưu.`
-        }));
-      } catch (_) { /* flash message is optional */ }
-      window.location.href = returnUrl;
     } catch (err) {
-      submitBtn.disabled = false;
-      submitBtn.classList.remove('is-loading');
+      setBusy(false);
       if (err.errors) {
         showErrors(err.errors);
       } else {
@@ -204,7 +292,43 @@ document.addEventListener('DOMContentLoaded', () => {
         alertBox.hidden = false;
         alertBox.focus();
       }
+      return;
     }
+
+    editing = saved;
+    if (pendingFile) {
+      setBusy(true, 'Đang tải ảnh…');
+      try {
+        const updated = await PetService.uploadPhoto(saved.id, pendingFile, pendingFile.name || 'pet.jpg');
+        editing = updated;
+        photoUrl = updated.photo || null;
+        pendingFile = null;
+        revokePendingPreview();
+        renderPreview();
+      } catch (err) {
+        document.title = `Sửa hồ sơ ${saved.name} - PetCare AI Hub`;
+        document.getElementById('pageTitle').textContent = `Sửa hồ sơ ${saved.name}`;
+        setBusy(false);
+        const msg = err.message || 'Không tải ảnh lên được.';
+        photoError.textContent = msg;
+        photoError.hidden = false;
+        if (!wasEditing && window.Toast) {
+          Toast.error('Đã lưu hồ sơ nhưng ảnh chưa tải lên được', msg);
+        } else if (window.Toast) {
+          Toast.error('Chưa tải ảnh lên được', msg);
+        }
+        return;
+      }
+    }
+
+    setBusy(false);
+    try {
+      sessionStorage.setItem('petcare_flash', JSON.stringify({
+        title: wasEditing ? 'Đã cập nhật hồ sơ' : 'Đã thêm thú cưng',
+        message: `Hồ sơ của ${editing.name} đã được lưu.`
+      }));
+    } catch (_) { /* flash message is optional */ }
+    window.location.href = returnUrl;
   });
 
   /* ---------- Edit mode (async: the pet comes from the API) ---------- */
@@ -233,7 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         form.elements.species.value = editing.species;
         form.elements.sex.value = editing.sex;
-        photo = editing.photo || null;
+        photoUrl = editing.photo || null;
       } else {
         if (params.get('welcome') === '1') document.getElementById('welcomeNote').hidden = false;
         const count = (await PetService.list()).length;

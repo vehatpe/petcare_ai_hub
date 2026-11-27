@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('pcardContent').innerHTML = `
       <p class="pcard-tag" id="pcardTag">Hồ sơ của bạn</p>
       <div class="pcard-head">
-        <div class="pet-avatar" id="pcardAvatar" aria-hidden="true">${avatarHtml}</div>
+        <div class="pet-avatar" id="pcardAvatar" data-pet-initial="${esc(pet.name.charAt(0).toUpperCase())}" aria-hidden="true">${avatarHtml}</div>
         <div>
           <h2 class="pcard-name" id="pcardName">${esc(pet.name)}</h2>
           <p class="pcard-specs" id="pcardSpecs">${esc(PetService.summary(pet))}</p>
@@ -203,6 +203,17 @@ document.addEventListener('DOMContentLoaded', () => {
         <div><dt>Lịch hẹn sắp tới</dt><dd id="pcardBooking">Đang tải…</dd></div>
       </dl>
       <a href="pages/health-records.html?pet=${encodeURIComponent(pet.id)}" class="btn btn-secondary btn-sm" id="pcardCta">Mở sổ sức khỏe</a>`;
+
+    const pcard = $('pcardContent');
+    if (pcard && !pcard.dataset.photoFallback) {
+      pcard.dataset.photoFallback = '1';
+      pcard.addEventListener('error', (e) => {
+        const img = e.target;
+        if (!img || img.tagName !== 'IMG') return;
+        const box = img.closest('.pet-avatar');
+        if (box) box.textContent = box.getAttribute('data-pet-initial') || '?';
+      }, true);
+    }
 
     try {
       const [health, bookings] = await Promise.all([

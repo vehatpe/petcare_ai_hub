@@ -110,8 +110,7 @@
         color: String(input.color || '').trim(),
         neutered: NEUTER_LABEL[input.neutered] ? input.neutered : 'unknown',
         microchip: String(input.microchip || '').trim(),
-        conditions: String(input.conditions || '').trim(),
-        photo: input.photo || null
+        conditions: String(input.conditions || '').trim()
       };
       try {
         return input.id
@@ -130,6 +129,16 @@
     async remove(id) {
       await Api.del('/pets/' + encodeURIComponent(id));
       return true;
+    },
+
+    async uploadPhoto(id, fileOrBlob, filename) {
+      const form = new FormData();
+      form.append('photo', fileOrBlob, filename || 'pet.jpg');
+      return Api.upload('/pets/' + encodeURIComponent(id) + '/photo', form);
+    },
+
+    async removePhoto(id) {
+      return Api.remove('/pets/' + encodeURIComponent(id) + '/photo');
     },
 
     /** "2 tuổi 3 tháng", "5 tháng", "dưới 1 tháng" */

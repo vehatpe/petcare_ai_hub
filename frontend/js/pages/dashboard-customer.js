@@ -54,7 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ---------- Pets ---------- */
   function petRow(pet) {
-    const avatar = pet.photo ? `<img src="${esc(pet.photo)}" alt="">` : esc(pet.name.charAt(0).toUpperCase());
+    const initial = esc(pet.name.charAt(0).toUpperCase());
+    const avatar = pet.photo ? `<img src="${esc(pet.photo)}" alt="">` : initial;
     const extras = [
       pet.sex ? `<span class="badge badge-mint">${esc(PetService.SEX_LABEL[pet.sex])}</span>` : '',
       pet.neutered && pet.neutered !== 'unknown' ? `<span class="badge badge-cream">${esc(PetService.NEUTER_LABEL[pet.neutered])}</span>` : '',
@@ -64,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return `
       <li class="pet-row" data-pet-id="${esc(pet.id)}">
-        <div class="pet-avatar" aria-hidden="true">${avatar}</div>
+        <div class="pet-avatar" data-pet-initial="${initial}" aria-hidden="true">${avatar}</div>
         <div class="pet-main">
           <h3 class="pet-name">${esc(pet.name)}</h3>
           <p class="pet-summary">${esc(PetService.summary(pet))}</p>
@@ -128,6 +129,15 @@ document.addEventListener('DOMContentLoaded', () => {
       Toast.show({ title: 'Chưa xóa được hồ sơ', message: err.message, type: 'danger' });
     }
   });
+
+  if (petsEl) {
+    petsEl.addEventListener('error', (e) => {
+      const img = e.target;
+      if (!img || img.tagName !== 'IMG') return;
+      const box = img.closest('.pet-avatar');
+      if (box) box.textContent = box.getAttribute('data-pet-initial') || '?';
+    }, true);
+  }
 
   /* ---------- Bookings ---------- */
   let cancelWindowHours = 2;
