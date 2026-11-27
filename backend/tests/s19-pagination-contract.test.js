@@ -153,8 +153,9 @@ test('Pager.render builds truncated pages and hides when totalPages <= 1', () =>
   assert.match(html, /aria-current="page"/);
 });
 
-test('admin-users.html scripts load with Pager and render page 2 from real app', async () => {
+test('admin-users.html scripts load with Pager and render page 2 from real app', async (t) => {
   const app = await startTestApp();
+  t.after(() => app.close());
   const scripts = readFrontendScripts('pages/admin-users.html');
   assert.ok(scripts.some((s) => s.endsWith(path.join('components', 'pager.js'))), 'admin-users.html must include pager.js');
 
@@ -200,8 +201,9 @@ test('provider-bookings.html and vet-bookings.html include pager.js before page 
   }
 });
 
-test('GET /provider/bookings and GET /vet/bookings return paginated items and meta', async () => {
+test('GET /provider/bookings and GET /vet/bookings return paginated items and meta', async (t) => {
   const app = await startTestApp();
+  t.after(() => app.close());
   const provRes = await app.call('GET', '/api/v1/provider/bookings?page=1&limit=2', { role: 'provider', providerId: 'prov-1' });
   assert.equal(provRes.status, 200);
   assert.ok(Array.isArray(provRes.body.data.items));

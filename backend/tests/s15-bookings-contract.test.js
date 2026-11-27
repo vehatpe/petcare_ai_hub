@@ -175,8 +175,15 @@ test('S15 Contract: Customer bookings, Provider bookings, and Header nav', async
       PetService: { MAX_PETS_PER_OWNER: 10, SEX_LABEL: {}, NEUTER_LABEL: {}, list: async () => [pet], summary: () => 'Chó' },
       DashboardService: { customer: async () => ({ petCount: 1, bookings: { total: 3, upcomingCount: 2, next: b1 }, vaccines: { overdueCount: 0, dueSoonCount: 0, nextDue: null } }) },
       Api: {
-        get: async (url) => {
-          if (url === '/bookings') { reloadCount++; return custBookingsData; }
+        get: async (url, _query, opts) => {
+          if (url === '/bookings') {
+            reloadCount++;
+            if (opts && opts.withMeta) {
+              const items = custBookingsData.items || custBookingsData;
+              return { data: custBookingsData, meta: { page: 1, limit: 20, total: items.length, totalPages: 1 } };
+            }
+            return custBookingsData;
+          }
           return [];
         },
         patch: async () => {

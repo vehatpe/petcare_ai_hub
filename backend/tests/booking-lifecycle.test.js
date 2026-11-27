@@ -120,7 +120,7 @@ test('Customer booking cancellation & lifecycle rules', async (t) => {
 
     // Retrieve booking via list / get
     const listRes = await call('GET', '/bookings', { token: A.token });
-    const b = listRes.data.find((item) => item.id === bookingId);
+    const b = (listRes.data.items || listRes.data).find((item) => item.id === bookingId);
     assert.equal(b.serviceName, 'Khám tổng quát', 'Snapshot serviceName must not change');
     assert.equal(b.priceVnd, 250000, 'Snapshot priceVnd must not change');
     assert.equal(b.petName, 'Miu Con', 'Snapshot petName must not change');
@@ -132,7 +132,8 @@ test('Customer booking cancellation & lifecycle rules', async (t) => {
   });
 
   await t.test('Customer B cannot cancel Customer A booking (404)', async () => {
-    const listA = (await call('GET', '/bookings', { token: A.token })).data;
+    const rawA = (await call('GET', '/bookings', { token: A.token })).data;
+    const listA = rawA.items || rawA;
     const bookingId = listA[0].id;
 
     const cancelRes = await call('PATCH', `/bookings/${bookingId}/cancel`, {
@@ -143,7 +144,8 @@ test('Customer booking cancellation & lifecycle rules', async (t) => {
   });
 
   await t.test('Reason validation: <= 300 characters, optional, empty body allowed', async () => {
-    const listA = (await call('GET', '/bookings', { token: A.token })).data;
+    const rawA = (await call('GET', '/bookings', { token: A.token })).data;
+    const listA = rawA.items || rawA;
     const bookingId = listA[0].id;
 
     // 301 chars -> 422
