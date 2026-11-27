@@ -74,26 +74,42 @@ test('Pagination across admin/users, provider/vets, provider/services & provider
     body: { identifier: 'pag_admin@petcare.vn', password: 'TestPass123!' }
   })).data.token;
 
-  await app.testHelpers.addStaff('provider', {
-    id: crypto.randomUUID(),
-    email: 'pag_prov1@petcare.vn',
-    phone: '0988000002',
-    fullName: 'Provider 1',
-    providerId: 'prov-pag-1',
-    passwordHash: pwHash
+  const regProv1 = await app.call('POST', '/auth/register', {
+    body: {
+      role: 'provider',
+      fullName: 'Provider 1',
+      email: 'pag_prov1@petcare.vn',
+      phone: '0988000002',
+      password: 'TestPass123!',
+      orgName: 'Cơ sở Phân Trang 1',
+      orgType: 'clinic',
+      orgArea: 'Quận 1'
+    }
   });
+  const prov1Id = (await app.call('POST', `/admin/users/${regProv1.data.user.id}/approve`, {
+    token: adminToken,
+    body: { area: 'Quận 1' }
+  })).data.providerId;
   const provToken = (await app.call('POST', '/auth/login', {
     body: { identifier: 'pag_prov1@petcare.vn', password: 'TestPass123!' }
   })).data.token;
 
-  await app.testHelpers.addStaff('provider', {
-    id: crypto.randomUUID(),
-    email: 'pag_prov2@petcare.vn',
-    phone: '0988000003',
-    fullName: 'Provider 2',
-    providerId: 'prov-pag-2',
-    passwordHash: pwHash
+  const regProv2 = await app.call('POST', '/auth/register', {
+    body: {
+      role: 'provider',
+      fullName: 'Provider 2',
+      email: 'pag_prov2@petcare.vn',
+      phone: '0988000003',
+      password: 'TestPass123!',
+      orgName: 'Cơ sở Phân Trang 2',
+      orgType: 'spa',
+      orgArea: 'Quận 3'
+    }
   });
+  const prov2Id = (await app.call('POST', `/admin/users/${regProv2.data.user.id}/approve`, {
+    token: adminToken,
+    body: { area: 'Quận 3' }
+  })).data.providerId;
   const otherProvToken = (await app.call('POST', '/auth/login', {
     body: { identifier: 'pag_prov2@petcare.vn', password: 'TestPass123!' }
   })).data.token;
@@ -137,7 +153,7 @@ test('Pagination across admin/users, provider/vets, provider/services & provider
       phone: `092200000${i}`,
       fullName: `Bác sĩ ${i}`,
       status: i === 5 ? 'disabled' : 'active',
-      providerId: 'prov-pag-1',
+      providerId: prov1Id,
       passwordHash: pwHash
     });
   }
@@ -147,7 +163,7 @@ test('Pagination across admin/users, provider/vets, provider/services & provider
     phone: '0933000001',
     fullName: 'Bác sĩ Cơ sở khác',
     status: 'active',
-    providerId: 'prov-pag-2',
+    providerId: prov2Id,
     passwordHash: pwHash
   });
 
