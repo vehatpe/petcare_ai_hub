@@ -42,9 +42,12 @@ async function startTestApp({ now = '2026-06-10T03:00:00Z', ai, storageService, 
   const validPet = (over = {}) => ({ name: 'Bơ', species: 'dog', sex: 'male', birthDate: '2024-01-15', ...over });
   async function createPet(token, over) { return (await call('POST', '/pets', { token, body: validPet(over) })).data; }
   async function loginStaff(role) {
+    n += 1;
     const id = crypto.randomUUID();
-    await testHelpers.addStaff(role, { id, email: `${role}@clinic.vn`, phone: role === 'vet' ? '0911111111' : '0922222222', passwordHash: bcrypt.hashSync('matkhau123', 4) });
-    const r = await call('POST', '/auth/login', { body: { identifier: `${role}@clinic.vn`, password: 'matkhau123' } });
+    const email = `${role}-${n}@clinic.vn`;
+    const phone = `091${String(n).padStart(7, '0')}`;
+    await testHelpers.addStaff(role, { id, email, phone, passwordHash: bcrypt.hashSync('matkhau123', 4) });
+    const r = await call('POST', '/auth/login', { body: { identifier: email, password: 'matkhau123' } });
     return { token: r.data.token, user: r.data.user };
   }
   return { call, baseUrl: base, registerCustomer, createPet, validPet, loginStaff, clock, testHelpers, models, config, close: () => new Promise((r) => server.close(r)) };

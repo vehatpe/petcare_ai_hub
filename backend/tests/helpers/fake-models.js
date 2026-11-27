@@ -813,6 +813,7 @@ function createFakeModels() {
         chunks.forEach((c) => s.chunks.push({ chunkId: ++seq, docSlug, docTitle, reviewStatus, ...clone(c) }));
       }
     },
+    async transaction(work) { return models.admin.transaction(work); },
     async ping() { return true; }
   };
 
