@@ -12,5 +12,7 @@ module.exports = ({ authService }) => ({
   changePassword: wrap(async (req, res) => {
     const data = await authService.changePassword(req.user.id, req.body);
     ok(res, data, 'Đổi mật khẩu thành công.');
-  })
+  }),
+  setAvatar: wrap(async (req, res) => ok(res, await authService.setAvatar(req.user.id, req.file.buffer), 'Đã cập nhật ảnh đại diện.')),
+  clearAvatar: wrap(async (req, res) => ok(res, await authService.clearAvatar(req.user.id), 'Đã xóa ảnh đại diện.'))
 });

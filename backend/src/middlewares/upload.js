@@ -24,7 +24,8 @@ function uploadSingle(fieldName, config) {
       if (err) {
         if (err instanceof multer.MulterError) {
           if (err.code === 'LIMIT_FILE_SIZE') {
-            return next(new AppError(413, 'file_too_large', 'Ảnh tối đa 5 MB.'));
+            const maxMb = Math.round(maxBytes / (1024 * 1024));
+            return next(new AppError(413, 'file_too_large', `Ảnh tối đa ${maxMb} MB.`));
           }
           return next(
             validation('Tệp tải lên không hợp lệ.', {

@@ -105,6 +105,20 @@ jobs:
           JWT_SECRET: 'ci-testing-jwt-secret-at-least-32-chars-long!!' # chỉ để test
         run: node scripts/smoke-bookings.js
 
+      - name: Run uploads smoke tests against SQL Server 2022
+        working-directory: backend
+        env:
+          DB_SERVER: localhost
+          DB_NAME: PetCareAIHub
+          DB_USER: sa
+          DB_PASSWORD: 'YourStrong@Password123'
+          DB_PORT: 1433
+          DB_ENCRYPT: 'false'
+          DB_TRUST_SERVER_CERT: 'true'
+          JWT_SECRET: 'ci-testing-jwt-secret-at-least-32-chars-long!!' # chỉ để test
+          STORAGE_DRIVER: local
+        run: node scripts/smoke-uploads.js
+
       - name: Run tests
         working-directory: backend
         run: npm test

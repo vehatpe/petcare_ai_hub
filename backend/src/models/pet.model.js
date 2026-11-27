@@ -4,7 +4,7 @@ const { LimitError } = require('../utils/errors');
 
 const SELECT = `
   SELECT p.PetId, p.Name, p.Species, p.Breed, p.Sex, CONVERT(CHAR(10), p.BirthDate, 23) AS BirthDate, p.Color,
-         p.Neutered, p.Microchip, p.Conditions, p.Photo, p.CreatedAt, p.UpdatedAt, p.OwnerId,
+         p.Neutered, p.Microchip, p.Conditions, p.Photo, p.PhotoUrl, p.CreatedAt, p.UpdatedAt, p.OwnerId,
          (SELECT TOP 1 m.Value FROM dbo.Health_Metrics m
            WHERE m.PetId = p.PetId AND m.MetricType = 'weight'
            ORDER BY m.MeasuredOn DESC, m.CreatedAt DESC) AS WeightKg
@@ -13,7 +13,7 @@ const SELECT = `
 const map = (r) => r && ({
   id: lc(r.PetId), name: r.Name, species: r.Species, breed: r.Breed, sex: r.Sex, birthDate: r.BirthDate,
   weightKg: r.WeightKg === null || r.WeightKg === undefined ? null : Number(r.WeightKg),
-  color: r.Color, neutered: r.Neutered, microchip: r.Microchip, conditions: r.Conditions, photo: r.Photo || null,
+  color: r.Color, neutered: r.Neutered, microchip: r.Microchip, conditions: r.Conditions, photo: r.PhotoUrl || r.Photo || null,
   createdAt: iso(r.CreatedAt), updatedAt: iso(r.UpdatedAt)
 });
 
@@ -55,7 +55,9 @@ module.exports = (db) => {
     },
     async update(id, ownerId, ch, newWeight) {
       const found = await db.transaction(async (tx) => {
-        const photoSql = Object.prototype.hasOwnProperty.call(ch, 'photo') ? ', Photo = @photo' : '';
+        const photoSql = Object.prototype.hasOwnProperty.call(ch, 'photo')
+          ? ', Photo = @photo, PhotoUrl = NULL, PhotoPublicId = NULL'
+          : '';
         const res = await tx.exec(
           `UPDATE dbo.Pets SET Name = @name, Species = @species, Breed = @breed, Sex = @sex, BirthDate = CAST(@birth AS DATE),
                   Color = @color, Neutered = @neutered, Microchip = @microchip, Conditions = @conditions,
@@ -73,9 +75,55 @@ module.exports = (db) => {
       });
       return found ? getByOwner(id, ownerId) : null;
     },
+    async getPhotoPublicId(id, ownerId) {
+      const rows = await db.query(
+        `SELECT PhotoPublicId FROM dbo.Pets WHERE PetId = @id AND OwnerId = @owner`,
+        { id: [T.guid, id], owner: [T.guid, ownerId] }
+      );
+      return rows.length ? (rows[0].PhotoPublicId || null) : null;
+    },
+    async setPhoto(tx, petId, ownerId, { url, publicId }) {
+      const rows = await tx.query(
+        `SELECT PhotoPublicId FROM dbo.Pets WITH (UPDLOCK) WHERE PetId = @id AND OwnerId = @owner`,
+        { id: [T.guid, petId], owner: [T.guid, ownerId] }
+      );
+      if (!rows.length) return null;
+      await tx.exec(
+        `UPDATE dbo.Pets SET PhotoUrl = @url, PhotoPublicId = @publicId, Photo = NULL, UpdatedAt = SYSUTCDATETIME()
+         WHERE PetId = @id AND OwnerId = @owner`,
+        { id: [T.guid, petId], owner: [T.guid, ownerId], url: [T.str(500), url], publicId: [T.str(200), publicId] }
+      );
+      return { previousPublicId: rows[0].PhotoPublicId || null };
+    },
+    async clearPhoto(tx, petId, ownerId) {
+      const rows = await tx.query(
+        `SELECT PhotoPublicId FROM dbo.Pets WITH (UPDLOCK) WHERE PetId = @id AND OwnerId = @owner`,
+        { id: [T.guid, petId], owner: [T.guid, ownerId] }
+      );
+      if (!rows.length) return null;
+      await tx.exec(
+        `UPDATE dbo.Pets SET PhotoUrl = NULL, PhotoPublicId = NULL, Photo = NULL, UpdatedAt = SYSUTCDATETIME()
+         WHERE PetId = @id AND OwnerId = @owner`,
+        { id: [T.guid, petId], owner: [T.guid, ownerId] }
+      );
+      return { previousPublicId: rows[0].PhotoPublicId || null };
+    },
     async remove(id, ownerId) {
-      const res = await db.exec(`DELETE FROM dbo.Pets WHERE PetId = @id AND OwnerId = @owner`, { id: [T.guid, id], owner: [T.guid, ownerId] });
-      return res.rowsAffected[0] > 0;
+      return db.transaction(async (tx) => {
+        const rows = await tx.query(
+          `SELECT PhotoPublicId FROM dbo.Pets WITH (UPDLOCK) WHERE PetId = @id AND OwnerId = @owner`,
+          { id: [T.guid, id], owner: [T.guid, ownerId] }
+        );
+        if (!rows.length) return { deleted: false, photoPublicId: null };
+        const res = await tx.exec(
+          `DELETE FROM dbo.Pets WHERE PetId = @id AND OwnerId = @owner`,
+          { id: [T.guid, id], owner: [T.guid, ownerId] }
+        );
+        return {
+          deleted: res.rowsAffected[0] > 0,
+          photoPublicId: rows[0].PhotoPublicId || null
+        };
+      });
     }
   };
 };

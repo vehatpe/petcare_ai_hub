@@ -44,7 +44,8 @@ function createApp({ models, config, ai, storageService, clock = () => new Date(
   }
   app.use(express.json({ limit: '600kb' }));
 
-  const deps = { models, config, clock };
+  const resolvedStorage = storageService || createStorageService({ config });
+  const deps = { models, config, clock, storageService: resolvedStorage, logger };
   const services = {
     authService: createAuthService(deps),
     catalogService: createCatalogService(deps),
@@ -55,7 +56,7 @@ function createApp({ models, config, ai, storageService, clock = () => new Date(
     aiRagService: createAiRagService({ ...deps, ai }),
     adminService: createAdminService(deps),
     providerService: createProviderService(deps),
-    storageService: storageService || createStorageService({ config })
+    storageService: resolvedStorage
   };
   const mw = createAuth({ models, config });
 

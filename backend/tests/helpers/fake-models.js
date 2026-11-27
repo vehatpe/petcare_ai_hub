@@ -21,8 +21,8 @@ function createFakeModels() {
   };
   const petOut = (p) => {
     if (!p) return null;
-    const { ownerId, ...rest } = p; // eslint-disable-line no-unused-vars
-    return { ...clone(rest), weightKg: latestWeight(p.id) };
+    const { ownerId, photoUrl, photoPublicId, ...rest } = p; // eslint-disable-line no-unused-vars
+    return { ...clone(rest), photo: photoUrl || p.photo || null, weightKg: latestWeight(p.id) };
   };
   const bookingOut = (b) => {
     if (!b) return null;
@@ -70,7 +70,9 @@ function createFakeModels() {
       rejectReason: u.rejectReason || null,
       tokenVersion: u.tokenVersion !== undefined && u.tokenVersion !== null ? Number(u.tokenVersion) : 0,
       orgLicenseNo: u.orgLicenseNo || null,
-      orgTaxCode: u.orgTaxCode || null
+      orgTaxCode: u.orgTaxCode || null,
+      avatarUrl: u.avatarUrl || null,
+      avatarPublicId: u.avatarPublicId || null
     };
   };
 
@@ -104,6 +106,22 @@ function createFakeModels() {
           u.mustChangePassword = Boolean(mustChangePassword);
           u.tokenVersion = (u.tokenVersion || 0) + 1;
         }
+      },
+      async setAvatar(tx, userId, { url, publicId }) {
+        const u = s.users.find((x) => x.id === userId);
+        if (!u) return null;
+        const previousPublicId = u.avatarPublicId || null;
+        u.avatarUrl = url;
+        u.avatarPublicId = publicId;
+        return { previousPublicId };
+      },
+      async clearAvatar(tx, userId) {
+        const u = s.users.find((x) => x.id === userId);
+        if (!u) return null;
+        const previousPublicId = u.avatarPublicId || null;
+        u.avatarUrl = null;
+        u.avatarPublicId = null;
+        return { previousPublicId };
       }
     },
     audit: {
@@ -546,17 +564,44 @@ function createFakeModels() {
         const p = s.pets.find((x) => x.id === id && x.ownerId === o);
         if (!p) return null;
         Object.assign(p, clone(ch));
+        if (Object.prototype.hasOwnProperty.call(ch, 'photo')) {
+          p.photoUrl = null;
+          p.photoPublicId = null;
+        }
         if (newWeight) s.metrics.push({ id: newWeight.id, petId: id, weightKg: newWeight.weightKg, measuredOn: newWeight.measuredOn, createdAt: tick() });
         return petOut(p);
       },
+      async getPhotoPublicId(id, o) {
+        const p = s.pets.find((x) => x.id === id && x.ownerId === o);
+        return p ? (p.photoPublicId || null) : null;
+      },
+      async setPhoto(tx, petId, o, { url, publicId }) {
+        const p = s.pets.find((x) => x.id === petId && x.ownerId === o);
+        if (!p) return null;
+        const previousPublicId = p.photoPublicId || null;
+        p.photoUrl = url;
+        p.photoPublicId = publicId;
+        p.photo = null;
+        return { previousPublicId };
+      },
+      async clearPhoto(tx, petId, o) {
+        const p = s.pets.find((x) => x.id === petId && x.ownerId === o);
+        if (!p) return null;
+        const previousPublicId = p.photoPublicId || null;
+        p.photoUrl = null;
+        p.photoPublicId = null;
+        p.photo = null;
+        return { previousPublicId };
+      },
       async remove(id, o) {
         const i = s.pets.findIndex((p) => p.id === id && p.ownerId === o);
-        if (i < 0) return false;
+        if (i < 0) return { deleted: false, photoPublicId: null };
+        const photoPublicId = s.pets[i].photoPublicId || null;
         s.pets.splice(i, 1);
         s.metrics = s.metrics.filter((m) => m.petId !== id); s.vaccs = s.vaccs.filter((v) => v.petId !== id);
         s.records = s.records.filter((r) => r.petId !== id);
         s.bookings.forEach((b) => { if (b.petId === id) b.petId = null; }); // ON DELETE SET NULL
-        return true;
+        return { deleted: true, photoPublicId };
       }
     },
     health: {
