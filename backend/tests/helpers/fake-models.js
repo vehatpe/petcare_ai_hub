@@ -6,6 +6,7 @@
  * pet limit, per-owner scoping, cascade on pet delete, booking capacity + pet-clash check.
  */
 const { DuplicateError, LimitError } = require('../../src/utils/errors');
+const { buildMeta } = require('../../src/utils/pagination');
 
 const clone = (o) => (o === null || o === undefined ? o : JSON.parse(JSON.stringify(o)));
 
@@ -106,9 +107,10 @@ function createFakeModels() {
       }
     },
     admin: {
-      async listUsers({ status, role, q, limit = 20, offset = 0 }) {
+      async listUsers({ status, role, q, page = 1, limit = 20 }) {
+        const p = Math.max(1, Number(page) || 1);
         const lim = Math.max(1, Math.min(50, Number(limit) || 20));
-        const off = Math.max(0, Number(offset) || 0);
+        const off = (p - 1) * lim;
         const search = q ? String(q).trim().toLowerCase().slice(0, 100) : null;
 
         let filtered = s.users.slice();
@@ -123,8 +125,8 @@ function createFakeModels() {
         }
 
         const total = filtered.length;
-        // Sort by createdAt DESC
-        filtered.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        // Sort by createdAt DESC, id ASC
+        filtered.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')) || String(a.id || '').localeCompare(String(b.id || '')));
         const paged = filtered.slice(off, off + lim);
 
         return {
@@ -151,7 +153,7 @@ function createFakeModels() {
             }
             return out;
           }),
-          meta: { limit: lim, offset: off, total }
+          meta: buildMeta({ page: p, limit: lim, total })
         };
       },
 
@@ -285,14 +287,15 @@ function createFakeModels() {
       async transaction(work) {
         return models.admin.transaction(work);
       },
-      async listVets({ providerId, limit = 20, offset = 0 }) {
+      async listVets({ providerId, page = 1, limit = 20 }) {
+        const p = Math.max(1, Number(page) || 1);
         const lim = Math.max(1, Math.min(50, Number(limit) || 20));
-        const off = Math.max(0, Number(offset) || 0);
+        const off = (p - 1) * lim;
 
         let filtered = s.users.filter((u) => u.role === 'vet' && u.providerId === providerId);
         const total = filtered.length;
 
-        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') || String(a.id || '').localeCompare(String(b.id || '')));
         const paged = filtered.slice(off, off + lim).map((u) => ({
           id: u.id,
           role: u.role,
@@ -307,8 +310,15 @@ function createFakeModels() {
 
         return {
           vets: clone(paged),
-          meta: { limit: lim, offset: off, total }
+          meta: buildMeta({ page: p, limit: lim, total })
         };
+      },
+      async listVetOptions(providerId) {
+        return s.users
+          .filter((u) => u.role === 'vet' && u.status === 'active' && u.providerId === providerId)
+          .sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || '')) || String(a.id || '').localeCompare(String(b.id || '')))
+          .slice(0, 200)
+          .map((u) => ({ id: u.id, fullName: u.fullName }));
       },
       async getVetForUpdate(tx, vetId) {
         const u = s.users.find((x) => x.id === vetId && x.role === 'vet');
@@ -381,14 +391,15 @@ function createFakeModels() {
           p.updatedAt = updatedAt;
         }
       },
-      async listServices({ providerId, limit = 50, offset = 0 }) {
-        const lim = Math.max(1, Math.min(100, Number(limit) || 50));
-        const off = Math.max(0, Number(offset) || 0);
+      async listServices({ providerId, page = 1, limit = 20 }) {
+        const p = Math.max(1, Number(page) || 1);
+        const lim = Math.max(1, Math.min(50, Number(limit) || 20));
+        const off = (p - 1) * lim;
 
         let filtered = s.services.filter((x) => x.providerId === providerId);
         const total = filtered.length;
 
-        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') || String(a.id || '').localeCompare(String(b.id || '')));
         const paged = filtered.slice(off, off + lim).map((x) => ({
           id: x.id,
           providerId: x.providerId,
@@ -406,7 +417,7 @@ function createFakeModels() {
 
         return {
           services: clone(paged),
-          meta: { limit: lim, offset: off, total }
+          meta: buildMeta({ page: p, limit: lim, total })
         };
       },
       async countServices(tx, providerId) {

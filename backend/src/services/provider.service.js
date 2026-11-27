@@ -2,6 +2,7 @@
 const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const { notFound, conflict, validation, forbidden, AppError, DuplicateError } = require('../utils/errors');
+const { parsePagination } = require('../utils/pagination');
 const {
   validateVetInput,
   normalizePhone,
@@ -103,6 +104,22 @@ function createProviderService({ models, config, clock = () => new Date() }) {
     if (!actorUser.providerId) {
       throw notFound('Tài khoản đối tác chưa được liên kết với cơ sở nào.');
     }
+  }
+
+  function resolveVetProviderId(actorUser, query = {}) {
+    if (actorUser.role === 'admin') {
+      const targetProviderId = query.providerId ? String(query.providerId).trim() : null;
+      if (!targetProviderId) {
+        throw validation('Quản trị viên cần chỉ định providerId khi xem danh sách bác sĩ.', { providerId: 'Vui lòng cung cấp providerId.' });
+      }
+      return targetProviderId;
+    }
+    if (actorUser.role === 'provider') {
+      if (actorUser.status !== 'active') throw forbidden('Tài khoản đối tác không hoạt động.');
+      if (!actorUser.providerId) throw forbidden('Tài khoản đối tác chưa gắn cơ sở.');
+      return actorUser.providerId;
+    }
+    throw forbidden('Bạn không có quyền truy cập danh sách bác sĩ.');
   }
 
   return {
@@ -380,25 +397,19 @@ function createProviderService({ models, config, clock = () => new Date() }) {
     },
 
     async listVets(actorUser, query = {}) {
-      let targetProviderId;
-      if (actorUser.role === 'admin') {
-        targetProviderId = query.providerId ? String(query.providerId).trim() : null;
-        if (!targetProviderId) {
-          throw validation('Quản trị viên cần chỉ định providerId khi xem danh sách bác sĩ.', { providerId: 'Vui lòng cung cấp providerId.' });
-        }
-      } else if (actorUser.role === 'provider') {
-        if (actorUser.status !== 'active') throw forbidden('Tài khoản đối tác không hoạt động.');
-        targetProviderId = actorUser.providerId;
-        if (!targetProviderId) throw forbidden('Tài khoản đối tác chưa gắn cơ sở.');
-      } else {
-        throw forbidden('Bạn không có quyền truy cập danh sách bác sĩ.');
-      }
-
+      const targetProviderId = resolveVetProviderId(actorUser, query);
+      const { page, limit } = parsePagination(query);
       return memberModel.listVets({
         providerId: targetProviderId,
-        limit: query.limit,
-        offset: query.offset
+        page,
+        limit
       });
+    },
+
+    async listVetOptions(actorUser, query = {}) {
+      const targetProviderId = resolveVetProviderId(actorUser, query);
+      const vets = await memberModel.listVetOptions(targetProviderId);
+      return { vets };
     },
 
     async disableVet(actorUser, vetId) {
@@ -472,13 +483,12 @@ function createProviderService({ models, config, clock = () => new Date() }) {
     // --- Services Management (Session S10) ---
     async listServices(actorUser, query = {}) {
       assertActiveProvider(actorUser);
-      const limit = query.limit;
-      const offset = query.offset;
-      const result = await memberModel.listServices({ providerId: actorUser.providerId, limit, offset });
+      const { page, limit } = parsePagination(query);
+      const result = await memberModel.listServices({ providerId: actorUser.providerId, page, limit });
       return {
         services: result.services,
-        meta: result.meta,
-        options: getServiceOptions()
+        options: getServiceOptions(),
+        meta: result.meta
       };
     },
 

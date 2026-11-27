@@ -79,6 +79,7 @@ function createRouter({ services, mw, config, models }) {
   r.post('/provider/services/:id/enable', provider, c.provider.enableService);
 
   r.post('/provider/vets', providerOrAdmin, c.provider.createVet);
+  r.get('/provider/vets/options', providerOrAdmin, c.provider.listVetOptions);
   r.get('/provider/vets', providerOrAdmin, c.provider.listVets);
   r.post('/provider/vets/:id/disable', providerOrAdmin, uuidParam('id'), c.provider.disableVet);
   r.post('/provider/vets/:id/enable', providerOrAdmin, uuidParam('id'), c.provider.enableVet);

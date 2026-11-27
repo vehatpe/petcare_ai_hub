@@ -1,6 +1,7 @@
 'use strict';
 const { T, lc, iso } = require('./db');
 const { AppError } = require('../utils/errors');
+const { buildMeta } = require('../utils/pagination');
 
 const USER_COLS = `u.UserId, u.Role, u.Status, u.FullName, u.Email, u.Phone, u.OrgName, u.OrgType, u.CreatedAt,
                    u.ProviderId, u.OrgArea, u.ApprovedBy, u.ApprovedAt, u.MustChangePassword, u.RejectReason,
@@ -50,9 +51,10 @@ const mapUser = (r) => {
 };
 
 module.exports = (db) => ({
-  async listUsers({ status, role, q, limit = 20, offset = 0 }) {
+  async listUsers({ status, role, q, page = 1, limit = 20 }) {
+    const p = Math.max(1, Number(page) || 1);
     const lim = Math.max(1, Math.min(50, Number(limit) || 20));
-    const off = Math.max(0, Number(offset) || 0);
+    const off = (p - 1) * lim;
     const search = q ? String(q).trim().slice(0, 100) : null;
 
     const whereClauses = [];
@@ -85,13 +87,13 @@ module.exports = (db) => ({
       FROM dbo.Users u
       LEFT JOIN dbo.Providers p ON u.ProviderId = p.ProviderId
       ${whereSql}
-      ORDER BY u.CreatedAt DESC
+      ORDER BY u.CreatedAt DESC, u.UserId ASC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `;
     const rows = await db.query(dataSql, params);
     return {
       users: rows.map(mapUser),
-      meta: { limit: lim, offset: off, total }
+      meta: buildMeta({ page: p, limit: lim, total })
     };
   },
 

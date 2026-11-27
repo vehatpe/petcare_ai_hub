@@ -21,7 +21,12 @@ module.exports = ({ providerService }) => ({
   }),
 
   listVets: wrap(async (req, res) => {
-    const data = await providerService.listVets(req.user, req.query);
+    const { vets, meta } = await providerService.listVets(req.user, req.query);
+    ok(res, { vets }, undefined, 200, meta);
+  }),
+
+  listVetOptions: wrap(async (req, res) => {
+    const data = await providerService.listVetOptions(req.user, req.query);
     ok(res, data);
   }),
 
@@ -36,8 +41,8 @@ module.exports = ({ providerService }) => ({
   }),
 
   listServices: wrap(async (req, res) => {
-    const data = await providerService.listServices(req.user, req.query);
-    ok(res, data);
+    const { services, options, meta } = await providerService.listServices(req.user, req.query);
+    ok(res, { services, options }, undefined, 200, meta);
   }),
 
   createService: wrap(async (req, res) => {

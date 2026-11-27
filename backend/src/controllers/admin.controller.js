@@ -3,8 +3,8 @@ const { wrap, ok } = require('../utils/http');
 
 module.exports = ({ adminService }) => ({
   listUsers: wrap(async (req, res) => {
-    const data = await adminService.listUsers(req.query);
-    ok(res, data, 'Lấy danh sách người dùng thành công.');
+    const { users, meta } = await adminService.listUsers(req.query);
+    ok(res, { users }, 'Lấy danh sách người dùng thành công.', 200, meta);
   }),
 
   approve: wrap(async (req, res) => {

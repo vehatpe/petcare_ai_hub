@@ -189,7 +189,8 @@ test('S10: Provider Services Management (Unit / DB giả)', async (t) => {
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
     assert.ok(Array.isArray(res.data.services));
-    assert.ok(res.data.meta);
+    assert.ok(res.body.meta);
+    assert.equal(res.data.meta, undefined);
     assert.ok(res.data.options);
     assert.equal(res.data.options.priceMaxVnd, 100000000);
     assert.equal(res.data.options.capacityMax, 50);
