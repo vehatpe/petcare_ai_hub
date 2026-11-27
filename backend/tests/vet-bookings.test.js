@@ -73,8 +73,9 @@ test('Vet Bookings API: access control, detail audit, medical record & vaccinati
   await t.test('GET /vet/bookings & GET /vet/bookings/:id: no photo, no customer phone/email, writes 1 AuditLog', async () => {
     const listRes = await call('GET', '/vet/bookings', { token: vet1.token });
     assert.equal(listRes.status, 200);
-    assert.equal(listRes.data.length, 2);
-    assert.equal(listRes.data[0].customerPhone, undefined);
+    assert.equal(listRes.data.items.length, 2);
+    assert.equal(listRes.meta.total, 2);
+    assert.equal(listRes.data.items[0].customerPhone, undefined);
     assert.equal(listRes.data[0].customerEmail, undefined);
 
     const detailRes = await call('GET', `/vet/bookings/${b1.id}`, { token: vet1.token });

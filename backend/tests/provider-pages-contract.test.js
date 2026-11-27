@@ -356,6 +356,7 @@ test('Contract Tests: Provider Profile & Services Pages via Harness (DB giả)',
     };
 
     vm.createContext(sandbox);
+    sandbox.window = sandbox;
     vm.runInContext(pagerJsCode, sandbox);
     vm.runInContext(servicesJsCode, sandbox);
     for (const h of domLoadedHandlers) {
@@ -412,6 +413,7 @@ test('Contract Tests: Provider Profile & Services Pages via Harness (DB giả)',
     };
 
     vm.createContext(sandbox);
+    sandbox.window = sandbox;
     vm.runInContext(pagerJsCode, sandbox);
     vm.runInContext(servicesJsCode, sandbox);
     for (const h of domLoadedHandlers) {
@@ -464,6 +466,7 @@ test('Contract Tests: Provider Profile & Services Pages via Harness (DB giả)',
     };
 
     vm.createContext(sandbox);
+    sandbox.window = sandbox;
     vm.runInContext(pagerJsCode, sandbox);
     vm.runInContext(servicesJsCode, sandbox);
     for (const h of domLoadedHandlers) {

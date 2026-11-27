@@ -39,6 +39,7 @@ function createDomStub() {
       disabled: false,
       dataset: {},
       className: '',
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
       attributes: {},
       style: { setProperty() {} },
       setAttribute(k, v) { this.attributes[k] = String(v); },
@@ -133,10 +134,10 @@ test('Api.get returns payload.data by default and { data, meta } when withMeta i
   vm.runInContext(code, ctx, { filename: 'api.config.js' });
 
   const plain = await ctx.Api.get('/bookings');
-  assert.deepEqual(plain, { items: [{ id: 'b1' }] });
+  assert.deepEqual(JSON.parse(JSON.stringify(plain)), { items: [{ id: 'b1' }] });
 
   const withMeta = await ctx.Api.get('/bookings', { page: 2 }, { withMeta: true });
-  assert.deepEqual(withMeta, {
+  assert.deepEqual(JSON.parse(JSON.stringify(withMeta)), {
     data: { items: [{ id: 'b1' }] },
     meta: { page: 2, limit: 20, total: 25, totalPages: 2 }
   });
@@ -213,7 +214,8 @@ test('provider-bookings.html and vet-bookings.html include pager.js before page 
 test('GET /provider/bookings and GET /vet/bookings return paginated items and meta', async (t) => {
   const app = await startTestApp();
   t.after(() => app.close());
-  const { call, state } = app.testHelpers;
+  const { call, testHelpers } = app;
+  const { state } = testHelpers;
   const bcrypt = require('bcryptjs');
   const passwordHash = bcrypt.hashSync('Pass123!', 4);
   state.users.push(

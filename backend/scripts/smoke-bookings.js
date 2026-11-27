@@ -206,7 +206,7 @@ async function run() {
     // 7. Provider A cancels bk2 with reason -> Customer sees it
     const cancelRes = await api('PATCH', `/bookings/${bk2.id}/cancel`, { token: tokenPA, body: { reason: 'Cơ sở bảo trì' } });
     const custList = await api('GET', '/bookings', { token: tokenCust });
-    const bk2Cust = custList.data.find((x) => x.id === bk2.id);
+    const bk2Cust = (custList.data.items || custList.data).find((x) => x.id === bk2.id);
     record(
       '7. Provider cancel + Customer sees reason',
       cancelRes.status === 200 && bk2Cust?.cancelledBy === 'provider' && bk2Cust?.cancelReason === 'Cơ sở bảo trì'
