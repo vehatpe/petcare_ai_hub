@@ -66,9 +66,9 @@ function createDom(bodyAuth = 'customer') {
         contains: (c) => this.classList._s.has(c)
       };
     }
-    set innerHTML(v) { this._html = String(v ?? ''); }
+    set innerHTML(v) { this._html = String(v ?? ''); this.children = []; }
     get innerHTML() { return this._html; }
-    set textContent(v) { this._text = String(v ?? ''); this._html = this._text; }
+    set textContent(v) { this._text = String(v ?? ''); this._html = this._text; this.children = []; }
     get textContent() { return this._text; }
     setAttribute(k, v) { this.attributes.set(k, String(v)); }
     getAttribute(k) { return this.attributes.get(k) ?? null; }
@@ -246,8 +246,9 @@ function makeBridgeFetch(tApp, calls, overrideUpload) {
     const headers = init.headers || {};
 
     if (init.body instanceof FakeFormData) {
-      if (overrideUpload) {
-        const res = await overrideUpload(method, apiPath, init.body, headers);
+      const override = overrideUpload ? await overrideUpload(method, apiPath, init.body, headers) : null;
+      if (override) {
+        const res = override;
         calls.push({ method, path: apiPath, isFormData: true, status: res.status, resBody: res.body });
         return { ok: res.status >= 200 && res.status < 300, status: res.status, async json() { return res.body; } };
       }
@@ -336,11 +337,12 @@ test('S22 pet-profile contract: create with photo, client validation, 413/422 re
   // (a) Thử lại submit ở chế độ sửa -> upload thành công, DOM hiện URL trả về
   uploadOverride = null;
   await form.dispatch('submit');
-  const uploadCall = calls.find((c) => c.method === 'POST' && /^\/pets\/[^/]+\/photo$/.test(c.path));
-  assert.ok(uploadCall && uploadCall.isFormData);
+  const uploadCall = calls.find((c) => c.method === 'POST' && /^\/pets\/[^/]+\/photo$/.test(c.path) && c.status === 200);
+  assert.ok(uploadCall && uploadCall.isFormData, 'successful photo upload not called; calls=' + JSON.stringify(calls));
 
   const previewAvatar = getOrCreate('previewAvatar');
   const previewImg = previewAvatar.children.find((c) => c.tagName === 'IMG');
+  assert.equal(previewAvatar.children.length, 1, 'previewAvatar must hold exactly one <img>');
   assert.ok(previewImg && /^\/uploads\/pets\/.+\.png$/.test(previewImg.src), 'previewAvatar should show uploaded URL');
 
   // (d) "Xóa ảnh" gọi DELETE và DOM về chữ cái đầu
@@ -418,7 +420,7 @@ test('S22 Toast helper methods forward to Toast.show with expected types', () =>
   ctx.Toast.info('Info', 'Note');
   ctx.Toast.warning('Warn', 'Careful');
 
-  assert.deepEqual(calls, [
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(calls)), [
     { title: 'OK', message: 'Done', type: 'success' },
     { title: 'Err', message: 'Fail', type: 'danger' },
     { title: 'Info', message: 'Note', type: 'info' },
