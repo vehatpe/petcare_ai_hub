@@ -147,25 +147,29 @@ test('Pagination across admin/users, provider/vets, provider/services & provider
   });
 
   for (let i = 1; i <= 5; i++) {
-    await app.testHelpers.addStaff('vet', {
-      id: crypto.randomUUID(),
-      email: `pag_vet_${i}@test.local`,
-      phone: `092200000${i}`,
-      fullName: `Bác sĩ ${i}`,
-      status: i === 5 ? 'disabled' : 'active',
-      providerId: prov1Id,
-      passwordHash: pwHash
+    const vRes = await app.call('POST', '/provider/vets', {
+      token: provToken,
+      body: {
+        email: `pag_vet_${i}@test.local`,
+        phone: `092200000${i}`,
+        fullName: `Bác sĩ ${i}`
+      }
     });
+    assert.equal(vRes.status, 201);
+    if (i === 5) {
+      const disRes = await app.call('POST', `/provider/vets/${vRes.data.vet.id}/disable`, { token: provToken });
+      assert.equal(disRes.status, 200);
+    }
   }
-  await app.testHelpers.addStaff('vet', {
-    id: crypto.randomUUID(),
-    email: 'other_vet@test.local',
-    phone: '0933000001',
-    fullName: 'Bác sĩ Cơ sở khác',
-    status: 'active',
-    providerId: prov2Id,
-    passwordHash: pwHash
+  const otherVetRes = await app.call('POST', '/provider/vets', {
+    token: otherProvToken,
+    body: {
+      email: 'other_vet@test.local',
+      phone: '0933000001',
+      fullName: 'Bác sĩ Cơ sở khác'
+    }
   });
+  assert.equal(otherVetRes.status, 201);
 
   await t.test('GET /provider/vets: page 1/2/3, page=0 -> 422', async () => {
     const p1 = await app.call('GET', '/provider/vets?page=1&limit=2', { token: provToken });
@@ -202,16 +206,17 @@ test('Pagination across admin/users, provider/vets, provider/services & provider
   });
 
   for (let i = 1; i <= 5; i++) {
-    await app.call('POST', '/provider/services', {
+    const sRes = await app.call('POST', '/provider/services', {
       token: provToken,
       body: {
-        category: 'checkup',
+        category: 'medical',
         name: `Dịch vụ phân trang ${i}`,
         priceVnd: 100000 + i * 10000,
         unit: 'lần',
         slotCapacity: 2
       }
     });
+    assert.equal(sRes.status, 201);
   }
 
   await t.test('GET /provider/services: page 1/2/3, page=0 -> 422', async () => {
