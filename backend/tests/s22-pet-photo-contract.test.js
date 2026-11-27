@@ -255,7 +255,7 @@ function makeBridgeFetch(tApp, calls, overrideUpload) {
       const buf = field && field.value && field.value._buf ? field.value._buf : Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
       const realForm = new FormData();
       realForm.append('photo', new Blob([buf], { type: 'image/png' }), (field && field.filename) || 'pet.png');
-      const res = await fetch(tApp.baseUrl + '/api/v1' + apiPath, {
+      const res = await fetch(tApp.baseUrl + apiPath, {
         method,
         headers: headers.Authorization ? { Authorization: headers.Authorization } : {},
         body: realForm
@@ -266,7 +266,7 @@ function makeBridgeFetch(tApp, calls, overrideUpload) {
     }
 
     const parsedBody = init.body ? JSON.parse(init.body) : undefined;
-    const res = await fetch(tApp.baseUrl + '/api/v1' + apiPath, { method, headers, body: init.body });
+    const res = await fetch(tApp.baseUrl + apiPath, { method, headers, body: init.body });
     const resBody = await res.json().catch(() => null);
     calls.push({ method, path: apiPath, body: parsedBody, status: res.status, resBody });
     return { ok: res.ok, status: res.status, async json() { return resBody; } };
@@ -355,7 +355,7 @@ test('S22 dashboard-customer and booking-flow: render pet.photo URL and fallback
   t.after(() => tApp.close());
   const cust = await seedCustomer(tApp);
   const photoUrl = '/uploads/pets/bong.png';
-  const createRes = await fetch(tApp.baseUrl + '/api/v1/pets', {
+  const createRes = await fetch(tApp.baseUrl + '/pets', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cust.token },
     body: JSON.stringify({ name: 'Bông', species: 'cat', sex: 'female', birthDate: '2022-05-01' })
