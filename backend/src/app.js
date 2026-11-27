@@ -15,11 +15,12 @@ const { createDashboardService } = require('./services/dashboard.service');
 const { createAiRagService } = require('./services/ai-rag.service');
 const { createAdminService } = require('./services/admin.service');
 const { createProviderService } = require('./services/provider.service');
+const { createStorageService } = require('./services/storage.service');
 
 /**
- * @param {{models:object, config:object, ai:{embed:Function, generate:Function}, clock?:()=>Date, logger?:object}} deps
+ * @param {{models:object, config:object, ai:{embed:Function, generate:Function}, storageService?:object, clock?:()=>Date, logger?:object}} deps
  */
-function createApp({ models, config, ai, clock = () => new Date(), logger = console }) {
+function createApp({ models, config, ai, storageService, clock = () => new Date(), logger = console }) {
   const app = express();
   app.disable('x-powered-by');
   if (config.trustProxy) app.set('trust proxy', /^\d+$/.test(config.trustProxy) ? Number(config.trustProxy) : config.trustProxy);
@@ -31,7 +32,7 @@ function createApp({ models, config, ai, clock = () => new Date(), logger = cons
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:', 'https://images.unsplash.com'],
+        imgSrc: ["'self'", 'data:', 'https://images.unsplash.com', 'https://res.cloudinary.com'],
         connectSrc: ["'self'"],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"]
@@ -53,12 +54,26 @@ function createApp({ models, config, ai, clock = () => new Date(), logger = cons
     dashboardService: createDashboardService(deps),
     aiRagService: createAiRagService({ ...deps, ai }),
     adminService: createAdminService(deps),
-    providerService: createProviderService(deps)
+    providerService: createProviderService(deps),
+    storageService: storageService || createStorageService({ config })
   };
   const mw = createAuth({ models, config });
 
   app.use('/api/v1', createRouter({ services, mw, config, models }));
   app.use('/api', notFoundHandler);
+
+  if (config.storage?.driver === 'local' && config.storage?.uploadDir) {
+    const setCorp = (req, res, next) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      next();
+    };
+    app.use('/uploads', setCorp, express.static(config.storage.uploadDir, {
+      index: false,
+      dotfiles: 'ignore',
+      maxAge: '365d',
+      immutable: true
+    }));
+  }
 
   if (config.serveFrontend) {
     const dir = path.resolve(__dirname, '../../frontend');
