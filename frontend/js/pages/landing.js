@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const $ = (id) => document.getElementById(id);
 
   let renderVersion = 0;
+  let pcardPhotoFallbackBound = false;
 
   async function renderForAuth() {
     const thisVersion = ++renderVersion;
@@ -205,8 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
       <a href="pages/health-records.html?pet=${encodeURIComponent(pet.id)}" class="btn btn-secondary btn-sm" id="pcardCta">Mở sổ sức khỏe</a>`;
 
     const pcard = $('pcardContent');
-    if (pcard && !pcard.dataset.photoFallback) {
-      pcard.dataset.photoFallback = '1';
+    if (pcard && !pcardPhotoFallbackBound) {
+      pcardPhotoFallbackBound = true;
       pcard.addEventListener('error', (e) => {
         const img = e.target;
         if (!img || img.tagName !== 'IMG') return;

@@ -19,8 +19,12 @@ function createSimpleDom() {
       this._innerHTML = '';
       this.children = [];
       this.attributes = new Map();
+      this.dataset = {};
       this.hidden = false;
     }
+
+    addEventListener() {}
+    closest() { return null; }
 
     get textContent() {
       return this._textContent;

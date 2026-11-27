@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const esc = Fmt.esc;
   const params = new URLSearchParams(window.location.search);
   let pets = [];
+  let petPhotoFallbackBound = false;
   let services = [];
   let providerFilter = params.get('provider') || null;
   const serviceById = (id) => services.find((x) => x.id === id) || null;
@@ -81,8 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
       </label>`).join('')}
       <a class="selectable-item-card pet-pick pet-pick-add" href="pet-profile.html?next=booking.html">+ Thêm thú cưng khác</a>
     </div>`;
-    if (!wrap.dataset.photoFallback) {
-      wrap.dataset.photoFallback = '1';
+    if (!petPhotoFallbackBound) {
+      petPhotoFallbackBound = true;
       wrap.addEventListener('error', (e) => {
         const img = e.target;
         if (!img || img.tagName !== 'IMG') return;

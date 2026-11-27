@@ -229,6 +229,15 @@ async function seedCustomer(tApp) {
   return { id, token, user: { id, name: user.name, email, role: 'customer', status: 'active' } };
 }
 
+async function waitFor(cond, timeoutMs = 2000, step = 10) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (cond()) return;
+    await new Promise((r) => setTimeout(r, step));
+  }
+  throw new Error('waitFor timeout after ' + timeoutMs + 'ms');
+}
+
 function makeBridgeFetch(tApp, calls, overrideUpload) {
   return async (url, init = {}) => {
     const u = new URL(url, tApp.baseUrl);
@@ -237,25 +246,30 @@ function makeBridgeFetch(tApp, calls, overrideUpload) {
     const headers = init.headers || {};
 
     if (init.body instanceof FakeFormData) {
-      calls.push({ method, path: apiPath, isFormData: true });
       if (overrideUpload) {
         const res = await overrideUpload(method, apiPath, init.body, headers);
+        calls.push({ method, path: apiPath, isFormData: true, status: res.status, resBody: res.body });
         return { ok: res.status >= 200 && res.status < 300, status: res.status, async json() { return res.body; } };
       }
       const field = init.body.fields.find((f) => f.name === 'photo');
       const buf = field && field.value && field.value._buf ? field.value._buf : Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
       const realForm = new FormData();
       realForm.append('photo', new Blob([buf], { type: 'image/png' }), (field && field.filename) || 'pet.png');
-      return fetch(tApp.baseUrl + '/api/v1' + apiPath, {
+      const res = await fetch(tApp.baseUrl + '/api/v1' + apiPath, {
         method,
         headers: headers.Authorization ? { Authorization: headers.Authorization } : {},
         body: realForm
       });
+      const resBody = await res.json().catch(() => null);
+      calls.push({ method, path: apiPath, isFormData: true, status: res.status, resBody });
+      return { ok: res.ok, status: res.status, async json() { return resBody; } };
     }
 
     const parsedBody = init.body ? JSON.parse(init.body) : undefined;
-    calls.push({ method, path: apiPath, body: parsedBody });
-    return fetch(tApp.baseUrl + '/api/v1' + apiPath, { method, headers, body: init.body });
+    const res = await fetch(tApp.baseUrl + '/api/v1' + apiPath, { method, headers, body: init.body });
+    const resBody = await res.json().catch(() => null);
+    calls.push({ method, path: apiPath, body: parsedBody, status: res.status, resBody });
+    return { ok: res.ok, status: res.status, async json() { return resBody; } };
   };
 }
 
@@ -275,7 +289,7 @@ test('S22 pet-profile contract: create with photo, client validation, 413/422 re
   });
 
   await document.dispatchEvent({ type: 'DOMContentLoaded' });
-  await new Promise((r) => setTimeout(r, 20));
+  await waitFor(() => calls.some((c) => c.method === 'GET' && c.path === '/pets') && !form.hasAttribute('aria-busy'));
 
   // (b) Ảnh > 5 MB hoặc GIF bị chặn ở client và KHÔNG gọi API
   const callsBefore = calls.length;
@@ -341,14 +355,14 @@ test('S22 dashboard-customer and booking-flow: render pet.photo URL and fallback
   t.after(() => tApp.close());
   const cust = await seedCustomer(tApp);
   const photoUrl = '/uploads/pets/bong.png';
-  await tApp.models.pets.create({
-    ownerId: cust.id,
-    name: 'Bông',
-    species: 'cat',
-    sex: 'female',
-    birthDate: '2022-05-01',
-    photoUrl
+  const createRes = await fetch(tApp.baseUrl + '/api/v1/pets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cust.token },
+    body: JSON.stringify({ name: 'Bông', species: 'cat', sex: 'female', birthDate: '2022-05-01' })
   });
+  const createJson = await createRes.json();
+  assert.equal(createRes.status, 201, JSON.stringify(createJson));
+  await tApp.models.pets.setPhoto(null, createJson.data.id, cust.id, { url: photoUrl, publicId: 'pets/bong' });
   const sessionJson = JSON.stringify({ token: cust.token, user: cust.user });
   const calls = [];
 
@@ -360,9 +374,9 @@ test('S22 dashboard-customer and booking-flow: render pet.photo URL and fallback
     fetchImpl: makeBridgeFetch(tApp, calls)
   });
   await dash.document.dispatchEvent({ type: 'DOMContentLoaded' });
-  await new Promise((r) => setTimeout(r, 100));
   const petsList = dash.getOrCreate('petList');
-  assert.ok(petsList.innerHTML.includes(`<img src="${photoUrl}" alt="">`), 'dashboard-customer should render img with uploaded URL');
+  await waitFor(() => petsList.innerHTML.includes('<img'));
+  assert.ok(petsList.innerHTML.includes(`<img src="${photoUrl}" alt="">`), `petList.innerHTML=${petsList.innerHTML}; calls=${JSON.stringify(calls)}`);
   const fakeBox = dash.document.createElement('DIV');
   fakeBox.classList.add('pet-avatar');
   fakeBox.setAttribute('data-pet-initial', 'B');
@@ -379,9 +393,9 @@ test('S22 dashboard-customer and booking-flow: render pet.photo URL and fallback
     fetchImpl: makeBridgeFetch(tApp, calls)
   });
   await book.document.dispatchEvent({ type: 'DOMContentLoaded' });
-  await new Promise((r) => setTimeout(r, 30));
   const stepContent = book.getOrCreate('stepContent');
-  assert.ok(stepContent.innerHTML.includes(`<img src="${photoUrl}" alt="">`), 'booking-flow should render img with uploaded URL');
+  await waitFor(() => stepContent.innerHTML.includes('<img'));
+  assert.ok(stepContent.innerHTML.includes(`<img src="${photoUrl}" alt="">`), `stepContent.innerHTML=${stepContent.innerHTML}; calls=${JSON.stringify(calls)}`);
   const fakeBox2 = book.document.createElement('SPAN');
   fakeBox2.classList.add('pet-avatar');
   fakeBox2.setAttribute('data-pet-initial', 'B');
