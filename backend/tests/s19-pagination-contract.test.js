@@ -105,6 +105,7 @@ test('Api.get returns payload.data by default and { data, meta } when withMeta i
   let fetchMode = 'meta';
   const ctx = vm.createContext({
     window: dom.window,
+    location: dom.window.location,
     document: dom.document,
     sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
@@ -138,6 +139,7 @@ test('Pager.render builds truncated pages and hides when totalPages <= 1', () =>
   const dom = createDomStub();
   const ctx = vm.createContext({
     window: dom.window,
+    location: dom.window.location,
     document: dom.document,
     Fmt: { esc: (s) => String(s) }
   });
@@ -163,6 +165,7 @@ test('admin-users.html scripts load with Pager and render page 2 from real app',
   });
   const ctx = vm.createContext({
     window: dom.window,
+    location: dom.window.location,
     document: dom.document,
     sessionStorage: { getItem: (k) => (k === 'petcare_session' ? sessionData : null), setItem() {}, removeItem() {} },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
