@@ -81,6 +81,11 @@ function createDomStub() {
         dataset: {},
         style: { setProperty() {} }
       },
+      body: {
+        hasAttribute() { return false; },
+        classList: { contains() { return false; }, add() {}, remove() {} },
+        dataset: {}
+      },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, makeEl(id));
         return elements.get(id);
@@ -107,6 +112,8 @@ test('Api.get returns payload.data by default and { data, meta } when withMeta i
     window: dom.window,
     location: dom.window.location,
     document: dom.document,
+    addEventListener() {},
+    removeEventListener() {},
     sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     URLSearchParams,
@@ -168,6 +175,8 @@ test('admin-users.html scripts load with Pager and render page 2 from real app',
     window: dom.window,
     location: dom.window.location,
     document: dom.document,
+    addEventListener() {},
+    removeEventListener() {},
     sessionStorage: { getItem: (k) => (k === 'petcare_session' ? sessionData : null), setItem() {}, removeItem() {} },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     URLSearchParams,
@@ -204,15 +213,22 @@ test('provider-bookings.html and vet-bookings.html include pager.js before page 
 test('GET /provider/bookings and GET /vet/bookings return paginated items and meta', async (t) => {
   const app = await startTestApp();
   t.after(() => app.close());
-  const provRes = await app.call('GET', '/api/v1/provider/bookings?page=1&limit=2', { role: 'provider', providerId: 'prov-1' });
-  assert.equal(provRes.status, 200);
-  assert.ok(Array.isArray(provRes.body.data.items));
-  assert.equal(typeof provRes.body.meta.total, 'number');
-  assert.equal(provRes.body.meta.limit, 2);
+  const { call, state } = app.testHelpers;
+  const provUser = { id: 'prov-s19', email: 'prov-s19@test.local', fullName: 'Prov S19', role: 'provider', status: 'active', providerId: 'clinic-a', tokenVersion: 0 };
+  const vetUser = { id: 'vet-s19', email: 'vet-s19@test.local', fullName: 'Vet S19', role: 'vet', status: 'active', providerId: 'clinic-a', tokenVersion: 0 };
+  state.users.push(provUser, vetUser);
+  const provToken = app.testHelpers.signToken(provUser);
+  const vetToken = app.testHelpers.signToken(vetUser);
 
-  const vetRes = await app.call('GET', '/api/v1/vet/bookings?page=1&limit=2', { role: 'vet', id: 'vet-1' });
+  const provRes = await call('GET', '/provider/bookings?page=1&limit=2', { token: provToken });
+  assert.equal(provRes.status, 200);
+  assert.ok(Array.isArray(provRes.data.items));
+  assert.equal(typeof provRes.meta.total, 'number');
+  assert.equal(provRes.meta.limit, 2);
+
+  const vetRes = await call('GET', '/vet/bookings?page=1&limit=2', { token: vetToken });
   assert.equal(vetRes.status, 200);
-  assert.ok(Array.isArray(vetRes.body.data.items));
-  assert.equal(typeof vetRes.body.meta.total, 'number');
-  assert.equal(vetRes.body.meta.limit, 2);
+  assert.ok(Array.isArray(vetRes.data.items));
+  assert.equal(typeof vetRes.meta.total, 'number');
+  assert.equal(vetRes.meta.limit, 2);
 });
