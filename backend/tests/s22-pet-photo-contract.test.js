@@ -393,9 +393,9 @@ test('S22 dashboard-customer and booking-flow: render pet.photo URL and fallback
     fetchImpl: makeBridgeFetch(tApp, calls)
   });
   await book.document.dispatchEvent({ type: 'DOMContentLoaded' });
-  const stepContent = book.getOrCreate('stepContent');
+  const stepContent = book.getOrCreate('petChoices');
   await waitFor(() => stepContent.innerHTML.includes('<img'));
-  assert.ok(stepContent.innerHTML.includes(`<img src="${photoUrl}" alt="">`), `stepContent.innerHTML=${stepContent.innerHTML}; calls=${JSON.stringify(calls)}`);
+  assert.ok(stepContent.innerHTML.includes(`<img src="${photoUrl}" alt="">`), `petChoices.innerHTML=${stepContent.innerHTML}; calls=${JSON.stringify(calls)}`);
   const fakeBox2 = book.document.createElement('SPAN');
   fakeBox2.classList.add('pet-avatar');
   fakeBox2.setAttribute('data-pet-initial', 'B');
@@ -403,4 +403,25 @@ test('S22 dashboard-customer and booking-flow: render pet.photo URL and fallback
   fakeImg2.closest = () => fakeBox2;
   await stepContent.dispatchEvent({ type: 'error', target: fakeImg2 });
   assert.equal(fakeBox2.textContent, 'B');
+});
+
+test('S22 Toast helper methods forward to Toast.show with expected types', () => {
+  const calls = [];
+  const ctx = { window: {}, document: { createElement: () => ({}), body: { appendChild: () => {} } } };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(FRONTEND_DIR, 'js/components/toast.js'), 'utf8'), ctx);
+  ctx.Toast.show = (opts) => calls.push(opts);
+
+  ctx.Toast.success('OK', 'Done');
+  ctx.Toast.error('Err', 'Fail');
+  ctx.Toast.info('Info', 'Note');
+  ctx.Toast.warning('Warn', 'Careful');
+
+  assert.deepEqual(calls, [
+    { title: 'OK', message: 'Done', type: 'success' },
+    { title: 'Err', message: 'Fail', type: 'danger' },
+    { title: 'Info', message: 'Note', type: 'info' },
+    { title: 'Warn', message: 'Careful', type: 'warning' }
+  ]);
 });

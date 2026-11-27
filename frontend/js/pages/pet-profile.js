@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
       photoUrl = updated.photo || null;
       photoInput.value = '';
       renderPreview();
-      if (window.Toast) Toast.info('Đã xóa ảnh thú cưng.');
+      if (window.Toast) { try { Toast.info('Đã xóa ảnh thú cưng.'); } catch (_) {} }
     } catch (err) {
       photoError.textContent = err.message || 'Không xóa được ảnh.';
       photoError.hidden = false;
@@ -313,9 +313,9 @@ document.addEventListener('DOMContentLoaded', () => {
         photoError.textContent = msg;
         photoError.hidden = false;
         if (!wasEditing && window.Toast) {
-          Toast.error('Đã lưu hồ sơ nhưng ảnh chưa tải lên được', msg);
+          try { Toast.error('Đã lưu hồ sơ nhưng ảnh chưa tải lên được', msg); } catch (_) {}
         } else if (window.Toast) {
-          Toast.error('Chưa tải ảnh lên được', msg);
+          try { Toast.error('Chưa tải ảnh lên được', msg); } catch (_) {}
         }
         return;
       }

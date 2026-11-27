@@ -94,6 +94,22 @@ const Toast = {
     toast.addEventListener('focusout', () => setTimeout(resume, 0));
     toast.querySelector('.toast-close').addEventListener('click', dismiss);
     run();
+  },
+
+  success(title, message = '') {
+    this.show({ title, message, type: 'success' });
+  },
+
+  error(title, message = '') {
+    this.show({ title, message, type: 'danger' });
+  },
+
+  info(title, message = '') {
+    this.show({ title, message, type: 'info' });
+  },
+
+  warning(title, message = '') {
+    this.show({ title, message, type: 'warning' });
   }
 };
 
