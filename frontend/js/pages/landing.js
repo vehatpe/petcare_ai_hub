@@ -200,7 +200,10 @@ document.addEventListener('DOMContentLoaded', () => {
       <a href="pages/health-records.html?pet=${encodeURIComponent(pet.id)}" class="btn btn-secondary btn-sm" id="pcardCta">Mở sổ sức khỏe</a>`;
 
     try {
-      const [health, bookings] = await Promise.all([HealthService.get(pet.id), BookingService.list()]);
+      const [health, bookings] = await Promise.all([
+        HealthService.get(pet.id),
+        BookingService.list({ scope: 'upcoming', petId: pet.id, limit: 1 })
+      ]);
       if (thisVersion !== renderVersion) return;
       const v = health.vaccineSummary;
       const vaxEl = $('pcardVax');
@@ -210,8 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
           : v.dueSoon ? `${v.dueSoon} sắp đến hạn · ${v.upToDate}/${v.total} còn hạn`
           : `${v.upToDate}/${v.total} loại còn hạn hoặc đã ghi nhận`;
       }
-      const today = Fmt.todayIso();
-      const next = bookings.filter((b) => b.petId === pet.id && (b.status === 'pending' || b.status === 'confirmed') && b.date >= today)[0];
+      const next = (bookings.items && bookings.items[0]) || null;
       const bookEl = $('pcardBooking');
       if (bookEl) {
         bookEl.textContent = next ? `${next.serviceName}, ${Fmt.dateShort(next.date)} ${next.time}` : 'Chưa có';

@@ -20,9 +20,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const PAGE_SIZE = 20;
   let users = [];
-  let currentOffset = 0;
+  let currentPage = 1;
   let currentTotal = 0;
-  let isLoadingMore = false;
+  let currentMeta = { page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 };
   let searchTimeout = null;
 
   const ROLE_LABEL = {
@@ -199,24 +199,30 @@ document.addEventListener('DOMContentLoaded', () => {
       <ul class="pet-list" style="list-style: none; padding: 0; margin: 0;">
         ${users.map(renderUserCard).join('')}
       </ul>`;
-    loadMoreWrap.hidden = users.length >= currentTotal;
+    const pagerHtml = Pager.render(currentMeta);
+    loadMoreWrap.innerHTML = pagerHtml;
+    loadMoreWrap.hidden = !pagerHtml;
   }
 
-  async function loadInitial() {
-    currentOffset = 0;
-    Panel.load(
+  async function loadPage(page = 1) {
+    currentPage = Math.max(1, Number(page) || 1);
+    return Panel.load(
       listEl,
       async () => {
         const query = {
           limit: PAGE_SIZE,
-          offset: 0,
+          page: currentPage,
           ...getFilterQuery()
         };
-        const res = await Api.get('/admin/users', query);
-        users = res.users || [];
-        currentOffset = users.length;
-        currentTotal = (res.meta && res.meta.total) || 0;
-        return res;
+        const { data, meta } = await Api.get('/admin/users', query, { withMeta: true });
+        const list = (data && data.users) || [];
+        if (currentPage > 1 && list.length === 0) {
+          return loadPage(currentPage - 1);
+        }
+        users = list;
+        currentMeta = meta || { page: currentPage, limit: PAGE_SIZE, total: users.length, totalPages: 1 };
+        currentTotal = currentMeta.total ?? users.length;
+        return data;
       },
       () => {
         updateUiState();
@@ -225,31 +231,8 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
-  async function loadMore() {
-    if (isLoadingMore) return;
-    isLoadingMore = true;
-    loadMoreBtn.disabled = true;
-    loadMoreBtn.textContent = 'Đang tải…';
-
-    try {
-      const query = {
-        limit: PAGE_SIZE,
-        offset: currentOffset,
-        ...getFilterQuery()
-      };
-      const res = await Api.get('/admin/users', query);
-      const newItems = res.users || [];
-      users = users.concat(newItems);
-      currentOffset = users.length;
-      currentTotal = (res.meta && res.meta.total) || currentTotal;
-      updateUiState();
-    } catch (err) {
-      Toast.show(err.message || 'Không tải thêm được người dùng.', 'error');
-    } finally {
-      isLoadingMore = false;
-      loadMoreBtn.disabled = false;
-      loadMoreBtn.textContent = 'Tải thêm';
-    }
+  function loadInitial() {
+    return loadPage(1);
   }
 
   // Action delegation
@@ -314,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   refreshBtn.addEventListener('click', () => loadInitial());
-  loadMoreBtn.addEventListener('click', () => loadMore());
+  Pager.bind(loadMoreWrap, (nextPage) => loadPage(nextPage));
 
   loadInitial();
 });

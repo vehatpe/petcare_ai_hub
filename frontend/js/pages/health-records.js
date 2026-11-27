@@ -152,10 +152,14 @@ document.addEventListener('DOMContentLoaded', () => {
           <div><dt>Hướng xử trí</dt><dd>${esc(r.plan || '')}</dd></div>
         </dl>
       </li>`).join('');
+    const mrTotal = (d.medicalRecordsMeta && d.medicalRecordsMeta.total) ?? d.medicalRecords.length;
+    const moreMrHtml = d.medicalRecords.length < mrTotal
+      ? `<div class="pager"><span class="pager-info">Đã hiển thị ${esc(String(d.medicalRecords.length))} / ${esc(String(mrTotal))}</span><button type="button" class="btn btn-outline btn-sm" data-action="load-more-mr">Tải thêm bệnh án</button></div>`
+      : '';
     return `
       <section class="health-card" aria-labelledby="hMr">
         <h2 id="hMr">Bệnh án</h2>
-        ${items ? `<ul class="record-list">${items}</ul>` : '<div class="empty-state"><h3>Chưa có bệnh án</h3><p>Bệnh án chỉ do bác sĩ thú y ghi sau khi khám. Bạn không thể tự nhập mục này.</p></div>'}
+        ${items ? `<ul class="record-list">${items}</ul>${moreMrHtml}` : '<div class="empty-state"><h3>Chưa có bệnh án</h3><p>Bệnh án chỉ do bác sĩ thú y ghi sau khi khám. Bạn không thể tự nhập mục này.</p></div>'}
       </section>`;
   }
 
@@ -171,6 +175,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     body.querySelectorAll('[data-offset]').forEach((el) => el.style.setProperty('--ring-offset', el.dataset.offset));
     body.querySelector('[data-focus-weight]')?.addEventListener('click', () => document.getElementById('wKg').focus());
+    body.querySelector('[data-action="load-more-mr"]')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.textContent = 'Đang tải…';
+      try {
+        const nextPage = ((d.medicalRecordsMeta && d.medicalRecordsMeta.page) || 1) + 1;
+        const limit = (d.medicalRecordsMeta && d.medicalRecordsMeta.limit) || 10;
+        const { data, meta } = await Api.get('/pets/' + encodeURIComponent(d.pet.id) + '/medical-records', { page: nextPage, limit }, { withMeta: true });
+        d.medicalRecords = d.medicalRecords.concat((data && data.items) || []);
+        d.medicalRecordsMeta = meta || { ...d.medicalRecordsMeta, page: nextPage };
+        render(d);
+      } catch (err) {
+        Toast.show({ title: 'Chưa tải thêm được', message: err.message || 'Không tải thêm được bệnh án.', type: 'danger' });
+        btn.disabled = false;
+        btn.textContent = 'Tải thêm bệnh án';
+      }
+    });
 
     document.getElementById('weightForm').addEventListener('submit', async (e) => {
       e.preventDefault();

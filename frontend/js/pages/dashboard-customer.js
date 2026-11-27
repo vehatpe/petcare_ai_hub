@@ -155,7 +155,10 @@ document.addEventListener('DOMContentLoaded', () => {
       </li>`;
   }
 
-  function renderBookings(list) {
+  let bookingState = { items: [], page: 1, total: 0, loadingMore: false };
+
+  function renderBookings() {
+    const list = bookingState.items;
     document.getElementById('newBookingBtn').hidden = list.length === 0;
     if (!list.length) {
       const hasPets = pets.length > 0;
@@ -167,10 +170,37 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>`;
       return;
     }
-    bookingListEl.innerHTML = `<ul class="booking-list" data-reveal-group>${list.map(bookingItem).join('')}</ul>`;
+    const hasMore = list.length < bookingState.total;
+    const moreHtml = hasMore
+      ? `<div class="pager"><span class="pager-info">Đã hiển thị ${esc(String(list.length))} / ${esc(String(bookingState.total))}</span><button type="button" class="btn btn-outline btn-sm" data-action="load-more-bookings">Tải thêm lịch hẹn</button></div>`
+      : '';
+    bookingListEl.innerHTML = `<ul class="booking-list" data-reveal-group>${list.map(bookingItem).join('')}</ul>${moreHtml}`;
   }
 
   bookingListEl.addEventListener('click', async (e) => {
+    const moreBtn = e.target.closest('[data-action="load-more-bookings"]');
+    if (moreBtn) {
+      if (bookingState.loadingMore) return;
+      bookingState.loadingMore = true;
+      moreBtn.disabled = true;
+      moreBtn.textContent = 'Đang tải…';
+      try {
+        const nextPage = bookingState.page + 1;
+        const res = await BookingService.list({ scope: 'all', page: nextPage, limit: 20 });
+        bookingState.items = bookingState.items.concat(res.items || []);
+        bookingState.page = nextPage;
+        bookingState.total = (res.meta && res.meta.total) ?? bookingState.total;
+        renderBookings();
+      } catch (err) {
+        Toast.show({ title: 'Chưa tải thêm được', message: err.message || 'Không tải thêm được lịch hẹn.', type: 'danger' });
+        moreBtn.disabled = false;
+        moreBtn.textContent = 'Tải thêm lịch hẹn';
+      } finally {
+        bookingState.loadingMore = false;
+      }
+      return;
+    }
+
     const btn = e.target.closest('[data-cancel-booking]');
     if (!btn) return;
     const ok = await Dialog.confirm({
@@ -194,7 +224,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function loadAll() {
     // Pets load first so the bookings empty state knows whether the owner has any.
     Panel.load(petListEl, () => PetService.list(), renderPets, { loading: 'Đang tải hồ sơ thú cưng…' })
-      .then(() => Panel.load(bookingListEl, () => BookingService.list(), renderBookings, { loading: 'Đang tải lịch hẹn…' }));
+      .then(() => Panel.load(bookingListEl, async () => {
+        const res = await BookingService.list({ scope: 'all', page: 1, limit: 20 });
+        bookingState = { items: res.items || [], page: 1, total: (res.meta && res.meta.total) ?? 0, loadingMore: false };
+        return res;
+      }, renderBookings, { loading: 'Đang tải lịch hẹn…' }));
     Panel.load(todayEl, () => DashboardService.customer(), renderToday, { loading: 'Đang tổng hợp…' });
   }
 

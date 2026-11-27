@@ -86,7 +86,7 @@
   });
 
   /* ---------- Requests ---------- */
-  async function request(method, path, { body, query, auth = true } = {}) {
+  async function request(method, path, { body, query, auth = true, withMeta = false } = {}) {
     let url = BASE + path;
     if (query) {
       const qs = new URLSearchParams();
@@ -140,7 +140,7 @@
 
       throw err;
     }
-    return payload.data;
+    return withMeta ? { data: payload.data, meta: payload.meta } : payload.data;
   }
 
   window.ApiError = ApiError;
