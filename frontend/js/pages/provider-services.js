@@ -21,9 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const PAGE_SIZE = 20;
   let services = [];
-  let currentOffset = 0;
+  let currentPage = 1;
   let currentTotal = 0;
-  let isLoadingMore = false;
+  let currentMeta = { page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 };
   let serviceOptions = null; // populated from API options
   let isLocked = false;
   let lockReason = '';
@@ -110,24 +110,24 @@ document.addEventListener('DOMContentLoaded', () => {
         ${services.map(serviceRow).join('')}
       </ul>`;
 
-    if (services.length < currentTotal) {
-      loadMoreWrap.hidden = false;
-      loadMoreBtn.disabled = false;
-      loadMoreBtn.textContent = `Tải thêm (còn ${currentTotal - services.length} dịch vụ)`;
-    } else {
-      loadMoreWrap.hidden = true;
-    }
+    const pagerHtml = Pager.render(currentMeta);
+    loadMoreWrap.innerHTML = pagerHtml;
+    loadMoreWrap.hidden = !pagerHtml;
   }
 
-  async function loadInitial() {
-    currentOffset = 0;
+  async function loadPage(page = 1) {
+    currentPage = Math.max(1, Number(page) || 1);
     return Panel.load(listEl, async () => {
       try {
-        const res = await Api.get('/provider/services', { limit: PAGE_SIZE, offset: 0 });
-        services = res.services || [];
-        serviceOptions = res.options || null;
-        currentTotal = (res.meta && res.meta.total) ?? services.length;
-        currentOffset = services.length;
+        const { data, meta } = await Api.get('/provider/services', { limit: PAGE_SIZE, page: currentPage }, { withMeta: true });
+        const list = (data && data.services) || [];
+        if (currentPage > 1 && list.length === 0) {
+          return loadPage(currentPage - 1);
+        }
+        services = list;
+        serviceOptions = (data && data.options) || null;
+        currentMeta = meta || { page: currentPage, limit: PAGE_SIZE, total: services.length, totalPages: 1 };
+        currentTotal = currentMeta.total ?? services.length;
 
         // Kiểm tra trạng thái cơ sở từ profile
         try {
@@ -141,48 +141,22 @@ document.addEventListener('DOMContentLoaded', () => {
           // Nếu get profile lỗi
         }
 
-        return res;
+        return data;
       } catch (err) {
         if (err.status === 403 || err.status === 409) {
           setLockState(true, err.message);
           services = [];
           currentTotal = 0;
-          return { services: [], meta: { total: 0 } };
+          currentMeta = { page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 };
+          return { services: [] };
         }
         throw err;
       }
     }, renderList, { loading: 'Đang tải danh sách dịch vụ…' });
   }
 
-  async function loadMore() {
-    if (isLoadingMore) return;
-    isLoadingMore = true;
-    loadMoreBtn.disabled = true;
-    loadMoreBtn.textContent = 'Đang tải thêm…';
-
-    try {
-      const res = await Api.get('/provider/services', { limit: PAGE_SIZE, offset: currentOffset });
-      const nextBatch = res.services || [];
-      services = services.concat(nextBatch);
-      currentTotal = (res.meta && res.meta.total) ?? currentTotal;
-      currentOffset += nextBatch.length;
-      renderList();
-    } catch (err) {
-      if (err.status === 403 || err.status === 409) {
-        // Kiểm tra profile trước khi khóa
-        try {
-          const prof = await Api.get('/provider/profile');
-          if (prof && prof.isActive === false) {
-            setLockState(true, err.message);
-          }
-        } catch (_) {}
-      }
-      Toast.show({ title: 'Lỗi tải thêm', message: err.message || 'Không thể tải thêm dịch vụ.', type: 'danger' });
-      loadMoreBtn.disabled = false;
-      loadMoreBtn.textContent = 'Thử lại tải thêm';
-    } finally {
-      isLoadingMore = false;
-    }
+  function loadInitial() {
+    return loadPage(1);
   }
 
   /**
@@ -581,9 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshBtn.addEventListener('click', () => loadInitial());
   }
 
-  if (loadMoreBtn) {
-    loadMoreBtn.addEventListener('click', () => loadMore());
-  }
+  Pager.bind(loadMoreWrap, (nextPage) => loadPage(nextPage));
 
   loadInitial();
 });

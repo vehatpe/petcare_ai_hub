@@ -10,6 +10,9 @@ const { startTestApp } = require('./helpers/harness');
 const profileJsPath = path.resolve(__dirname, '../../frontend/js/pages/provider-profile.js');
 const profileJsCode = fs.readFileSync(profileJsPath, 'utf8');
 
+const pagerJsPath = path.resolve(__dirname, '../../frontend/js/components/pager.js');
+const pagerJsCode = fs.readFileSync(pagerJsPath, 'utf8');
+
 const servicesJsPath = path.resolve(__dirname, '../../frontend/js/pages/provider-services.js');
 const servicesJsCode = fs.readFileSync(servicesJsPath, 'utf8');
 
@@ -24,6 +27,7 @@ function createMockDom() {
       this._innerHTML = '';
       this.children = [];
       this.attributes = new Map();
+      this.dataset = {};
       this.classList = {
         _classes: new Set(),
         add: (...cls) => cls.forEach((c) => this.classList._classes.add(c)),
@@ -342,8 +346,10 @@ test('Contract Tests: Provider Profile & Services Pages via Harness (DB giả)',
       },
       AuthService: { currentUser: () => provUser },
       Api: {
-        get: async (path) => {
-          if (path === '/provider/services') return realServicesData; // TRẢ THẲNG payload.data { services, meta, options }
+        get: async (path, _query, opts) => {
+          if (path === '/provider/services') {
+            return opts && opts.withMeta ? { data: realServicesData, meta: realServicesData.meta } : realServicesData;
+          }
           if (path === '/provider/profile') return realProfileData;
           throw new Error('Not found');
         }
@@ -351,6 +357,8 @@ test('Contract Tests: Provider Profile & Services Pages via Harness (DB giả)',
     };
 
     vm.createContext(sandbox);
+    sandbox.window = sandbox;
+    vm.runInContext(pagerJsCode, sandbox);
     vm.runInContext(servicesJsCode, sandbox);
     for (const h of domLoadedHandlers) {
       const res = h();
@@ -406,6 +414,8 @@ test('Contract Tests: Provider Profile & Services Pages via Harness (DB giả)',
     };
 
     vm.createContext(sandbox);
+    sandbox.window = sandbox;
+    vm.runInContext(pagerJsCode, sandbox);
     vm.runInContext(servicesJsCode, sandbox);
     for (const h of domLoadedHandlers) {
       const res = h();
@@ -457,6 +467,8 @@ test('Contract Tests: Provider Profile & Services Pages via Harness (DB giả)',
     };
 
     vm.createContext(sandbox);
+    sandbox.window = sandbox;
+    vm.runInContext(pagerJsCode, sandbox);
     vm.runInContext(servicesJsCode, sandbox);
     for (const h of domLoadedHandlers) {
       const res = h();

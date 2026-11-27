@@ -6,14 +6,12 @@ function createDashboardService({ models, config, clock = () => new Date() }) {
   return {
     async customer(ownerId) {
       const now = nowInTz(clock(), config.timezone);
-      const [pets, bookings, vaccRows] = await Promise.all([
+      const [pets, bookingCounts, nextBooking, vaccRows] = await Promise.all([
         models.pets.listByOwner(ownerId),
-        models.bookings.listByOwner(ownerId),
+        models.bookings.countsByOwner(ownerId, { today: now.date, time: now.time }),
+        models.bookings.nextUpcomingByOwner(ownerId, { today: now.date, time: now.time }),
         models.health.listVaccinationsForOwner(ownerId)
       ]);
-      const upcoming = bookings
-        .filter((b) => (b.status === 'pending' || b.status === 'confirmed') && (b.date + ' ' + b.time) >= (now.date + ' ' + now.time))
-        .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
 
       // Evaluate per pet (the latest-dose rule applies within one pet's record).
       let dueSoonCount = 0; let overdueCount = 0; let nextDue = null;
@@ -30,7 +28,7 @@ function createDashboardService({ models, config, clock = () => new Date() }) {
       }
       return {
         petCount: pets.length,
-        bookings: { total: bookings.length, upcomingCount: upcoming.length, next: upcoming[0] || null },
+        bookings: { total: bookingCounts.total, upcomingCount: bookingCounts.upcomingCount, next: nextBooking || null },
         vaccines: { dueSoonCount, overdueCount, nextDue }
       };
     }

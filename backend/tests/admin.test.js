@@ -51,12 +51,14 @@ test('Admin API: access control, partner approval, rejection, and account disabl
   });
 
   await t.test('listUsers: returns meta, pagination, filters by status and role, never leaks passwordHash', async () => {
-    const r = await app.call('GET', '/admin/users?limit=10&offset=0', { token: adminToken });
+    const r = await app.call('GET', '/admin/users?page=1&limit=10', { token: adminToken });
     assert.equal(r.status, 200);
-    assert.ok(r.data.meta);
-    assert.equal(r.data.meta.limit, 10);
-    assert.equal(r.data.meta.offset, 0);
-    assert.ok(r.data.meta.total >= 1);
+    assert.ok(r.body.meta);
+    assert.equal(r.body.meta.page, 1);
+    assert.equal(r.body.meta.limit, 10);
+    assert.ok(r.body.meta.total >= 1);
+    assert.ok(r.body.meta.totalPages >= 1);
+    assert.equal(r.data.meta, undefined);
     assert.ok(Array.isArray(r.data.users));
 
     for (const u of r.data.users) {

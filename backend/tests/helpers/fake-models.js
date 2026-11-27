@@ -6,6 +6,7 @@
  * pet limit, per-owner scoping, cascade on pet delete, booking capacity + pet-clash check.
  */
 const { DuplicateError, LimitError } = require('../../src/utils/errors');
+const { buildMeta } = require('../../src/utils/pagination');
 
 const clone = (o) => (o === null || o === undefined ? o : JSON.parse(JSON.stringify(o)));
 
@@ -119,9 +120,10 @@ function createFakeModels() {
       }
     },
     admin: {
-      async listUsers({ status, role, q, limit = 20, offset = 0 }) {
+      async listUsers({ status, role, q, page = 1, limit = 20 }) {
+        const p = Math.max(1, Number(page) || 1);
         const lim = Math.max(1, Math.min(50, Number(limit) || 20));
-        const off = Math.max(0, Number(offset) || 0);
+        const off = (p - 1) * lim;
         const search = q ? String(q).trim().toLowerCase().slice(0, 100) : null;
 
         let filtered = s.users.slice();
@@ -136,8 +138,8 @@ function createFakeModels() {
         }
 
         const total = filtered.length;
-        // Sort by createdAt DESC
-        filtered.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        // Sort by createdAt DESC, id ASC
+        filtered.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')) || String(a.id || '').localeCompare(String(b.id || '')));
         const paged = filtered.slice(off, off + lim);
 
         return {
@@ -164,7 +166,7 @@ function createFakeModels() {
             }
             return out;
           }),
-          meta: { limit: lim, offset: off, total }
+          meta: buildMeta({ page: p, limit: lim, total })
         };
       },
 
@@ -298,14 +300,15 @@ function createFakeModels() {
       async transaction(work) {
         return models.admin.transaction(work);
       },
-      async listVets({ providerId, limit = 20, offset = 0 }) {
+      async listVets({ providerId, page = 1, limit = 20 }) {
+        const p = Math.max(1, Number(page) || 1);
         const lim = Math.max(1, Math.min(50, Number(limit) || 20));
-        const off = Math.max(0, Number(offset) || 0);
+        const off = (p - 1) * lim;
 
         let filtered = s.users.filter((u) => u.role === 'vet' && u.providerId === providerId);
         const total = filtered.length;
 
-        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') || String(a.id || '').localeCompare(String(b.id || '')));
         const paged = filtered.slice(off, off + lim).map((u) => ({
           id: u.id,
           role: u.role,
@@ -320,8 +323,15 @@ function createFakeModels() {
 
         return {
           vets: clone(paged),
-          meta: { limit: lim, offset: off, total }
+          meta: buildMeta({ page: p, limit: lim, total })
         };
+      },
+      async listVetOptions(providerId) {
+        return s.users
+          .filter((u) => u.role === 'vet' && u.status === 'active' && u.providerId === providerId)
+          .sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || '')) || String(a.id || '').localeCompare(String(b.id || '')))
+          .slice(0, 200)
+          .map((u) => ({ id: u.id, fullName: u.fullName }));
       },
       async getVetForUpdate(tx, vetId) {
         const u = s.users.find((x) => x.id === vetId && x.role === 'vet');
@@ -394,14 +404,15 @@ function createFakeModels() {
           p.updatedAt = updatedAt;
         }
       },
-      async listServices({ providerId, limit = 50, offset = 0 }) {
-        const lim = Math.max(1, Math.min(100, Number(limit) || 50));
-        const off = Math.max(0, Number(offset) || 0);
+      async listServices({ providerId, page = 1, limit = 20 }) {
+        const p = Math.max(1, Number(page) || 1);
+        const lim = Math.max(1, Math.min(50, Number(limit) || 20));
+        const off = (p - 1) * lim;
 
         let filtered = s.services.filter((x) => x.providerId === providerId);
         const total = filtered.length;
 
-        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') || String(a.id || '').localeCompare(String(b.id || '')));
         const paged = filtered.slice(off, off + lim).map((x) => ({
           id: x.id,
           providerId: x.providerId,
@@ -419,7 +430,7 @@ function createFakeModels() {
 
         return {
           services: clone(paged),
-          meta: { limit: lim, offset: off, total }
+          meta: buildMeta({ page: p, limit: lim, total })
         };
       },
       async countServices(tx, providerId) {
@@ -561,8 +572,12 @@ function createFakeModels() {
       async addVaccination(v) { s.vaccs.push({ createdAt: tick(), ...clone(v) }); return v; },
       async deleteVaccination(petId, id) { const n = s.vaccs.length; s.vaccs = s.vaccs.filter((v) => !(v.id === id && v.petId === petId)); return s.vaccs.length < n; },
       async listMedicalRecords(petId) {
-        return s.records.filter((r) => r.petId === petId).sort((a, b) => b.visitDate.localeCompare(a.visitDate))
+        return s.records.filter((r) => r.petId === petId).sort((a, b) => b.visitDate.localeCompare(a.visitDate) || b.id.localeCompare(a.id))
           .map((r) => { const vet = s.users.find((u) => u.id === r.vetId); return { id: r.id, visitDate: r.visitDate, vetName: vet ? vet.fullName : null, subjective: r.subjective, objective: r.objective, assessment: r.assessment, plan: r.plan }; });
+      },
+      async listMedicalRecordsPaginated(petId, { offset = 0, limit = 10 } = {}) {
+        const all = await this.listMedicalRecords(petId);
+        return { rows: all.slice(offset, offset + limit), total: all.length };
       },
       async getMedicalRecordByBooking(bookingId) {
         const r = s.records.find((x) => x.bookingId === bookingId);
@@ -580,7 +595,33 @@ function createFakeModels() {
       }
     },
     bookings: {
-      async listByOwner(o) { return s.bookings.filter((b) => b.ownerId === o).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).map(bookingOut); },
+      async listByOwner(o, { scope = 'all', petId = null, today = '0000-00-00', time = '00:00', offset = 0, limit = 20 } = {}) {
+        const isUp = (b) => (b.status === 'pending' || b.status === 'confirmed') && (b.date > today || (b.date === today && b.time >= time));
+        let rows = s.bookings.filter((b) => b.ownerId === o && (!petId || b.petId === petId));
+        if (scope === 'upcoming') rows = rows.filter(isUp);
+        else if (scope === 'history') rows = rows.filter((b) => !isUp(b));
+        rows = rows.slice().sort((a, b) => {
+          const ua = isUp(a) ? 1 : 0;
+          const ub = isUp(b) ? 1 : 0;
+          if (scope === 'all' && ua !== ub) return ub - ua;
+          if (ua === 1 || scope === 'upcoming') {
+            return (a.date + a.time).localeCompare(b.date + b.time) || a.id.localeCompare(b.id);
+          }
+          return (b.date + b.time).localeCompare(a.date + a.time) || b.id.localeCompare(a.id);
+        });
+        return { rows: rows.slice(offset, offset + limit).map(bookingOut), total: rows.length };
+      },
+      async countsByOwner(o, { today, time }) {
+        const isUp = (b) => (b.status === 'pending' || b.status === 'confirmed') && (b.date > today || (b.date === today && b.time >= time));
+        const mine = s.bookings.filter((b) => b.ownerId === o);
+        return { total: mine.length, upcomingCount: mine.filter(isUp).length };
+      },
+      async nextUpcomingByOwner(o, { today, time }) {
+        const isUp = (b) => (b.status === 'pending' || b.status === 'confirmed') && (b.date > today || (b.date === today && b.time >= time));
+        const up = s.bookings.filter((b) => b.ownerId === o && isUp(b))
+          .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time) || a.id.localeCompare(b.id));
+        return up[0] ? bookingOut(up[0]) : null;
+      },
       async getByOwner(id, o) { return bookingOut(s.bookings.find((b) => b.id === id && b.ownerId === o)) || null; },
       async getById(id) { return bookingOut(s.bookings.find((b) => b.id === id)) || null; },
       async countBySlot(serviceId, date) {
@@ -636,7 +677,7 @@ function createFakeModels() {
           noShowAt: b.noShowAt || null
         };
       },
-      async listByProvider(providerId, filters = {}) {
+      async listByProvider(providerId, filters = {}, { offset = 0, limit = 20 } = {}) {
         const dateFiltered = s.bookings.filter((b) => {
           if (b.providerId !== providerId) return false;
           if (filters.date && b.date !== filters.date) return false;
@@ -665,8 +706,8 @@ function createFakeModels() {
         });
 
         filtered.sort((a, b) => (a.date + a.time + a.id).localeCompare(b.date + b.time + b.id));
-        const items = await Promise.all(filtered.slice(0, 200).map((b) => this.getByIdForProvider(b.id, providerId)));
-        return { items, summary };
+        const items = await Promise.all(filtered.slice(offset, offset + limit).map((b) => this.getByIdForProvider(b.id, providerId)));
+        return { items, summary, total: filtered.length };
       },
       async hasMedicalRecordForBooking(bookingId, vetId) {
         return (s.medicalRecords || []).some((r) => r.bookingId === bookingId && r.vetId === vetId);
@@ -678,7 +719,7 @@ function createFakeModels() {
         const p = s.providers.find((x) => x.id === providerId);
         return Boolean(p && p.isActive !== false);
       },
-      async listForVet(vetId, filters = {}) {
+      async listForVet(vetId, filters = {}, { offset = 0, limit = 20 } = {}) {
         const toVetDto = (b) => {
           const pet = s.pets.find((p) => p.id === b.petId);
           const customer = s.users.find((u) => u.id === b.ownerId);
@@ -689,7 +730,7 @@ function createFakeModels() {
             notes: b.notes, hasMedicalRecord: s.records.some((r) => r.bookingId === b.id)
           };
         };
-        return s.bookings.filter((b) => {
+        const filtered = s.bookings.filter((b) => {
           if (b.vetId !== vetId) return false;
           if (filters.status && b.status !== filters.status) return false;
           if (filters.date && b.date !== filters.date) return false;
@@ -702,7 +743,8 @@ function createFakeModels() {
             if (!b.code.toLowerCase().includes(qLower) && !b.petName.toLowerCase().includes(qLower) && !cName.includes(qLower) && !b.serviceName.toLowerCase().includes(qLower)) return false;
           }
           return true;
-        }).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 200).map(toVetDto);
+        }).sort((a, b) => (a.date + a.time + a.id).localeCompare(b.date + b.time + b.id));
+        return { rows: filtered.slice(offset, offset + limit).map(toVetDto), total: filtered.length };
       },
       async getForVet(id, vetId) {
         const b = s.bookings.find((x) => x.id === id && x.vetId === vetId);

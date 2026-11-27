@@ -206,7 +206,7 @@ async function run() {
     // 7. Provider A cancels bk2 with reason -> Customer sees it
     const cancelRes = await api('PATCH', `/bookings/${bk2.id}/cancel`, { token: tokenPA, body: { reason: 'Cơ sở bảo trì' } });
     const custList = await api('GET', '/bookings', { token: tokenCust });
-    const bk2Cust = custList.data.find((x) => x.id === bk2.id);
+    const bk2Cust = (custList.data.items || custList.data).find((x) => x.id === bk2.id);
     record(
       '7. Provider cancel + Customer sees reason',
       cancelRes.status === 200 && bk2Cust?.cancelledBy === 'provider' && bk2Cust?.cancelReason === 'Cơ sở bảo trì'
@@ -346,6 +346,15 @@ async function run() {
       && pendVacc.status === 409 && pendVacc.body.code === 'invalid_transition'
       && auditViewCount === 1;
     record('15. Vet API (list, detail, MR 201/409, concurrent, pending 409, SQL AuditLog)', vetApiOk);
+
+    // 16. D1 Pagination check on GET /bookings, /provider/bookings, /vet/bookings
+    const cPage = await api('GET', '/bookings?page=1&limit=2', { token: tokenCust });
+    const pPage = await api('GET', '/provider/bookings?page=1&limit=2', { token: tokenPA });
+    const vPage = await api('GET', '/vet/bookings?page=1&limit=2', { token: tokenVetA });
+    const d1Ok = cPage.status === 200 && cPage.body?.meta?.limit === 2 && Array.isArray(cPage.body?.data?.items)
+      && pPage.status === 200 && pPage.body?.meta?.limit === 2 && Array.isArray(pPage.body?.data?.items)
+      && vPage.status === 200 && vPage.body?.meta?.limit === 2 && Array.isArray(vPage.body?.data?.items);
+    record('16. D1 pagination on /bookings, /provider/bookings, /vet/bookings', d1Ok);
   } finally {
     let cleanupFailed = false;
     try {

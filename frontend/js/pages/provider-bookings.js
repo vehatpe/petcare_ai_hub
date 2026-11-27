@@ -119,24 +119,32 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>`;
       return;
     }
-    listEl.innerHTML = `<ul class="pet-list">${bookings.map(bookingRow).join('')}</ul>`;
+    listEl.innerHTML = `<ul class="pet-list">${bookings.map(bookingRow).join('')}</ul>${Pager.render(currentMeta)}`;
+    Pager.bind(listEl, (nextPage) => loadBookings(nextPage));
   }
 
-  async function loadBookings() {
+  let currentPage = 1;
+  let currentMeta = { page: 1, limit: 20, total: 0, totalPages: 1 };
+
+  async function loadBookings(page = currentPage) {
+    currentPage = Math.max(1, Number(page) || 1);
     const params = new URLSearchParams();
     if (activeStatus) params.set('status', activeStatus);
     if (fromInput && fromInput.value) params.set('from', fromInput.value);
     if (toInput && toInput.value) params.set('to', toInput.value);
     if (vetSelect && vetSelect.value) params.set('vetId', vetSelect.value);
     if (searchInput && searchInput.value.trim()) params.set('q', searchInput.value.trim());
+    params.set('page', String(currentPage));
+    params.set('limit', '20');
 
     const qs = params.toString();
     await Panel.load(
       listEl,
-      () => Api.get(`/provider/bookings${qs ? `?${qs}` : ''}`),
-      (res) => {
-        bookings = Array.isArray(res.bookings) ? res.bookings : (Array.isArray(res.items) ? res.items : []);
-        renderSummary(res.summary);
+      () => Api.get(`/provider/bookings?${qs}`, undefined, { withMeta: true }),
+      ({ data, meta }) => {
+        bookings = Array.isArray(data?.bookings) ? data.bookings : (Array.isArray(data?.items) ? data.items : []);
+        currentMeta = meta || { page: currentPage, limit: 20, total: bookings.length, totalPages: 1 };
+        renderSummary(data?.summary);
         renderList();
       },
       { loading: 'Đang tải danh sách lịch hẹn…' }
@@ -152,9 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (_) { /* ignore profile check error */ }
 
     try {
-      const vetsRes = await Api.get('/provider/vets?limit=100');
-      const allVets = Array.isArray(vetsRes.vets) ? vetsRes.vets : [];
-      activeVets = allVets.filter((v) => v.status === 'active');
+      const vetsRes = await Api.get('/provider/vets/options');
+      activeVets = Array.isArray(vetsRes?.vets) ? vetsRes.vets : [];
       renderVetOptions();
     } catch (_) {
       activeVets = [];

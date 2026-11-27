@@ -29,9 +29,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const PAGE_SIZE = 20;
   let vets = [];
-  let currentOffset = 0;
+  let currentPage = 1;
   let currentTotal = 0;
-  let isLoadingMore = false;
+  let currentMeta = { page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 };
 
   // In-memory single-use reference for password copying (never written to storage or console)
   let activeTempPassword = null;
@@ -122,46 +122,28 @@ document.addEventListener('DOMContentLoaded', () => {
         ${vets.map(vetRow).join('')}
       </ul>`;
 
-    if (vets.length < currentTotal) {
-      loadMoreWrap.hidden = false;
-      loadMoreBtn.disabled = false;
-      loadMoreBtn.textContent = `Tải thêm (còn ${currentTotal - vets.length} bác sĩ)`;
-    } else {
-      loadMoreWrap.hidden = true;
-    }
+    const pagerHtml = Pager.render(currentMeta);
+    loadMoreWrap.innerHTML = pagerHtml;
+    loadMoreWrap.hidden = !pagerHtml;
   }
 
-  async function loadInitial() {
-    currentOffset = 0;
+  async function loadPage(page = 1) {
+    currentPage = Math.max(1, Number(page) || 1);
     return Panel.load(listEl, async () => {
-      const res = await Api.get('/provider/vets', { limit: PAGE_SIZE, offset: 0 });
-      vets = res.vets || [];
-      currentTotal = (res.meta && res.meta.total) || vets.length;
-      currentOffset = vets.length;
-      return res;
+      const { data, meta } = await Api.get('/provider/vets', { limit: PAGE_SIZE, page: currentPage }, { withMeta: true });
+      const list = (data && data.vets) || [];
+      if (currentPage > 1 && list.length === 0) {
+        return loadPage(currentPage - 1);
+      }
+      vets = list;
+      currentMeta = meta || { page: currentPage, limit: PAGE_SIZE, total: vets.length, totalPages: 1 };
+      currentTotal = currentMeta.total ?? vets.length;
+      return data;
     }, renderList, { loading: 'Đang tải danh sách bác sĩ…' });
   }
 
-  async function loadMore() {
-    if (isLoadingMore) return;
-    isLoadingMore = true;
-    loadMoreBtn.disabled = true;
-    loadMoreBtn.textContent = 'Đang tải thêm…';
-
-    try {
-      const res = await Api.get('/provider/vets', { limit: PAGE_SIZE, offset: currentOffset });
-      const nextBatch = res.vets || [];
-      vets = vets.concat(nextBatch);
-      currentTotal = (res.meta && res.meta.total) || currentTotal;
-      currentOffset += nextBatch.length;
-      renderList();
-    } catch (err) {
-      Toast.show({ title: 'Lỗi tải thêm', message: err.message || 'Không thể tải thêm bác sĩ.', type: 'danger' });
-      loadMoreBtn.disabled = false;
-      loadMoreBtn.textContent = 'Thử lại tải thêm';
-    } finally {
-      isLoadingMore = false;
-    }
+  function loadInitial() {
+    return loadPage(1);
   }
 
   /* Form submission for creating vet */
@@ -318,9 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  if (loadMoreBtn) {
-    loadMoreBtn.addEventListener('click', loadMore);
-  }
+  Pager.bind(loadMoreWrap, (nextPage) => loadPage(nextPage));
 
   if (refreshBtn) {
     refreshBtn.addEventListener('click', loadInitial);

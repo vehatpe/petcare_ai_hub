@@ -111,7 +111,7 @@ test('bookings', async (t) => {
   });
 
   await t.test('cancel flow: pending -> cancelled frees capacity; cancel twice 409; completed 409; unknown 404', async () => {
-    const list = (await call('GET', '/bookings', { token: A.token })).data;
+    const list = (await call('GET', '/bookings', { token: A.token })).data.items;
     const target = list.find((b) => b.petId === petA2.id && b.time === '14:00');
     const c = await call('PATCH', `/bookings/${target.id}/cancel`, { token: A.token });
     assert.equal(c.status, 200); assert.equal(c.data.status, 'cancelled');
@@ -129,7 +129,9 @@ test('bookings', async (t) => {
   });
 
   await t.test('list sorted by date+time and scoped to owner', async () => {
-    const a = (await call('GET', '/bookings', { token: A.token })).data;
+    const res = await call('GET', '/bookings', { token: A.token });
+    const a = res.data.items;
+    assert.ok(res.body.meta && res.body.meta.total === a.length);
     const keys = a.map((b) => b.date + b.time);
     assert.deepEqual(keys, [...keys].sort());
     assert.ok(a.every((b) => ['Bơ', 'Mít'].includes(b.petName)));

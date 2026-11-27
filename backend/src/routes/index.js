@@ -54,6 +54,7 @@ function createRouter({ services, mw, config, models }) {
   r.delete('/pets/:id/weights/:metricId', customer, uuidParam('id'), uuidParam('metricId'), c.health.deleteWeight);
   r.post('/pets/:id/vaccinations', customer, uuidParam('id'), c.health.addVaccination);
   r.delete('/pets/:id/vaccinations/:vaccinationId', customer, uuidParam('id'), uuidParam('vaccinationId'), c.health.deleteVaccination);
+  r.get('/pets/:id/medical-records', customer, uuidParam('id'), c.health.listMedicalRecords);
 
   r.get('/bookings', customer, c.booking.list);
   r.post('/bookings', customer, c.booking.create);
@@ -90,6 +91,7 @@ function createRouter({ services, mw, config, models }) {
   r.post('/provider/services/:id/enable', provider, c.provider.enableService);
 
   r.post('/provider/vets', providerOrAdmin, c.provider.createVet);
+  r.get('/provider/vets/options', providerOrAdmin, c.provider.listVetOptions);
   r.get('/provider/vets', providerOrAdmin, c.provider.listVets);
   r.post('/provider/vets/:id/disable', providerOrAdmin, uuidParam('id'), c.provider.disableVet);
   r.post('/provider/vets/:id/enable', providerOrAdmin, uuidParam('id'), c.provider.enableVet);

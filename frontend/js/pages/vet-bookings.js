@@ -88,8 +88,14 @@
         </li>`;
     }
 
-    function renderList(data) {
+    let currentPage = 1;
+    let currentMeta = { page: 1, limit: 20, total: 0, totalPages: 1 };
+
+    function renderList(res) {
+      const data = res && res.data ? res.data : res;
+      const meta = res && res.meta ? res.meta : null;
       const items = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+      currentMeta = meta || { page: currentPage, limit: 20, total: items.length, totalPages: 1 };
       if (!items.length) {
         listEl.innerHTML = `
           <div class="empty-state">
@@ -98,14 +104,16 @@
           </div>`;
         return;
       }
-      listEl.innerHTML = `<ul class="booking-list">${items.map(renderItem).join('')}</ul>`;
+      listEl.innerHTML = `<ul class="booking-list">${items.map(renderItem).join('')}</ul>${Pager.render(currentMeta)}`;
+      Pager.bind(listEl, (nextPage) => loadBookings(nextPage));
     }
 
-    function loadBookings() {
+    function loadBookings(page = 1) {
+      currentPage = Math.max(1, Number(page) || 1);
       updateQuickButtons();
       return Panel.load(
         listEl,
-        () => Api.get(`/vet/bookings${buildQuery()}`),
+        () => Api.get(`/vet/bookings${buildQuery()}`, { page: currentPage, limit: 20 }, { withMeta: true }),
         renderList,
         { loading: 'Đang tải lịch khám…' }
       );
@@ -113,15 +121,15 @@
 
     filterForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      loadBookings();
+      loadBookings(1);
     });
 
-    statusEl.addEventListener('change', loadBookings);
-    fromEl.addEventListener('change', loadBookings);
-    toEl.addEventListener('change', loadBookings);
+    statusEl.addEventListener('change', () => loadBookings(1));
+    fromEl.addEventListener('change', () => loadBookings(1));
+    toEl.addEventListener('change', () => loadBookings(1));
     searchEl.addEventListener('input', () => {
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(loadBookings, 300);
+      searchTimer = setTimeout(() => loadBookings(1), 300);
     });
 
     document.addEventListener('click', (e) => {

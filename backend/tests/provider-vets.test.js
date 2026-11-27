@@ -200,7 +200,8 @@ test('C1: Provider management of Vets and Mandatory Change Password', async (t) 
   await t.test('GET /provider/vets lists only own vets, with pagination and no password/hash', async () => {
     const r = await app.call('GET', '/provider/vets', { token: providerToken });
     assert.equal(r.status, 200);
-    assert.ok(r.data.meta);
+    assert.ok(r.body.meta);
+    assert.equal(r.data.meta, undefined);
     assert.equal(r.data.vets.length, 1);
     assert.equal(r.data.vets[0].id, createdVet.id);
     assert.equal(r.data.vets[0].passwordHash, undefined);

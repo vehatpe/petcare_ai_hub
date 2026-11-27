@@ -1,19 +1,17 @@
 'use strict';
 const crypto = require('node:crypto');
 const { validation, notFound, conflict } = require('../utils/errors');
-const { validateBooking } = require('../utils/validators');
+const { validateBooking, isUuid } = require('../utils/validators');
 const { nowInTz } = require('../utils/time');
+const { parsePagination, buildMeta } = require('../utils/pagination');
 const { assertTransition, minutesUntil, TERMINAL_STATUSES } = require('../utils/booking-state');
 
+const VALID_SCOPES = new Set(['all', 'upcoming', 'history']);
 const VALID_BOOKING_STATUSES = new Set(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']);
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function isYmd(s) {
   if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const d = new Date(`${s}T00:00:00.000Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
-}
-function isUuid(s) {
-  return typeof s === 'string' && UUID_RE.test(s);
 }
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -30,9 +28,27 @@ function createBookingService({ models, config, clock = () => new Date() }) {
     : 2;
 
   return {
-    list: async (ownerId) => {
-      const rows = await models.bookings.listByOwner(ownerId);
-      return Array.isArray(rows) ? rows.map((b) => ({ ...b, cancelWindowHours })) : rows;
+    async list(ownerId, query = {}) {
+      const { page, limit, offset } = parsePagination(query);
+      const scope = typeof query.scope === 'string' && query.scope.trim() ? query.scope.trim() : 'all';
+      if (!VALID_SCOPES.has(scope)) {
+        throw validation('Phạm vi lọc lịch hẹn không hợp lệ.', { scope: 'Phạm vi lọc phải là all, upcoming hoặc history.' });
+      }
+      let petId = null;
+      if (query.petId !== undefined && query.petId !== '') {
+        if (!isUuid(query.petId)) {
+          throw validation('Mã thú cưng không hợp lệ.', { petId: 'Mã thú cưng không hợp lệ.' });
+        }
+        petId = String(query.petId).toLowerCase();
+      }
+      const now = nowInTz(clock(), config.timezone);
+      const { rows, total } = await models.bookings.listByOwner(ownerId, {
+        scope, petId, today: now.date, time: now.time, offset, limit
+      });
+      return {
+        items: rows.map((b) => ({ ...b, cancelWindowHours })),
+        meta: buildMeta({ page, limit, total })
+      };
     },
 
     async create(ownerId, input) {
@@ -195,7 +211,9 @@ function createBookingService({ models, config, clock = () => new Date() }) {
         throw validation('Tham số lọc không hợp lệ.', errors);
       }
 
-      return models.bookings.listByProvider(providerId, filters);
+      const { page, limit, offset } = parsePagination(query);
+      const { items, summary, total } = await models.bookings.listByProvider(providerId, filters, { offset, limit });
+      return { items, summary, meta: buildMeta({ page, limit, total }) };
     },
 
     async _requireActiveFacility(providerId) {

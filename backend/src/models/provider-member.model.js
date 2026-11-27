@@ -1,5 +1,6 @@
 'use strict';
 const { T, lc, iso } = require('./db');
+const { buildMeta } = require('../utils/pagination');
 
 const VET_COLS = `u.UserId, u.Role, u.Status, u.FullName, u.Email, u.Phone, u.CreatedAt,
                   u.ProviderId, u.MustChangePassword, u.TokenVersion`;
@@ -18,9 +19,10 @@ const mapVet = (r) => r && ({
 });
 
 module.exports = (db) => ({
-  async listVets({ providerId, limit = 20, offset = 0 }) {
+  async listVets({ providerId, page = 1, limit = 20 }) {
+    const p = Math.max(1, Number(page) || 1);
     const lim = Math.max(1, Math.min(50, Number(limit) || 20));
-    const off = Math.max(0, Number(offset) || 0);
+    const off = (p - 1) * lim;
 
     const params = {
       providerId: [T.vstr(50), providerId],
@@ -36,14 +38,25 @@ module.exports = (db) => ({
       SELECT ${VET_COLS}
       FROM dbo.Users u
       WHERE u.Role = 'vet' AND u.ProviderId = @providerId
-      ORDER BY u.CreatedAt DESC
+      ORDER BY u.CreatedAt DESC, u.UserId ASC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `;
     const rows = await db.query(dataSql, params);
     return {
       vets: rows.map(mapVet),
-      meta: { limit: lim, offset: off, total }
+      meta: buildMeta({ page: p, limit: lim, total })
     };
+  },
+
+  async listVetOptions(providerId) {
+    const rows = await db.query(
+      `SELECT TOP 200 u.UserId, u.FullName
+       FROM dbo.Users u
+       WHERE u.Role = 'vet' AND u.Status = 'active' AND u.ProviderId = @providerId
+       ORDER BY u.FullName ASC, u.UserId ASC`,
+      { providerId: [T.vstr(50), providerId] }
+    );
+    return rows.map((r) => ({ id: lc(r.UserId), fullName: r.FullName }));
   },
 
   async getVetForUpdate(tx, vetId) {
@@ -142,9 +155,10 @@ module.exports = (db) => ({
     );
   },
 
-  async listServices({ providerId, limit = 50, offset = 0 }) {
-    const lim = Math.max(1, Math.min(100, Number(limit) || 50));
-    const off = Math.max(0, Number(offset) || 0);
+  async listServices({ providerId, page = 1, limit = 20 }) {
+    const p = Math.max(1, Number(page) || 1);
+    const lim = Math.max(1, Math.min(50, Number(limit) || 20));
+    const off = (p - 1) * lim;
 
     const params = {
       providerId: [T.vstr(50), providerId],
@@ -160,7 +174,7 @@ module.exports = (db) => ({
       SELECT ServiceId, ProviderId, Category, CategoryLabel, Name, Description, PriceVnd, Unit, SlotCapacity, IsActive, IsSample, CreatedAt
       FROM dbo.Services
       WHERE ProviderId = @providerId
-      ORDER BY CreatedAt DESC
+      ORDER BY CreatedAt DESC, ServiceId ASC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `;
     const rows = await db.query(dataSql, params);
@@ -179,7 +193,7 @@ module.exports = (db) => ({
         isSample: Boolean(r.IsSample),
         createdAt: iso(r.CreatedAt)
       })),
-      meta: { limit: lim, offset: off, total }
+      meta: buildMeta({ page: p, limit: lim, total })
     };
   },
 

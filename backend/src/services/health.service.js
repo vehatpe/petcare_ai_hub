@@ -4,6 +4,7 @@ const { validation, notFound, conflict } = require('../utils/errors');
 const { validateWeight, validateVaccination, validateMedicalRecord, isUuid, isValidYmd } = require('../utils/validators');
 const { todayInTz } = require('../utils/time');
 const { evaluateVaccinations } = require('../utils/health');
+const { parsePagination, buildMeta } = require('../utils/pagination');
 const { VALID_BOOKING_STATUSES } = require('../utils/booking-state');
 
 function createHealthService({ models, config, clock = () => new Date() }) {
@@ -19,10 +20,10 @@ function createHealthService({ models, config, clock = () => new Date() }) {
     async aggregate(ownerId, petId) {
       if (!isUuid(petId)) fail({ petId: 'Vui lòng chọn thú cưng.' });
       const pet = await ownedPet(ownerId, petId.toLowerCase());
-      const [weights, vacc, records] = await Promise.all([
+      const [weights, vacc, medicalRes] = await Promise.all([
         models.health.listWeights(pet.id),
         models.health.listVaccinations(pet.id),
-        models.health.listMedicalRecords(pet.id)
+        models.health.listMedicalRecordsPaginated(pet.id, { offset: 0, limit: 10 })
       ]);
       const ev = evaluateVaccinations(vacc, today());
       return {
@@ -31,8 +32,16 @@ function createHealthService({ models, config, clock = () => new Date() }) {
         weightChart: { count: weights.length, canRender: weights.length >= 2 },
         vaccinations: ev.list,
         vaccineSummary: ev.summary,
-        medicalRecords: records
+        medicalRecords: medicalRes.rows,
+        medicalRecordsMeta: { limit: 10, total: medicalRes.total }
       };
+    },
+
+    async listMedicalRecords(ownerId, petId, query = {}) {
+      const pet = await ownedPet(ownerId, petId);
+      const { page, limit, offset } = parsePagination(query);
+      const { rows, total } = await models.health.listMedicalRecordsPaginated(pet.id, { offset, limit });
+      return { items: rows, meta: buildMeta({ page, limit, total }) };
     },
 
     async addWeight(ownerId, petId, input) {
@@ -99,7 +108,9 @@ function createHealthService({ models, config, clock = () => new Date() }) {
         else if (q.length > 0) filters.q = q;
       }
       if (Object.keys(errors).length) fail(errors);
-      return models.bookings.listForVet(vet.id, filters);
+      const { page, limit, offset } = parsePagination(query);
+      const { rows, total } = await models.bookings.listForVet(vet.id, filters, { offset, limit });
+      return { items: rows, meta: buildMeta({ page, limit, total }) };
     },
 
     async getVetBookingDetail(vet, bookingId) {

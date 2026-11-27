@@ -33,6 +33,8 @@ const mapCustomer = (r) => r && ({
   createdAt: iso(r.CreatedAt)
 });
 
+const UPCOMING_EXPR = `CASE WHEN Status IN ('pending','confirmed') AND (BookingDate > CAST(@today AS DATE) OR (BookingDate = CAST(@today AS DATE) AND BookingTime >= @time)) THEN 1 ELSE 0 END`;
+
 const mapProvider = (r) => r && ({
   id: lc(r.BookingId),
   code: r.BookingCode,
@@ -88,8 +90,64 @@ module.exports = (db) => {
     mapCustomer((await db.query(`${SELECT} WHERE b.BookingId = @id AND b.UserId = @owner`, { id: [T.guid, id], owner: [T.guid, ownerId] }))[0]);
 
   return {
-    async listByOwner(ownerId) {
-      return (await db.query(`${SELECT} WHERE b.UserId = @owner ORDER BY b.BookingDate, b.BookingTime, b.CreatedAt`, { owner: [T.guid, ownerId] })).map(mapCustomer);
+    async listByOwner(ownerId, { scope = 'all', petId = null, today, time, offset = 0, limit = 20 } = {}) {
+      const scopeFilter = scope === 'upcoming' ? 'AND u.IsUpcoming = 1' : scope === 'history' ? 'AND u.IsUpcoming = 0' : '';
+      const orderBy = scope === 'upcoming'
+        ? 'BookingDate ASC, BookingTime ASC, BookingId ASC'
+        : scope === 'history'
+          ? 'BookingDate DESC, BookingTime DESC, BookingId DESC'
+          : `u.IsUpcoming DESC,
+             CASE WHEN u.IsUpcoming = 1 THEN CONVERT(CHAR(10), BookingDate, 23) + ' ' + BookingTime END ASC,
+             CASE WHEN u.IsUpcoming = 0 THEN CONVERT(CHAR(10), BookingDate, 23) + ' ' + BookingTime END DESC,
+             BookingId ASC`;
+      const params = {
+        owner: [T.guid, ownerId],
+        petId: [T.guid, petId],
+        today: [T.ymd, today],
+        time: [T.vstr(5), time],
+        offset: [T.int, offset],
+        limit: [T.int, limit]
+      };
+      const [countRow] = await db.query(
+        `SELECT COUNT(*) AS total
+         FROM dbo.Bookings
+         CROSS APPLY (SELECT ${UPCOMING_EXPR} AS IsUpcoming) u
+         WHERE UserId = @owner AND (@petId IS NULL OR PetId = @petId) ${scopeFilter}`,
+        params
+      );
+      const rows = await db.query(
+        `${SELECT}
+         CROSS APPLY (SELECT ${UPCOMING_EXPR} AS IsUpcoming) u
+         WHERE UserId = @owner AND (@petId IS NULL OR PetId = @petId) ${scopeFilter}
+         ORDER BY ${orderBy}
+         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`,
+        params
+      );
+      return { rows: rows.map(mapCustomer), total: Number(countRow?.total) || 0 };
+    },
+    async countsByOwner(ownerId, { today, time }) {
+      const [row] = await db.query(
+        `SELECT COUNT(*) AS total,
+                SUM(${UPCOMING_EXPR}) AS upcomingCount
+         FROM dbo.Bookings
+         WHERE UserId = @owner`,
+        { owner: [T.guid, ownerId], today: [T.ymd, today], time: [T.vstr(5), time] }
+      );
+      return {
+        total: Number(row?.total) || 0,
+        upcomingCount: Number(row?.upcomingCount) || 0
+      };
+    },
+    async nextUpcomingByOwner(ownerId, { today, time }) {
+      const rows = await db.query(
+        `${SELECT.replace('SELECT ', 'SELECT TOP (1) ')}
+         WHERE UserId = @owner
+           AND Status IN ('pending','confirmed')
+           AND (BookingDate > CAST(@today AS DATE) OR (BookingDate = CAST(@today AS DATE) AND BookingTime >= @time))
+         ORDER BY BookingDate ASC, BookingTime ASC, BookingId ASC`,
+        { owner: [T.guid, ownerId], today: [T.ymd, today], time: [T.vstr(5), time] }
+      );
+      return mapCustomer(rows[0]) || null;
     },
     getByOwner,
     async getById(id) {
@@ -215,7 +273,7 @@ module.exports = (db) => {
       );
       return mapProvider(rows[0]);
     },
-    async listByProvider(providerId, filters = {}) {
+    async listByProvider(providerId, filters = {}, { offset = 0, limit = 20 } = {}) {
       const dateWhere = ['b.ProviderId = @providerId'];
       const params = { providerId: [T.vstr(50), providerId] };
 
@@ -248,11 +306,18 @@ module.exports = (db) => {
         params.q = [T.str(200), `%${escapedQ}%`];
       }
 
-      const rows = await db.query(
-        `${PROVIDER_SELECT.replace('SELECT ', 'SELECT TOP 200 ')}
-         WHERE ${itemWhere.join(' AND ')}
-         ORDER BY b.BookingDate ASC, b.BookingTime ASC, b.BookingId ASC`,
+      const [countRow] = await db.query(
+        `SELECT COUNT(*) AS total
+         FROM dbo.Bookings b
+         WHERE ${itemWhere.join(' AND ')}`,
         params
+      );
+      const rows = await db.query(
+        `${PROVIDER_SELECT}
+         WHERE ${itemWhere.join(' AND ')}
+         ORDER BY b.BookingDate ASC, b.BookingTime ASC, b.BookingId ASC
+         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`,
+        { ...params, offset: [T.int, offset], limit: [T.int, limit] }
       );
 
       const summaryRows = await db.query(
@@ -269,7 +334,7 @@ module.exports = (db) => {
         }
       }
 
-      return { items: rows.map(mapProvider), summary };
+      return { items: rows.map(mapProvider), summary, total: Number(countRow?.total) || 0 };
     },
     async hasMedicalRecordForBooking(bookingId, vetId) {
       const rows = await db.query(
@@ -292,7 +357,7 @@ module.exports = (db) => {
       );
       return rows.length > 0 && Boolean(rows[0].IsActive);
     },
-    async listForVet(vetId, filters = {}) {
+    async listForVet(vetId, filters = {}, { offset = 0, limit = 20 } = {}) {
       const where = ['b.VetId = @vetId'];
       const params = { vetId: [T.guid, vetId] };
       if (filters.status) { where.push('b.Status = @status'); params.status = [T.vstr(20), filters.status]; }
@@ -303,8 +368,16 @@ module.exports = (db) => {
         where.push('(b.BookingCode LIKE @q OR b.PetName LIKE @q OR u.FullName LIKE @q OR b.ServiceName LIKE @q)');
         params.q = [T.str(100), `%${filters.q}%`];
       }
+      const [countRow] = await db.query(
+        `SELECT COUNT(*) AS total
+         FROM dbo.Bookings b
+         LEFT JOIN dbo.Pets p ON p.PetId = b.PetId
+         LEFT JOIN dbo.Users u ON u.UserId = b.UserId
+         WHERE ${where.join(' AND ')}`,
+        params
+      );
       const rows = await db.query(
-        `SELECT TOP 200 b.BookingId, b.BookingCode, b.PetId, b.PetName, p.Species AS PetSpecies,
+        `SELECT b.BookingId, b.BookingCode, b.PetId, b.PetName, p.Species AS PetSpecies,
                 b.ServiceName, CONVERT(CHAR(10), b.BookingDate, 23) AS BookingDate, b.BookingTime,
                 b.Status, u.FullName AS CustomerName, b.Notes,
                 CASE WHEN EXISTS (SELECT 1 FROM dbo.Medical_Records mr WHERE mr.BookingId = b.BookingId) THEN 1 ELSE 0 END AS HasMedicalRecord
@@ -312,10 +385,11 @@ module.exports = (db) => {
          LEFT JOIN dbo.Pets p ON p.PetId = b.PetId
          LEFT JOIN dbo.Users u ON u.UserId = b.UserId
          WHERE ${where.join(' AND ')}
-         ORDER BY b.BookingDate ASC, b.BookingTime ASC, b.BookingId ASC`,
-        params
+         ORDER BY b.BookingDate ASC, b.BookingTime ASC, b.BookingId ASC
+         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`,
+        { ...params, offset: [T.int, offset], limit: [T.int, limit] }
       );
-      return rows.map(mapVet);
+      return { rows: rows.map(mapVet), total: Number(countRow?.total) || 0 };
     },
     async getForVet(id, vetId, executor = db) {
       const lock = executor !== db ? 'WITH (UPDLOCK, HOLDLOCK)' : '';

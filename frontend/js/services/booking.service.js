@@ -19,9 +19,16 @@
   const BookingService = {
     STATUS,
 
-    async list() {
-      if (!AuthService.isLoggedIn()) return [];
-      return Api.get('/bookings');
+    async list(params = {}) {
+      if (!AuthService.isLoggedIn()) {
+        return { items: [], meta: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+      }
+      const { data, meta } = await Api.get('/bookings', params, { withMeta: true });
+      const items = (data && data.items) || [];
+      return {
+        items,
+        meta: meta || { page: 1, limit: 20, total: items.length, totalPages: 1 }
+      };
     },
 
     /** Throws ApiError; `err.errors` may carry { time } for slot conflicts. */

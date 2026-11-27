@@ -218,7 +218,7 @@ test('Provider Bookings API: list, filters, transitions, vet assignment, permiss
 
     // Customer sees cancelledBy & cancelReason in GET /bookings
     const custList = await call('GET', '/bookings', { token: cust.token });
-    const b2Cust = custList.data.find((x) => x.id === b2Id);
+    const b2Cust = (custList.data.items || custList.data).find((x) => x.id === b2Id);
     assert.equal(b2Cust.status, 'cancelled');
     assert.equal(b2Cust.cancelledBy, 'provider');
     assert.equal(b2Cust.cancelReason, 'Bác sĩ nghỉ đột xuất');

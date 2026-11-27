@@ -83,7 +83,7 @@ Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài k
 
 | Method | Path | Query / Body | Kết quả & Quy tắc |
 |---|---|---|---|
-| GET | `/admin/users?status=&role=&q=&limit=&offset=` | Query: `status` (active/pending/disabled/rejected), `role` (customer/provider/vet/admin), `q` (tìm kiếm theo tên, email, SĐT), `limit` (mặc định 20, tối đa 50), `offset` (mặc định 0). | 200 `{ users: User[], meta: { limit, offset, total } }`. Với dòng provider trả thêm `licenseNo`, `taxCode`, `hasLegalInfo`. Không rò rỉ trường nhạy cảm (`passwordHash`, `tokenVersion`). |
+| GET | `/admin/users?status=&role=&q=&page=&limit=` | Query: `status` (active/pending/disabled/rejected), `role` (customer/provider/vet/admin), `q` (tìm kiếm theo tên, email, SĐT), `page` (số nguyên ≥ 1, mặc định 1), `limit` (số nguyên ≥ 1, mặc định 20, tối đa 50). | 200 `data: { users: User[] }`, `meta: { page, limit, total, totalPages }` ở cấp ngoài. Với dòng provider trả thêm `licenseNo`, `taxCode`, `hasLegalInfo`. Không rò rỉ trường nhạy cảm (`passwordHash`, `tokenVersion`). |
 | POST | `/admin/users/:id/approve` | Body: `{ area? }` (bắt buộc nếu tài khoản provider chưa có `orgArea`). | 200 `{ id, role, status: "active", providerId, orgArea, approvedBy, approvedAt }`. Chạy trong 1 transaction: tạo dòng `Providers` (slug từ `orgName` duy nhất ≤ 50 ký tự, `isActive=1`), cập nhật `Users.ProviderId`, `Status='active'`, `ApprovedBy/At`, ghi `AuditLog`. Chỉ áp dụng cho `provider` `pending` (duyệt lặp → 409 `conflict`, thiếu area → 422 `validation`). |
 | POST | `/admin/users/:id/reject` | Body: `{ reason }` (bắt buộc, tối đa 200 ký tự). | 200 `{ id, status: "rejected", rejectReason }`. Chỉ áp dụng cho user `pending` (không áp dụng cho `admin`). Ghi `AuditLog`. Từ chối là kết thúc vòng đời. |
 | POST | `/admin/users/:id/disable` | – | 200 `{ id, status: "disabled" }`. Chỉ áp dụng cho tài khoản `active`. Khóa `provider` sẽ cùng transaction khóa toàn bộ `vet` thuộc cơ sở đó và đặt `Providers.IsActive = 0`. Ràng buộc: Admin không tự khóa mình (403); không được khóa Admin `active` cuối cùng (403). Ghi `AuditLog`. |
@@ -104,7 +104,7 @@ Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài k
 
 | Method | Path | Query / Body | Kết quả & Quy tắc |
 |---|---|---|---|
-| GET | `/provider/services` | Query: `limit`, `offset` | 200 `{ services: Service[], meta: { limit, offset, total }, options: { categories: [{ id, labels: [...] }], priceMaxVnd, capacityMax, nameMax, unitMax } }`. Trả về cả dịch vụ đang ẩn (`isActive: false`) của chính cơ sở. `options` chứa hằng số backend định nghĩa danh mục và nhãn dịch vụ động (frontend dùng trực tiếp từ options, không phụ thuộc cứng vào file seed). |
+| GET | `/provider/services` | Query: `page`, `limit` | 200 `data: { services: Service[], options: { categories: [{ id, labels: [...] }], priceMaxVnd, capacityMax, nameMax, unitMax } }`, `meta: { page, limit, total, totalPages }` ở cấp ngoài. Trả về cả dịch vụ đang ẩn (`isActive: false`) của chính cơ sở. `options` chứa hằng số backend định nghĩa danh mục và nhãn dịch vụ động (frontend dùng trực tiếp từ options, không phụ thuộc cứng vào file seed). |
 | POST | `/provider/services` | Body: `{ name, category, categoryLabel?, priceVnd, unit, slotCapacity?, description? }` | 201 `Service`. Server tự sinh `ServiceId` dạng `<providerId>-<slug-tên>` (rút gọn ≤ 50 ký tự; trùng thêm số `-2`, `-3`). Mặc định `IsSample = 0`, `IsActive = 1`. Kiểm tra: `name` 3–200 ký tự (trim); không trùng tên (không phân biệt hoa thường) với dịch vụ khác của cùng cơ sở, kể cả dịch vụ đang ẩn → 409 `duplicate`; `category` ∈ `medical | grooming | hotel | emergency`; `categoryLabel` phải thuộc nhãn của danh mục (thiếu mặc định nhãn đầu); `priceVnd` số nguyên 0 đến 100.000.000; `unit` 1–30 ký tự; `slotCapacity` 1–50 (mặc định 3); `description` ≤ 500 ký tự. Tối đa 50 dịch vụ/cơ sở → 409. Ghi AuditLog `service_created` (TargetType: `service`). |
 | PUT | `/provider/services/:id` | Body: `{ name?, category?, categoryLabel?, priceVnd?, unit?, slotCapacity?, description? }` | 200 `Service`. Sửa thông tin dịch vụ. Không đổi được `ProviderId`. Kiểm tra trùng tên và tính tương thích của danh mục & nhãn. Khi không có trường nào thay đổi (kể cả body `{}` hoặc giá trị y nguyên): không cập nhật DB, không ghi AuditLog. Khi có thay đổi: ghi AuditLog `service_updated` (Detail chỉ lưu `serviceId` và danh sách tên các trường thật sự thay đổi). |
 | POST | `/provider/services/:id/disable` | – | 200 `{ id, isActive: false }`. Ngừng cung cấp dịch vụ: ẩn khỏi trang công khai, không nhận lịch mới, lịch cũ giữ nguyên. Trùng trạng thái (đã tắt) → 409 conflict. Ghi AuditLog `service_disabled`. |
@@ -116,15 +116,16 @@ Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài k
 | Method | Path | Query / Body | Kết quả & Quy tắc |
 |---|---|---|---|
 | POST | `/provider/vets` | Body: `{ fullName, email, phone, providerId? }` | 201 `{ vet: User, tempPassword }`. Header kèm `Cache-Control: no-store`. Provider chỉ được tạo vet cho chính cơ sở của mình (`ProviderId` lấy từ tài khoản người gọi). Admin bắt buộc truyền `providerId` (cơ sở phải tồn tại và `IsActive = 1`, nếu không → 404/422). Mật khẩu tạm sinh ngẫu nhiên (≥ 12 ký tự, đủ hoa/thường/số) và chỉ trả **duy nhất một lần** trong phản hồi; không bao giờ lưu trữ dạng thô hoặc ghi log/AuditLog. Cờ `MustChangePassword = 1`. Trùng email/phone → 409 `duplicate` có `errors.email`/`errors.phone`. Ghi AuditLog `vet_created`. |
-| GET | `/provider/vets` | Query: `limit`, `offset`, `providerId?` (chỉ dành cho admin) | 200 `{ vets: User[], meta: { limit, offset, total } }`. Chỉ trả danh sách bác sĩ thuộc cơ sở của provider gọi API (hoặc cơ sở do admin chỉ định). Tuyệt đối không trả `passwordHash` hay mật khẩu tạm. |
+| GET | `/provider/vets` | Query: `page`, `limit`, `providerId?` (chỉ dành cho admin) | 200 `data: { vets: User[] }`, `meta: { page, limit, total, totalPages }` ở cấp ngoài. Chỉ trả danh sách bác sĩ thuộc cơ sở của provider gọi API (hoặc cơ sở do admin chỉ định). Tuyệt đối không trả `passwordHash` hay mật khẩu tạm. |
+| GET | `/provider/vets/options` | Query: `providerId?` (chỉ dành cho admin) | 200 `data: { vets: [{ id, fullName }] }`. Chỉ trả Vet `active` của cơ sở (tối đa 200, sắp theo tên rồi `id`, không phân trang, không email/SĐT). |
 | POST | `/provider/vets/:id/disable` | – | 200 `{ id, status: "disabled" }`. Chỉ áp dụng cho vet thuộc chính cơ sở của người gọi (vet thuộc cơ sở khác trả 404 để không lộ sự tồn tại). Vet phải đang ở trạng thái `active`. Ghi AuditLog `disable_vet`. |
 | POST | `/provider/vets/:id/enable` | – | 200 `{ id, status: "active" }`. Chỉ áp dụng cho vet thuộc chính cơ sở của người gọi (vet thuộc cơ sở khác trả 404). Chỉ được mở khóa khi cơ sở của vet đang hoạt động (`Providers.IsActive = 1`), nếu cơ sở bị khóa → 409 conflict. Ghi AuditLog `enable_vet`. |
 
 ## Danh mục (công khai, không cần token)
 | Method | Path | Ghi chú |
 |---|---|---|
-| GET | `/providers` | `Provider[]` đang hoạt động |
-| GET | `/services?category=&providerId=&q=` | `Service[]` đang hoạt động |
+| GET | `/providers` | `Provider[]` đang hoạt động (trần tối đa `500` dòng, không phân trang, không `meta`) |
+| GET | `/services?category=&providerId=&q=` | `Service[]` đang hoạt động (trần tối đa `500` dòng, không phân trang, không `meta`) |
 | GET | `/services/:id` | `Service` |
 | GET | `/services/:id/slots?date=YYYY-MM-DD` | `[{time, available}]`. Khung giờ cố định: 08:30 09:30 10:30 14:00 15:30 16:30 18:00 19:30. `available=false` khi đủ `SlotCapacity` lịch chưa hủy, hoặc giờ đã qua (ngày hôm nay, múi giờ `APP_TIMEZONE`). Ngày quá khứ → 422. |
 
@@ -149,7 +150,9 @@ Validation: name 1–40; species/sex thuộc tập; birthDate hợp lệ, không
 | DELETE | `/pets/:id/weights/:metricId` | xóa số đo nhập nhầm |
 | POST | `/pets/:id/vaccinations` | `{vaccineName, administeredOn, nextDueOn?, providerName?, batchNo?}` → 201. Bản ghi do chủ nuôi nhập có `source:"owner"` (chưa được cơ sở xác nhận). |
 | DELETE | `/pets/:id/vaccinations/:vaccinationId` | chỉ xóa được bản ghi `source:"owner"` |
-| GET | `/vet/bookings` | chỉ role `vet`; lọc `status`, `date`, `from`/`to` (≤ 92 ngày), `q`; tối đa 200 dòng |
+| GET | `/pets/:id/medical-records` | Query: `page`, `limit` → 200 `data: { items: MedicalRecord[] }`, `meta` cấp ngoài; sắp theo `visitDate` giảm dần |
+| POST | `/pets/:id/medical-records` | chỉ role `vet`/`admin`; `{visitDate, subjective, objective, assessment, plan, bookingId?}` |
+| GET | `/vet/bookings` | chỉ role `vet`; lọc `status`, `date`, `from`/`to` (≤ 92 ngày), `q`, phân trang `page`, `limit` (trả `data: { items }` + `meta` cấp ngoài) |
 | GET | `/vet/bookings/:id` | chỉ role `vet` được gán; trả chi tiết lịch + hồ sơ thú cưng (không `photo`), ghi `AuditLog` (`health_record_viewed`) |
 | POST | `/vet/bookings/:id/medical-record` | chỉ role `vet` được gán, lịch `confirmed`/`completed`; `{subjective, objective, assessment, plan}` (mỗi lịch tối đa 1 bệnh án) |
 | POST | `/vet/bookings/:id/vaccinations` | chỉ role `vet` được gán, lịch `confirmed`/`completed`; `{vaccineName, administeredOn, nextDueOn?, batchNo?}` (`source='clinic'`, `providerName` từ DB) |
@@ -162,14 +165,15 @@ Tổng hợp `GET /health-records?petId=`:
   vaccinations:[{id, vaccineName, administeredOn, nextDueOn|null, providerName, batchNo, source:"owner"|"clinic",
                  status:"ok"|"due-soon"|"overdue"|"recorded"}],   // status tính ở server theo ngày hiện tại
   vaccineSummary:{ total, upToDate, dueSoon, overdue, nextDue:{vaccineName, dueOn}|null },
-  medicalRecords:[{id, visitDate, vetName|null, subjective, objective, assessment, plan}] }  // mới → cũ
+  medicalRecords:[{id, visitDate, vetName|null, subjective, objective, assessment, plan}], // tối đa 10 bản ghi mới nhất
+  medicalRecordsMeta:{ limit: 10, total } }
 ```
 Quy tắc trạng thái tiêm: với mỗi `vaccineName` chỉ tính mũi có `administeredOn` mới nhất. `nextDueOn` null → `recorded`; `< hôm nay` → `overdue`; trong 30 ngày tới → `due-soon`; còn lại `ok`. `vaccineSummary` đếm trên các mũi mới nhất đó; `total` = số loại vắc-xin; không có dữ liệu thì mọi số bằng 0 và `nextDue:null`. Server **không** trả cờ kiểu "sổ tiêm hợp lệ" nào ngoài các số tính được.
 
 ## Lịch hẹn (customer)
 | Method | Path | Ghi chú |
 |---|---|---|
-| GET | `/bookings` | `Booking[]` của chủ, sắp theo ngày+giờ |
+| GET | `/bookings` | **Thay đổi hợp đồng (S18):** Query: `page`, `limit`, `scope?` (`all` \| `upcoming` \| `history`), `petId?` (GUID). Trả `data: { items: Booking[] }` + `meta` cấp ngoài. `scope=all` sắp nhóm "sắp tới" (`pending`/`confirmed` và ngày/giờ >= hiện tại theo `APP_TIMEZONE`) tăng dần trước, sau đó nhóm lịch sử giảm dần. |
 | POST | `/bookings` | `{petId, serviceId, date, time, notes?}` → 201 `Booking` status `pending`. Kiểm tra: bé thuộc chủ; dịch vụ còn hoạt động; ngày không ở quá khứ; `time` thuộc khung giờ; còn chỗ (`SlotCapacity`); bé không trùng giờ → 409 `conflict` với `errors.time`. |
 | PATCH | `/bookings/:id/cancel` | Customer hủy (`pending` hoặc `confirmed` còn ≥ 2 giờ) hoặc Provider hủy (lý do 3–300 ký tự) → `Booking` status `cancelled` |
 | PATCH | `/bookings/:id/confirm` | Provider xác nhận lịch `pending` → `confirmed` (409 `slot_passed` nếu đã qua giờ) |
@@ -214,6 +218,12 @@ Các điểm hợp đồng chưa nói rõ; backend chọn cách hiểu đơn gi�
 - **AI**: tài liệu có `ReviewStatus='rejected'` không bao giờ được dùng; `RAG_REQUIRE_APPROVED=true` chỉ dùng tài liệu đã `approved`. Nguồn hiển thị chỉ là tiêu đề tài liệu.
 - Token: HS256, hết hạn 1 ngày (30 ngày nếu `remember`). Vắc-xin `source:"clinic"` chưa có API tạo (chờ luồng cơ sở xác nhận); hiện chỉ chủ nuôi nhập `owner`.
 
+## Không phân trang và lý do
+- `GET /pets`: tối đa 10 thú cưng/chủ.
+- Cân nặng (`weights` trong `GET /health-records`): biểu đồ cần toàn bộ chuỗi thời gian.
+- Tiêm chủng (`vaccinations` trong `GET /health-records`): trạng thái `ok` / `due-soon` / `overdue` tính trên toàn bộ các mũi cùng loại vắc-xin của một thú cưng nên phải đọc đủ (xem lại nếu đo được > 200 dòng/thú cưng).
+- Danh mục công khai (`GET /providers`, `GET /services`): không phân trang, áp trần `500` dòng để bảo vệ truy vấn.
+
 ---
 
 ## Giai đoạn C2 — Vòng đời lịch hẹn & Hồ sơ khám (S12–S16)
@@ -225,7 +235,7 @@ Các điểm hợp đồng chưa nói rõ; backend chọn cách hiểu đơn gi�
 | Customer | `GET /bookings` | Danh sách lịch hẹn của chủ nuôi (kèm `cancelWindowHours`, ẩn `vetId`, có `providerIsSample`) |
 | Customer | `POST /bookings` | Đặt lịch mới (`status: "pending"`) |
 | Customer | `PATCH /bookings/:id/cancel` | Hủy lịch (`pending` bất kỳ lúc nào; `confirmed` cần ≥ `BOOKING_CANCEL_WINDOW_HOURS`, mặc định 2h) |
-| Provider | `GET /provider/bookings` | Danh sách lịch hẹn của cơ sở (lọc theo `status`, `from`, `to`, `vetId`, `search`) |
+| Provider | `GET /provider/bookings` | Danh sách lịch hẹn của cơ sở (lọc theo `status`, `from`, `to`, `vetId`, `search`, phân trang `page`, `limit` + `meta` cấp ngoài) |
 | Provider | `PATCH /bookings/:id/confirm` | Xác nhận lịch `pending → confirmed` (chặn nếu `slot_passed` hoặc `IsSample = 1`) |
 | Provider | `PATCH /bookings/:id/cancel` | Hủy lịch `pending|confirmed → cancelled` (bắt buộc `reason` 3–300 ký tự) |
 | Provider | `PATCH /bookings/:id/complete` | Hoàn tất lịch `confirmed → completed` (chặn nếu `too_early`) |
@@ -281,3 +291,4 @@ Các điểm hợp đồng chưa nói rõ; backend chọn cách hiểu đơn gi�
 
 ### Không làm trong C2
 - Email/SMS nhắc lịch, thanh toán trực tuyến, dashboard tổng hợp (F-1/F-2), cấu hình giờ làm/ngày nghỉ (F-3), đánh giá (F-3), phân trang `page`/`limit` (D), sửa/xóa bệnh án đã ghi, Admin thao tác lịch hẹn, tự động chuyển trạng thái lịch quá hạn.
+>>>>>>> main
