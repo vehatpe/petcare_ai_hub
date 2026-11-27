@@ -38,6 +38,6 @@ test('file-sniff: rejects GIF, SVG, text, empty/short buffers, and fake WEBP', (
 
   assert.throws(
     () => assertImage(Buffer.from('GIF89a', 'ascii')),
-    (err) => err instanceof AppError && err.status === 422 && err.errors?.file
+    (err) => err instanceof AppError && err.status === 422 && Boolean(err.errors?.file)
   );
 });
