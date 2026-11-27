@@ -1,9 +1,11 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const bcrypt = require('bcryptjs');
 const { parsePagination, buildMeta } = require('../src/utils/pagination');
 const { ok } = require('../src/utils/http');
-const { createTestApp } = require('./helpers/harness');
+const { startTestApp } = require('./helpers/harness');
 
 test('parsePagination: defaults, clamping, offset ignored, and invalid inputs -> 422', () => {
   assert.deepEqual(parsePagination({}), { page: 1, limit: 20, offset: 0 });
@@ -57,20 +59,50 @@ test('ok(): omits meta when undefined, includes top-level meta when provided', (
 });
 
 test('Pagination across admin/users, provider/vets, provider/services & provider/vets/options', async (t) => {
-  const { app, state, tokens, seedUser } = createTestApp();
-  const adminToken = tokens.admin;
-  const provToken = tokens.provider;
-  const otherProvToken = tokens.provider2;
+  const app = await startTestApp();
+  t.after(async () => { await app.close(); });
 
-  // Seed 5 users with role=customer for filter + pagination test
+  const pwHash = bcrypt.hashSync('TestPass123!', 4);
+  await app.testHelpers.addStaff('admin', {
+    id: crypto.randomUUID(),
+    email: 'pag_admin@petcare.vn',
+    phone: '0988000001',
+    fullName: 'Admin Pag',
+    passwordHash: pwHash
+  });
+  const adminToken = (await app.call('POST', '/auth/login', {
+    body: { identifier: 'pag_admin@petcare.vn', password: 'TestPass123!' }
+  })).data.token;
+
+  await app.testHelpers.addStaff('provider', {
+    id: crypto.randomUUID(),
+    email: 'pag_prov1@petcare.vn',
+    phone: '0988000002',
+    fullName: 'Provider 1',
+    providerId: 'prov-pag-1',
+    passwordHash: pwHash
+  });
+  const provToken = (await app.call('POST', '/auth/login', {
+    body: { identifier: 'pag_prov1@petcare.vn', password: 'TestPass123!' }
+  })).data.token;
+
+  await app.testHelpers.addStaff('provider', {
+    id: crypto.randomUUID(),
+    email: 'pag_prov2@petcare.vn',
+    phone: '0988000003',
+    fullName: 'Provider 2',
+    providerId: 'prov-pag-2',
+    passwordHash: pwHash
+  });
+  const otherProvToken = (await app.call('POST', '/auth/login', {
+    body: { identifier: 'pag_prov2@petcare.vn', password: 'TestPass123!' }
+  })).data.token;
+
   for (let i = 1; i <= 5; i++) {
-    await seedUser({
+    await app.registerCustomer({
       email: `pag_cust_${i}@test.local`,
       phone: `091100000${i}`,
-      fullName: `Pag Cust ${i}`,
-      role: 'customer',
-      status: 'active',
-      createdAt: `2026-01-0${i}T00:00:00.000Z`
+      fullName: `Pag Cust ${i}`
     });
   }
 
@@ -98,28 +130,25 @@ test('Pagination across admin/users, provider/vets, provider/services & provider
     assert.equal(forbiddenRes.status, 403);
   });
 
-  // Seed 5 vets for provider1 + 1 vet for provider2
-  const prov1 = state.users.find((u) => u.role === 'provider');
   for (let i = 1; i <= 5; i++) {
-    await seedUser({
+    await app.testHelpers.addStaff('vet', {
+      id: crypto.randomUUID(),
       email: `pag_vet_${i}@test.local`,
       phone: `092200000${i}`,
       fullName: `Bác sĩ ${i}`,
-      role: 'vet',
       status: i === 5 ? 'disabled' : 'active',
-      providerId: prov1.providerId,
-      createdAt: `2026-02-0${i}T00:00:00.000Z`
+      providerId: 'prov-pag-1',
+      passwordHash: pwHash
     });
   }
-  const prov2 = state.users.find((u) => u.role === 'provider' && u.providerId !== prov1.providerId);
-  await seedUser({
+  await app.testHelpers.addStaff('vet', {
+    id: crypto.randomUUID(),
     email: 'other_vet@test.local',
     phone: '0933000001',
     fullName: 'Bác sĩ Cơ sở khác',
-    role: 'vet',
     status: 'active',
-    providerId: prov2.providerId,
-    createdAt: '2026-02-06T00:00:00.000Z'
+    providerId: 'prov-pag-2',
+    passwordHash: pwHash
   });
 
   await t.test('GET /provider/vets: page 1/2/3, page=0 -> 422', async () => {
@@ -156,7 +185,6 @@ test('Pagination across admin/users, provider/vets, provider/services & provider
     assert.equal(otherRes.data.vets[0].fullName, 'Bác sĩ Cơ sở khác');
   });
 
-  // Seed 5 services for provider1
   for (let i = 1; i <= 5; i++) {
     await app.call('POST', '/provider/services', {
       token: provToken,
