@@ -1,5 +1,6 @@
 'use strict';
-const { T, lc, iso } = require('./db');
+const { T, lc, iso, isUniqueViolation } = require('./db');
+const { conflict } = require('../utils/errors');
 
 const mapVacc = (r) => ({
   id: lc(r.VaccinationId), petId: lc(r.PetId), vaccineName: r.VaccineName, administeredOn: r.AdministeredOn,
@@ -89,16 +90,32 @@ module.exports = (db) => ({
       total: Number(countRow?.total) || 0
     };
   },
-  async addMedicalRecord(m) {
-    await db.query(
-      `INSERT INTO dbo.Medical_Records (RecordId, PetId, BookingId, VetId, VisitDate, Subjective, Objective, Assessment, PlanText)
-       VALUES (@id, @petId, @bookingId, @vetId, CAST(@visit AS DATE), @s, @o, @a, @p)`,
-      {
-        id: [T.guid, m.id], petId: [T.guid, m.petId], bookingId: [T.guid, m.bookingId], vetId: [T.guid, m.vetId],
-        visit: [T.ymd, m.visitDate], s: [T.str(2000), m.subjective], o: [T.str(2000), m.objective],
-        a: [T.str(2000), m.assessment], p: [T.str(2000), m.plan]
-      });
-    const vet = (await db.query(`SELECT FullName FROM dbo.Users WHERE UserId = @id`, { id: [T.guid, m.vetId] }))[0];
+  async getMedicalRecordByBooking(bookingId, executor = db) {
+    const r = (await executor.query(
+      `SELECT r.RecordId, CONVERT(CHAR(10), r.VisitDate, 23) AS VisitDate, u.FullName AS VetName,
+              r.Subjective, r.Objective, r.Assessment, r.PlanText
+       FROM dbo.Medical_Records r LEFT JOIN dbo.Users u ON u.UserId = r.VetId
+       WHERE r.BookingId = @bookingId`, { bookingId: [T.guid, bookingId] }))[0];
+    return r ? {
+      id: lc(r.RecordId), visitDate: r.VisitDate, vetName: r.VetName || null,
+      subjective: r.Subjective, objective: r.Objective, assessment: r.Assessment, plan: r.PlanText
+    } : null;
+  },
+  async addMedicalRecord(m, executor = db) {
+    try {
+      await executor.query(
+        `INSERT INTO dbo.Medical_Records (RecordId, PetId, BookingId, VetId, VisitDate, Subjective, Objective, Assessment, PlanText)
+         VALUES (@id, @petId, @bookingId, @vetId, CAST(@visit AS DATE), @s, @o, @a, @p)`,
+        {
+          id: [T.guid, m.id], petId: [T.guid, m.petId], bookingId: [T.guid, m.bookingId], vetId: [T.guid, m.vetId],
+          visit: [T.ymd, m.visitDate], s: [T.str(2000), m.subjective], o: [T.str(2000), m.objective],
+          a: [T.str(2000), m.assessment], p: [T.str(2000), m.plan]
+        });
+    } catch (err) {
+      if (isUniqueViolation(err)) throw conflict('Lịch hẹn này đã có bệnh án.', {}, 'already_recorded');
+      throw err;
+    }
+    const vet = (await executor.query(`SELECT FullName FROM dbo.Users WHERE UserId = @id`, { id: [T.guid, m.vetId] }))[0];
     return {
       id: m.id, visitDate: m.visitDate, vetName: vet ? vet.FullName : null,
       subjective: m.subjective, objective: m.objective, assessment: m.assessment, plan: m.plan

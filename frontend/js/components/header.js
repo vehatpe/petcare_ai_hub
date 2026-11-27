@@ -58,9 +58,12 @@
           ${dash ? `<a role="menuitem" href="${url(dash)}">Bảng điều khiển</a>` : ''}
           ${user.role === 'admin' ? `<a role="menuitem" href="${url('admin-partners.html')}">Duyệt đối tác</a>` : ''}
           ${user.role === 'admin' ? `<a role="menuitem" href="${url('admin-users.html')}">Quản lý tài khoản</a>` : ''}
+          ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-bookings.html')}">Lịch hẹn</a>` : ''}
           ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-services.html')}">Dịch vụ của tôi</a>` : ''}
           ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-profile.html')}">Hồ sơ cơ sở</a>` : ''}
           ${user.role === 'provider' ? `<a role="menuitem" href="${url('provider-vets.html')}">Quản lý bác sĩ</a>` : ''}
+          ${user.role === 'vet' ? `<a role="menuitem" href="${url('vet-bookings.html')}">Lịch khám của tôi</a>` : ''}
+          ${user.role === 'customer' ? `<a role="menuitem" href="${url('customer-dashboard.html#bookingList')}">Lịch hẹn của tôi</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('health-records.html')}">Sổ sức khỏe</a>` : ''}
           ${user.role === 'customer' ? `<a role="menuitem" href="${url('pet-profile.html')}">Thêm thú cưng</a>` : ''}
           <a role="menuitem" href="${url('change-password.html')}">Đổi mật khẩu</a>
@@ -111,6 +114,11 @@
       });
     } else if (user.role === 'provider') {
       items.push({
+        href: url('provider-bookings.html'),
+        text: 'Lịch hẹn',
+        isActive: currentFile === 'provider-bookings.html'
+      });
+      items.push({
         href: url('provider-services.html'),
         text: 'Dịch vụ của tôi',
         isActive: currentFile === 'provider-services.html'
@@ -124,6 +132,12 @@
         href: url('provider-vets.html'),
         text: 'Quản lý bác sĩ',
         isActive: currentFile === 'provider-vets.html'
+      });
+    } else if (user.role === 'vet') {
+      items.push({
+        href: url('vet-bookings.html'),
+        text: 'Lịch khám của tôi',
+        isActive: currentFile === 'vet-bookings.html' || currentFile === 'vet-booking.html'
       });
     }
 
@@ -194,9 +208,12 @@
           ${dash ? `<li><a href="${url(dash)}">Bảng điều khiển</a></li>` : ''}
           ${user.role === 'admin' ? `<li><a href="${url('admin-partners.html')}">Duyệt đối tác</a></li>` : ''}
           ${user.role === 'admin' ? `<li><a href="${url('admin-users.html')}">Quản lý tài khoản</a></li>` : ''}
+          ${user.role === 'provider' ? `<li><a href="${url('provider-bookings.html')}">Lịch hẹn</a></li>` : ''}
           ${user.role === 'provider' ? `<li><a href="${url('provider-services.html')}">Dịch vụ của tôi</a></li>` : ''}
           ${user.role === 'provider' ? `<li><a href="${url('provider-profile.html')}">Hồ sơ cơ sở</a></li>` : ''}
           ${user.role === 'provider' ? `<li><a href="${url('provider-vets.html')}">Quản lý bác sĩ</a></li>` : ''}
+          ${user.role === 'vet' ? `<li><a href="${url('vet-bookings.html')}">Lịch khám của tôi</a></li>` : ''}
+          ${user.role === 'customer' ? `<li><a href="${url('customer-dashboard.html#bookingList')}">Lịch hẹn của tôi</a></li>` : ''}
           ${user.role === 'customer' ? `<li><a href="${url('health-records.html')}">Sổ sức khỏe</a></li>` : ''}
           <li><a href="${url('change-password.html')}">Đổi mật khẩu</a></li>
           <li><button type="button" class="btn-link" data-action="logout">Đăng xuất</button></li>`;
@@ -334,9 +351,12 @@
       ${dash ? `<a href="${url(dash)}" class="btn btn-secondary">Bảng điều khiển</a>` : ''}
       ${user.role === 'admin' ? `<a href="${url('admin-partners.html')}" class="btn btn-secondary">Duyệt đối tác</a>` : ''}
       ${user.role === 'admin' ? `<a href="${url('admin-users.html')}" class="btn btn-secondary">Quản lý tài khoản</a>` : ''}
+      ${user.role === 'provider' ? `<a href="${url('provider-bookings.html')}" class="btn btn-secondary">Lịch hẹn</a>` : ''}
       ${user.role === 'provider' ? `<a href="${url('provider-services.html')}" class="btn btn-secondary">Dịch vụ của tôi</a>` : ''}
       ${user.role === 'provider' ? `<a href="${url('provider-profile.html')}" class="btn btn-secondary">Hồ sơ cơ sở</a>` : ''}
       ${user.role === 'provider' ? `<a href="${url('provider-vets.html')}" class="btn btn-secondary">Quản lý bác sĩ</a>` : ''}
+      ${user.role === 'vet' ? `<a href="${url('vet-bookings.html')}" class="btn btn-secondary">Lịch khám của tôi</a>` : ''}
+      ${user.role === 'customer' ? `<a href="${url('customer-dashboard.html#bookingList')}" class="btn btn-secondary">Lịch hẹn của tôi</a>` : ''}
       <a href="${url('change-password.html')}" class="btn btn-outline">Đổi mật khẩu</a>
       <button type="button" class="btn btn-outline" data-action="logout">Đăng xuất</button>`;
   }

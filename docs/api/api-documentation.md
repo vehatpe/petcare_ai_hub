@@ -152,6 +152,10 @@ Validation: name 1–40; species/sex thuộc tập; birthDate hợp lệ, không
 | DELETE | `/pets/:id/vaccinations/:vaccinationId` | chỉ xóa được bản ghi `source:"owner"` |
 | GET | `/pets/:id/medical-records` | Query: `page`, `limit` → 200 `data: { items: MedicalRecord[] }`, `meta` cấp ngoài; sắp theo `visitDate` giảm dần |
 | POST | `/pets/:id/medical-records` | chỉ role `vet`/`admin`; `{visitDate, subjective, objective, assessment, plan, bookingId?}` |
+| GET | `/vet/bookings` | chỉ role `vet`; lọc `status`, `date`, `from`/`to` (≤ 92 ngày), `q`, phân trang `page`, `limit` (trả `data: { items }` + `meta` cấp ngoài) |
+| GET | `/vet/bookings/:id` | chỉ role `vet` được gán; trả chi tiết lịch + hồ sơ thú cưng (không `photo`), ghi `AuditLog` (`health_record_viewed`) |
+| POST | `/vet/bookings/:id/medical-record` | chỉ role `vet` được gán, lịch `confirmed`/`completed`; `{subjective, objective, assessment, plan}` (mỗi lịch tối đa 1 bệnh án) |
+| POST | `/vet/bookings/:id/vaccinations` | chỉ role `vet` được gán, lịch `confirmed`/`completed`; `{vaccineName, administeredOn, nextDueOn?, batchNo?}` (`source='clinic'`, `providerName` từ DB) |
 
 Tổng hợp `GET /health-records?petId=`:
 ```
@@ -171,7 +175,14 @@ Quy tắc trạng thái tiêm: với mỗi `vaccineName` chỉ tính mũi có `a
 |---|---|---|
 | GET | `/bookings` | **Thay đổi hợp đồng (S18):** Query: `page`, `limit`, `scope?` (`all` \| `upcoming` \| `history`), `petId?` (GUID). Trả `data: { items: Booking[] }` + `meta` cấp ngoài. `scope=all` sắp nhóm "sắp tới" (`pending`/`confirmed` và ngày/giờ >= hiện tại theo `APP_TIMEZONE`) tăng dần trước, sau đó nhóm lịch sử giảm dần. |
 | POST | `/bookings` | `{petId, serviceId, date, time, notes?}` → 201 `Booking` status `pending`. Kiểm tra: bé thuộc chủ; dịch vụ còn hoạt động; ngày không ở quá khứ; `time` thuộc khung giờ; còn chỗ (`SlotCapacity`); bé không trùng giờ → 409 `conflict` với `errors.time`. |
-| PATCH | `/bookings/:id/cancel` | → `Booking` status `cancelled`; đã hủy/hoàn tất → 409 |
+| PATCH | `/bookings/:id/cancel` | Customer hủy (`pending` hoặc `confirmed` còn ≥ 2 giờ) hoặc Provider hủy (lý do 3–300 ký tự) → `Booking` status `cancelled` |
+| PATCH | `/bookings/:id/confirm` | Provider xác nhận lịch `pending` → `confirmed` (409 `slot_passed` nếu đã qua giờ) |
+| PATCH | `/bookings/:id/complete` | Provider hoàn tất lịch `confirmed` → `completed` (409 `too_early` nếu chưa tới giờ) |
+| PATCH | `/bookings/:id/no-show` | Provider ghi vắng mặt `confirmed` → `no_show` (409 `too_early` nếu chưa tới giờ) |
+| PATCH | `/bookings/:id/vet` | Provider gán/đổi/bỏ gán (`vetId: uuid \| null`) cho lịch `pending\|confirmed` (409 `already_recorded` nếu Vet cũ đã ghi bệnh án) |
+| GET | `/provider/bookings` | Provider xem lịch cơ sở mình (`status`, `date`, `from`/`to` ≤ 92 ngày, `vetId`, `q`; tối đa 200 dòng). Trả về `data = { items: [...], summary: { pending, confirmed, completed, cancelled, no_show } }` |
+
+> **Mã lỗi nghiệp vụ C2:** `invalid_transition` (409), `cancel_window` (409), `slot_passed` (409), `too_early` (409), `facility_inactive` (409), `already_recorded` (409).
 
 ## Dashboard (customer) – mọi số được tính từ DB
 `GET /dashboard/customer` →
@@ -212,3 +223,72 @@ Các điểm hợp đồng chưa nói rõ; backend chọn cách hiểu đơn gi�
 - Cân nặng (`weights` trong `GET /health-records`): biểu đồ cần toàn bộ chuỗi thời gian.
 - Tiêm chủng (`vaccinations` trong `GET /health-records`): trạng thái `ok` / `due-soon` / `overdue` tính trên toàn bộ các mũi cùng loại vắc-xin của một thú cưng nên phải đọc đủ (xem lại nếu đo được > 200 dòng/thú cưng).
 - Danh mục công khai (`GET /providers`, `GET /services`): không phân trang, áp trần `500` dòng để bảo vệ truy vấn.
+
+---
+
+## Giai đoạn C2 — Vòng đời lịch hẹn & Hồ sơ khám (S12–S16)
+
+### Bảng route C2
+
+| Vai trò | Method & Path | Mô tả |
+| :--- | :--- | :--- |
+| Customer | `GET /bookings` | Danh sách lịch hẹn của chủ nuôi (kèm `cancelWindowHours`, ẩn `vetId`, có `providerIsSample`) |
+| Customer | `POST /bookings` | Đặt lịch mới (`status: "pending"`) |
+| Customer | `PATCH /bookings/:id/cancel` | Hủy lịch (`pending` bất kỳ lúc nào; `confirmed` cần ≥ `BOOKING_CANCEL_WINDOW_HOURS`, mặc định 2h) |
+| Provider | `GET /provider/bookings` | Danh sách lịch hẹn của cơ sở (lọc theo `status`, `from`, `to`, `vetId`, `search`, phân trang `page`, `limit` + `meta` cấp ngoài) |
+| Provider | `PATCH /bookings/:id/confirm` | Xác nhận lịch `pending → confirmed` (chặn nếu `slot_passed` hoặc `IsSample = 1`) |
+| Provider | `PATCH /bookings/:id/cancel` | Hủy lịch `pending|confirmed → cancelled` (bắt buộc `reason` 3–300 ký tự) |
+| Provider | `PATCH /bookings/:id/complete` | Hoàn tất lịch `confirmed → completed` (chặn nếu `too_early`) |
+| Provider | `PATCH /bookings/:id/no-show` | Đánh dấu vắng mặt `confirmed → no_show` (chặn nếu `too_early`) |
+| Provider | `PATCH /bookings/:id/vet` | Gán/đổi bác sĩ phụ trách cho lịch của cơ sở |
+| Vet | `GET /vet/bookings` | Danh sách lịch hẹn được gán cho Vet (`VetId = mình`) |
+| Vet | `GET /vet/bookings/:id` | Chi tiết lịch + hồ sơ thú cưng + lịch sử bệnh án/tiêm chủng/cân nặng (ghi `AuditLog`) |
+| Vet | `POST /vet/bookings/:id/medical-record` | Ghi bệnh án (tối đa 1/booking, trạng thái `confirmed|completed`, `VisitDate` = ngày hẹn) |
+| Vet | `POST /vet/bookings/:id/vaccinations` | Ghi tiêm chủng (`source = 'clinic'`, `providerName` từ cơ sở trong DB) |
+
+> **Route đã gỡ ở S14:** `POST /pets/:id/medical-records` (thay bằng `POST /vet/bookings/:id/medical-record`).
+
+### Mã lỗi C2
+- `409 invalid_transition`: chuyển trạng thái không hợp lệ ngoài máy trạng thái 5×5.
+- `409 cancel_window`: Customer hủy lịch `confirmed` sát giờ hơn `BOOKING_CANCEL_WINDOW_HOURS` (mặc định 2h theo `Asia/Ho_Chi_Minh`).
+- `409 slot_passed`: Provider xác nhận lịch khi đã qua giờ hẹn.
+- `409 too_early`: Provider đánh dấu `complete` hoặc `no-show` khi chưa đến giờ hẹn.
+- `409 already_recorded`: Vet ghi bệnh án lần thứ hai cho cùng một booking.
+- `403 facility_inactive`: Cơ sở không ở trạng thái `active` khi thao tác.
+
+### Ví dụ Request / Response
+
+**`PATCH /bookings/:id/confirm`** (Provider)
+```json
+// Response 200
+{ "success": true, "message": "Đã xác nhận lịch hẹn.", "data": { "id": "...", "status": "confirmed" } }
+```
+
+**`PATCH /bookings/:id/cancel`** (Provider — lý do bắt buộc 3–300 ký tự)
+```json
+// Request
+{ "reason": "Bác sĩ phụ trách có lịch phẫu thuật đột xuất." }
+// Response 200
+{ "success": true, "message": "Đã hủy lịch hẹn.", "data": { "id": "...", "status": "cancelled", "cancelledBy": "provider" } }
+```
+
+**`POST /vet/bookings/:id/medical-record`** (Vet)
+```json
+// Request
+{
+  "subjective": "Bé ho nhẹ 2 ngày, ăn uống bình thường.",
+  "objective": "Thân nhiệt 38.5°C, phổi nghe rõ.",
+  "assessment": "Viêm họng nhẹ.",
+  "plan": "Uống thuốc theo đơn 5 ngày, tái khám nếu không giảm."
+}
+// Response 201
+{ "success": true, "message": "Đã lưu bệnh án.", "data": { "id": "...", "bookingId": "...", "visitDate": "2026-11-26" } }
+```
+
+### Quy tắc nghiệp vụ C2 (7–17) & Cấu hình
+- Quy tắc 7–17: Máy trạng thái 5×5 (`pending`, `confirmed`, `completed`, `cancelled`, `no_show`); `BOOKING_CANCEL_WINDOW_HOURS` (mặc định `2` giờ theo `Asia/Ho_Chi_Minh`, có thể cấu hình qua env); Provider hủy bắt buộc lý do 3–300 ký tự; kiểm tra mốc thời gian cho `confirm` (`slot_passed`) và `complete`/`no-show` (`too_early`); Vet chỉ truy cập booking có `VetId = mình` (khác → `404`), ghi tối đa 1 bệnh án/booking, `VisitDate` lấy từ ngày hẹn, thú cưng đã xóa (`petDeleted`) → `409`; tiêm chủng gắn `source = 'clinic'` và `providerName` từ DB; mọi lần Vet đọc chi tiết lịch ghi `AuditLog`; cơ sở minh họa (`IsSample = 1`) luôn `pending` và không được xác nhận.
+- Kiểm thử smoke C2 trên SQL Server thật: `node backend/scripts/smoke-bookings.js`.
+
+### Không làm trong C2
+- Email/SMS nhắc lịch, thanh toán trực tuyến, dashboard tổng hợp (F-1/F-2), cấu hình giờ làm/ngày nghỉ (F-3), đánh giá (F-3), phân trang `page`/`limit` (D), sửa/xóa bệnh án đã ghi, Admin thao tác lịch hẹn, tự động chuyển trạng thái lịch quá hạn.
+>>>>>>> main

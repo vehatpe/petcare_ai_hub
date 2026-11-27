@@ -75,6 +75,11 @@ document.addEventListener('DOMContentLoaded', () => {
           <a href="pages/provider-services.html" class="btn btn-primary btn-sm">Dịch vụ của tôi</a>
           <a href="pages/provider-profile.html" class="btn btn-outline btn-sm">Hồ sơ cơ sở</a>
           <a href="pages/provider-vets.html" class="btn btn-outline btn-sm">Quản lý bác sĩ</a>`;
+      } else if (user.role === 'vet' && !user.mustChangePassword) {
+        roleSpecificLink = `
+          <a href="pages/vet-bookings.html" class="btn btn-primary btn-lg">Lịch khám của tôi</a>`;
+        pcardActionLink = `
+          <a href="pages/vet-bookings.html" class="btn btn-primary btn-sm">Lịch khám của tôi</a>`;
       }
 
       $('heroActions').innerHTML = `

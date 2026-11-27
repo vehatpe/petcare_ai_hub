@@ -61,12 +61,26 @@ function createDomStub() {
 
   return {
     window: {
-      location: { protocol: 'http:', hostname: 'localhost', port: '3000', pathname: '/pages/admin-users.html' },
+      location: {
+        protocol: 'http:',
+        hostname: 'localhost',
+        port: '3000',
+        pathname: '/pages/customer-dashboard.html',
+        search: '',
+        href: 'http://127.0.0.1:5500/pages/customer-dashboard.html',
+        assign() {},
+        replace() {}
+      },
       addEventListener() {},
       dispatchEvent() {},
       CustomEvent: function CustomEvent(name) { this.type = name; }
     },
     document: {
+      documentElement: {
+        classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+        dataset: {},
+        style: { setProperty() {} }
+      },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, makeEl(id));
         return elements.get(id);
@@ -172,4 +186,28 @@ test('admin-users.html scripts load with Pager and render page 2 from real app',
   };
 
   assert.equal(typeof ctx.Pager.render, 'function');
+});
+
+test('provider-bookings.html and vet-bookings.html include pager.js before page script', () => {
+  for (const page of ['pages/provider-bookings.html', 'pages/vet-bookings.html']) {
+    const scripts = readFrontendScripts(page);
+    const pagerIdx = scripts.findIndex((s) => s.endsWith(path.join('components', 'pager.js')));
+    assert.ok(pagerIdx !== -1, `${page} must include pager.js`);
+    assert.ok(pagerIdx < scripts.length - 1, `${page} must load pager.js before page script`);
+  }
+});
+
+test('GET /provider/bookings and GET /vet/bookings return paginated items and meta', async () => {
+  const app = await startTestApp();
+  const provRes = await app.call('GET', '/api/v1/provider/bookings?page=1&limit=2', { role: 'provider', providerId: 'prov-1' });
+  assert.equal(provRes.status, 200);
+  assert.ok(Array.isArray(provRes.body.data.items));
+  assert.equal(typeof provRes.body.meta.total, 'number');
+  assert.equal(provRes.body.meta.limit, 2);
+
+  const vetRes = await app.call('GET', '/api/v1/vet/bookings?page=1&limit=2', { role: 'vet', id: 'vet-1' });
+  assert.equal(vetRes.status, 200);
+  assert.ok(Array.isArray(vetRes.body.data.items));
+  assert.equal(typeof vetRes.body.meta.total, 'number');
+  assert.equal(vetRes.body.meta.limit, 2);
 });

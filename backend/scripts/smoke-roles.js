@@ -551,6 +551,15 @@ async function main() {
       `Scanned ${auditLogs.recordset.length} audit log entries`
     );
 
+    // 19. D1 Pagination check on GET /admin/users
+    const p1 = await req('GET', '/api/v1/admin/users?page=1&limit=2', { token: adminToken });
+    const p2 = await req('GET', '/api/v1/admin/users?page=2&limit=2', { token: adminToken });
+    const ids1 = new Set((p1.body?.data?.users || []).map((u) => u.id));
+    const ids2 = (p2.body?.data?.users || []).map((u) => u.id);
+    const noDup = ids2.every((id) => !ids1.has(id));
+    const metaOk = p1.body?.meta?.page === 1 && p1.body?.meta?.limit === 2 && typeof p1.body?.meta?.total === 'number' && p2.body?.meta?.page === 2;
+    record('19. GET /admin/users pagination (page 1 & 2, meta, no duplicates)', p1.status === 200 && p2.status === 200 && metaOk && noDup);
+
   } finally {
     console.log('\n--- CLEANING UP C1 TEST DATA ON REAL SQL SERVER ---');
     try {

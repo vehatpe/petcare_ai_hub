@@ -1,10 +1,11 @@
 'use strict';
 const crypto = require('node:crypto');
 const { validation, notFound, conflict } = require('../utils/errors');
-const { validateWeight, validateVaccination, validateMedicalRecord, isUuid } = require('../utils/validators');
+const { validateWeight, validateVaccination, validateMedicalRecord, isUuid, isValidYmd } = require('../utils/validators');
 const { todayInTz } = require('../utils/time');
 const { evaluateVaccinations } = require('../utils/health');
 const { parsePagination, buildMeta } = require('../utils/pagination');
+const { VALID_BOOKING_STATUSES } = require('../utils/booking-state');
 
 function createHealthService({ models, config, clock = () => new Date() }) {
   const today = () => todayInTz(clock(), config.timezone);
@@ -77,20 +78,154 @@ function createHealthService({ models, config, clock = () => new Date() }) {
       return { deleted: true };
     },
 
-    async addMedicalRecord(vet, petId, input) {
-      const pet = await models.pets.getById(petId);
-      if (!pet) throw notFound('Không tìm thấy hồ sơ thú cưng này.');
-      const { errors, value } = validateMedicalRecord(input || {}, today());
-      if (Object.keys(errors).length) fail(errors);
-      if (value.bookingId) {
-        const b = await models.bookings.getById(value.bookingId);
-        if (!b || b.petId !== pet.id) fail({ bookingId: 'Lịch hẹn không tồn tại hoặc không thuộc thú cưng này.' });
+    async listVetBookings(vet, query = {}) {
+      const filters = {};
+      const errors = {};
+      if (query.status !== undefined && query.status !== '') {
+        if (!VALID_BOOKING_STATUSES.has(query.status)) errors.status = 'Trạng thái không hợp lệ.';
+        else filters.status = query.status;
       }
-      return models.health.addMedicalRecord({
-        id: crypto.randomUUID(), petId: pet.id, vetId: vet.id, bookingId: value.bookingId || null,
-        visitDate: value.visitDate, subjective: value.subjective, objective: value.objective,
-        assessment: value.assessment, plan: value.plan
+      if (query.date !== undefined && query.date !== '') {
+        if (!isValidYmd(query.date)) errors.date = 'Ngày không hợp lệ (YYYY-MM-DD).';
+        else filters.date = query.date;
+      }
+      if (query.from !== undefined && query.from !== '') {
+        if (!isValidYmd(query.from)) errors.from = 'Từ ngày không hợp lệ (YYYY-MM-DD).';
+        else filters.from = query.from;
+      }
+      if (query.to !== undefined && query.to !== '') {
+        if (!isValidYmd(query.to)) errors.to = 'Đến ngày không hợp lệ (YYYY-MM-DD).';
+        else filters.to = query.to;
+      }
+      if (filters.from && filters.to) {
+        const diffDays = Math.round((new Date(filters.to) - new Date(filters.from)) / 86400000);
+        if (diffDays < 0) errors.from = 'Khoảng ngày không hợp lệ.';
+        else if (diffDays > 92) errors.to = 'Khoảng ngày tối đa 92 ngày.';
+      }
+      if (query.q !== undefined && query.q !== '') {
+        const q = String(query.q).trim();
+        if (q.length > 60) errors.q = 'Từ khóa tìm kiếm tối đa 60 ký tự.';
+        else if (q.length > 0) filters.q = q;
+      }
+      if (Object.keys(errors).length) fail(errors);
+      const { page, limit, offset } = parsePagination(query);
+      const { rows, total } = await models.bookings.listForVet(vet.id, filters, { offset, limit });
+      return { items: rows, meta: buildMeta({ page, limit, total }) };
+    },
+
+    async getVetBookingDetail(vet, bookingId) {
+      const b = await models.bookings.getForVet(bookingId, vet.id);
+      if (!b) throw notFound('Không tìm thấy lịch hẹn này.');
+      const pet = b.petId ? await models.pets.getById(b.petId) : null;
+      await models.audit.log({
+        actorUserId: vet.id,
+        action: 'health_record_viewed',
+        targetType: b.petId ? 'pet' : 'booking',
+        targetId: b.petId || b.id,
+        detail: null
       });
+      if (!pet) {
+        return {
+          booking: b,
+          pet: null,
+          petDeleted: true,
+          weights: [],
+          vaccinations: [],
+          medicalRecords: [],
+          bookingMedicalRecord: null
+        };
+      }
+      const [weights, vacc, records, bookingMedicalRecord] = await Promise.all([
+        models.health.listWeights(pet.id),
+        models.health.listVaccinations(pet.id),
+        models.health.listMedicalRecords(pet.id),
+        models.health.getMedicalRecordByBooking(b.id)
+      ]);
+      const ev = evaluateVaccinations(vacc, today());
+      const { photo: _omitPhoto, ...petBasic } = pet;
+      return {
+        booking: b,
+        pet: petBasic,
+        petDeleted: false,
+        weights,
+        vaccinations: ev.list,
+        medicalRecords: records,
+        bookingMedicalRecord
+      };
+    },
+
+    async addMedicalRecordForBooking(vet, bookingId, input) {
+      const cleanInput = { ...(input || {}), visitDate: today() };
+      delete cleanInput.bookingId;
+      const { errors, value } = validateMedicalRecord(cleanInput, today());
+      if (Object.keys(errors).length) fail(errors);
+
+      return models.admin.transaction(async (tx) => {
+        const b = await models.bookings.getForVet(bookingId, vet.id, tx);
+        if (!b) throw notFound('Không tìm thấy lịch hẹn này.');
+        if (b.status !== 'confirmed' && b.status !== 'completed') {
+          throw conflict('Chỉ ghi bệnh án khi lịch đã xác nhận hoặc hoàn tất.', {}, 'invalid_transition');
+        }
+        const pet = b.petId ? await models.pets.getById(b.petId) : null;
+        if (!pet) {
+          throw conflict('Hồ sơ thú cưng đã bị xóa, không thể ghi bệnh án.', {}, 'pet_deleted');
+        }
+        const existing = await models.health.getMedicalRecordByBooking(b.id, tx);
+        if (existing) {
+          throw conflict('Lịch hẹn này đã có bệnh án.', {}, 'already_recorded');
+        }
+        const created = await models.health.addMedicalRecord({
+          id: crypto.randomUUID(),
+          petId: b.petId,
+          vetId: vet.id,
+          bookingId: b.id,
+          visitDate: b.date,
+          subjective: value.subjective,
+          objective: value.objective,
+          assessment: value.assessment,
+          plan: value.plan
+        }, tx);
+        await models.audit.log({
+          actorUserId: vet.id,
+          action: 'medical_record_created',
+          targetType: 'booking',
+          targetId: b.id,
+          detail: null
+        }, tx);
+        return created;
+      });
+    },
+
+    async addVaccinationForBooking(vet, bookingId, input) {
+      const { errors, value } = validateVaccination(input || {}, today());
+      if (Object.keys(errors).length) fail(errors);
+
+      const b = await models.bookings.getForVet(bookingId, vet.id);
+      if (!b) throw notFound('Không tìm thấy lịch hẹn này.');
+      if (b.status !== 'confirmed' && b.status !== 'completed') {
+        throw conflict('Chỉ ghi tiêm chủng khi lịch đã xác nhận hoặc hoàn tất.', {}, 'invalid_transition');
+      }
+      const pet = b.petId ? await models.pets.getById(b.petId) : null;
+      if (!pet) {
+        throw conflict('Hồ sơ thú cưng đã bị xóa, không thể ghi tiêm chủng.', {}, 'pet_deleted');
+      }
+      const row = await models.health.addVaccination({
+        id: crypto.randomUUID(),
+        petId: b.petId,
+        ...value,
+        providerName: b.providerName || '',
+        source: 'clinic',
+        createdAt: clock().toISOString()
+      });
+      await models.audit.log({
+        actorUserId: vet.id,
+        action: 'vaccination_created',
+        targetType: 'booking',
+        targetId: b.id,
+        detail: null
+      });
+      const all = evaluateVaccinations(await models.health.listVaccinations(b.petId), today());
+      return all.list.find((v) => v.id === row.id);
     }
   };
 }
