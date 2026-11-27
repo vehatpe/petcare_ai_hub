@@ -76,7 +76,7 @@ test('Vet Bookings API: access control, detail audit, medical record & vaccinati
     assert.equal(listRes.data.items.length, 2);
     assert.equal(listRes.body.meta.total, 2);
     assert.equal(listRes.data.items[0].customerPhone, undefined);
-    assert.equal(listRes.data[0].customerEmail, undefined);
+    assert.equal(listRes.data.items[0].customerEmail, undefined);
 
     const detailRes = await call('GET', `/vet/bookings/${b1.id}`, { token: vet1.token });
     assert.equal(detailRes.status, 200);

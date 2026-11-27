@@ -84,6 +84,9 @@ function createDomStub() {
       },
       body: {
         hasAttribute() { return false; },
+        getAttribute() { return null; },
+        setAttribute() {},
+        removeAttribute() {},
         classList: { contains() { return false; }, add() {}, remove() {} },
         dataset: {}
       },
@@ -218,14 +221,14 @@ test('GET /provider/bookings and GET /vet/bookings return paginated items and me
   t.after(() => app.close());
   const { call, testHelpers } = app;
   const { state } = testHelpers;
-  const bcrypt = require('bcryptjs');
-  const passwordHash = bcrypt.hashSync('TestPass123!', 4);
+  const jwt = require('jsonwebtoken');
+  const { config } = require('../src/config');
   state.users.push(
-    { id: 'prov-s19', email: 'prov-s19@test.local', fullName: 'Prov S19', passwordHash, role: 'provider', status: 'active', providerId: 'clinic-a', tokenVersion: 0 },
-    { id: 'vet-s19', email: 'vet-s19@test.local', fullName: 'Vet S19', passwordHash, role: 'vet', status: 'active', providerId: 'clinic-a', tokenVersion: 0 }
+    { id: 'prov-s19', email: 'prov-s19@test.local', fullName: 'Prov S19', role: 'provider', status: 'active', providerId: 'clinic-a', tokenVersion: 0 },
+    { id: 'vet-s19', email: 'vet-s19@test.local', fullName: 'Vet S19', role: 'vet', status: 'active', providerId: 'clinic-a', tokenVersion: 0 }
   );
-  const provToken = (await call('POST', '/auth/login', { body: { email: 'prov-s19@test.local', password: 'TestPass123!' } })).data.token;
-  const vetToken = (await call('POST', '/auth/login', { body: { email: 'vet-s19@test.local', password: 'TestPass123!' } })).data.token;
+  const provToken = jwt.sign({ sub: 'prov-s19', role: 'provider', tv: 0 }, config.jwtSecret, { expiresIn: '1h' });
+  const vetToken = jwt.sign({ sub: 'vet-s19', role: 'vet', tv: 0 }, config.jwtSecret, { expiresIn: '1h' });
 
   const provRes = await call('GET', '/provider/bookings?page=1&limit=2', { token: provToken });
   assert.equal(provRes.status, 200);
