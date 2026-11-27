@@ -184,6 +184,8 @@ test('admin-users.html scripts load with Pager and render page 2 from real app',
     CustomEvent: dom.window.CustomEvent,
     setTimeout,
     clearTimeout,
+    MutationObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (cb) => setTimeout(cb, 0),
     fetch: async () => ({ ok: true, status: 200, json: async () => ({ success: true, data: { users: [] }, meta: { page: 1, limit: 20, total: 0, totalPages: 1 } }) })
   });
   ctx.window = ctx;
@@ -217,24 +219,24 @@ test('GET /provider/bookings and GET /vet/bookings return paginated items and me
   const { call, testHelpers } = app;
   const { state } = testHelpers;
   const bcrypt = require('bcryptjs');
-  const passwordHash = bcrypt.hashSync('Pass123!', 4);
+  const passwordHash = bcrypt.hashSync('TestPass123!', 4);
   state.users.push(
     { id: 'prov-s19', email: 'prov-s19@test.local', fullName: 'Prov S19', passwordHash, role: 'provider', status: 'active', providerId: 'clinic-a', tokenVersion: 0 },
     { id: 'vet-s19', email: 'vet-s19@test.local', fullName: 'Vet S19', passwordHash, role: 'vet', status: 'active', providerId: 'clinic-a', tokenVersion: 0 }
   );
-  const provToken = (await call('POST', '/auth/login', { body: { email: 'prov-s19@test.local', password: 'Pass123!' } })).data.token;
-  const vetToken = (await call('POST', '/auth/login', { body: { email: 'vet-s19@test.local', password: 'Pass123!' } })).data.token;
+  const provToken = (await call('POST', '/auth/login', { body: { email: 'prov-s19@test.local', password: 'TestPass123!' } })).data.token;
+  const vetToken = (await call('POST', '/auth/login', { body: { email: 'vet-s19@test.local', password: 'TestPass123!' } })).data.token;
 
   const provRes = await call('GET', '/provider/bookings?page=1&limit=2', { token: provToken });
   assert.equal(provRes.status, 200);
   assert.ok(Array.isArray(provRes.data.items));
   assert.ok(provRes.data.summary && typeof provRes.data.summary.pending === 'number');
-  assert.equal(typeof provRes.meta.total, 'number');
-  assert.equal(provRes.meta.limit, 2);
+  assert.equal(typeof provRes.body.meta.total, 'number');
+  assert.equal(provRes.body.meta.limit, 2);
 
   const vetRes = await call('GET', '/vet/bookings?page=1&limit=2', { token: vetToken });
   assert.equal(vetRes.status, 200);
   assert.ok(Array.isArray(vetRes.data.items));
-  assert.equal(typeof vetRes.meta.total, 'number');
-  assert.equal(vetRes.meta.limit, 2);
+  assert.equal(typeof vetRes.body.meta.total, 'number');
+  assert.equal(vetRes.body.meta.limit, 2);
 });

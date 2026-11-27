@@ -372,6 +372,12 @@ async function main() {
     });
     record('11. Limit 50 services per provider returns 409', over50Res.status === 409, `Message: ${over50Res.body.message}`);
 
+    // 11b. D1 Pagination check on GET /provider/services (before Provider A is disabled)
+    const svcP1 = await api('GET', '/provider/services?page=1&limit=2', { token: provAToken });
+    const svcP2 = await api('GET', '/provider/services?page=2&limit=2', { token: provAToken });
+    const svcMetaOk = svcP1.body?.meta?.page === 1 && svcP1.body?.meta?.limit === 2 && typeof svcP1.body?.meta?.total === 'number' && svcP2.body?.meta?.page === 2;
+    record('11b. GET /provider/services pagination (page 1 & 2, meta)', svcP1.status === 200 && svcP2.status === 200 && svcMetaOk);
+
     // 12. Admin disables Provider A -> all services vanish from GET /services and Provider A cannot write
     // Re-enable svcAId first
     await api('POST', `/provider/services/${svcAId}/enable`, { token: provAToken });
@@ -404,12 +410,6 @@ async function main() {
       hasServiceAudit && !anyLeakedSensitive,
       `Entries: ${auditLogs.recordset.length}, Leaked: ${anyLeakedSensitive}`
     );
-
-    // 14b. D1 Pagination check on GET /provider/services
-    const svcP1 = await api('GET', '/provider/services?page=1&limit=2', { token: provAToken });
-    const svcP2 = await api('GET', '/provider/services?page=2&limit=2', { token: provAToken });
-    const svcMetaOk = svcP1.body?.meta?.page === 1 && svcP1.body?.meta?.limit === 2 && typeof svcP1.body?.meta?.total === 'number' && svcP2.body?.meta?.page === 2;
-    record('13b. GET /provider/services pagination (page 1 & 2, meta)', svcP1.status === 200 && svcP2.status === 200 && svcMetaOk);
 
   } finally {
     console.log('\n--- CLEANING UP C3 TEST DATA ON REAL SQL SERVER ---');

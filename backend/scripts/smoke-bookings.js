@@ -348,9 +348,9 @@ async function run() {
     record('15. Vet API (list, detail, MR 201/409, concurrent, pending 409, SQL AuditLog)', vetApiOk);
 
     // 16. D1 Pagination check on GET /bookings, /provider/bookings, /vet/bookings
-    const cPage = await req('GET', '/api/v1/bookings?page=1&limit=2', custToken);
-    const pPage = await req('GET', '/api/v1/provider/bookings?page=1&limit=2', provToken);
-    const vPage = await req('GET', '/api/v1/vet/bookings?page=1&limit=2', vetToken);
+    const cPage = await api('GET', '/bookings?page=1&limit=2', { token: custToken });
+    const pPage = await api('GET', '/provider/bookings?page=1&limit=2', { token: provToken });
+    const vPage = await api('GET', '/vet/bookings?page=1&limit=2', { token: vetToken });
     const d1Ok = cPage.status === 200 && cPage.body?.meta?.limit === 2 && Array.isArray(cPage.body?.data?.items)
       && pPage.status === 200 && pPage.body?.meta?.limit === 2 && Array.isArray(pPage.body?.data?.items)
       && vPage.status === 200 && vPage.body?.meta?.limit === 2 && Array.isArray(vPage.body?.data?.items);

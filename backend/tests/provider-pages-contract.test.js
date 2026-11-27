@@ -27,6 +27,7 @@ function createMockDom() {
       this._innerHTML = '';
       this.children = [];
       this.attributes = new Map();
+      this.dataset = {};
       this.classList = {
         _classes: new Set(),
         add: (...cls) => cls.forEach((c) => this.classList._classes.add(c)),
