@@ -126,6 +126,9 @@ function createFakeModels() {
     },
     audit: {
       async log({ actorUserId, action, targetType, targetId, detail }) {
+        if (detail !== undefined && detail !== null && typeof detail !== 'string') {
+          throw new TypeError("Validation failed for parameter 'detail'. Invalid string.");
+        }
         s.auditLogs.push({
           auditId: ++seq,
           actorUserId: actorUserId || null,

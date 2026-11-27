@@ -148,7 +148,7 @@ function createAuthService({ models, config, storageService, logger = console, c
             action: 'avatar_set',
             targetType: 'user',
             targetId: userId,
-            detail: { ext }
+            detail: JSON.stringify({ ext })
           }, tx);
           return updated;
         });

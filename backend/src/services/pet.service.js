@@ -81,7 +81,7 @@ function createPetService({ models, config, storageService, logger = console, cl
             action: 'pet_photo_set',
             targetType: 'pet',
             targetId: id,
-            detail: { ext }
+            detail: JSON.stringify({ ext })
           }, tx);
           return updated;
         });

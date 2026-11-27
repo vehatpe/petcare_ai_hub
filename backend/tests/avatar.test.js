@@ -74,4 +74,17 @@ test('avatar API: all roles can set/clear own avatar, validation, cleanup', asyn
   assert.equal(rDel.status, 200);
   assert.equal(rDel.data.user.avatarUrl, null);
   assert.equal(storage.files.size, 3);
+
+  // 6. AuditLog has avatar_set / avatar_clear, detail is string for set, no URL/publicId
+  const logs = await app.testHelpers.queryAuditLogs();
+  const setLogs = logs.filter((l) => l.action === 'avatar_set');
+  const clearLogs = logs.filter((l) => l.action === 'avatar_clear');
+  assert.ok(setLogs.length >= 1);
+  assert.ok(clearLogs.length >= 1);
+  for (const log of [...setLogs, ...clearLogs]) {
+    if (log.action === 'avatar_set') assert.equal(typeof log.detail, 'string');
+    const raw = JSON.stringify(log);
+    assert.equal(raw.includes('/uploads/'), false);
+    assert.equal(raw.includes('publicId'), false);
+  }
 });

@@ -179,6 +179,21 @@ async function run() {
     assertOk(rAvDel.status === 200 && rAvDel.body !== null, `DELETE avatar failed: ${rAvDel.status}`);
     assertOk(!fs.existsSync(avDiskPath), 'Avatar file still exists after DELETE');
     console.log('9. Verified PUT/DELETE /auth/me/avatar.');
+
+    // 10. Verify AuditLog rows in real SQL Server
+    const auditRes = await pool.request()
+      .input('uid', sql.UniqueIdentifier, c1.user.id)
+      .query('SELECT Action, Detail FROM dbo.AuditLog WHERE ActorUserId = @uid');
+    const actions = new Set(auditRes.recordset.map((r) => r.Action));
+    for (const expected of ['pet_photo_set', 'pet_photo_clear', 'avatar_set', 'avatar_clear']) {
+      assertOk(actions.has(expected), `Missing AuditLog action: ${expected}`);
+    }
+    for (const row of auditRes.recordset) {
+      if (row.Detail) {
+        assertOk(!row.Detail.includes('/uploads/') && !row.Detail.includes('publicId'), 'AuditLog Detail leaked URL/publicId');
+      }
+    }
+    console.log('10. Verified AuditLog rows in SQL Server.');
   } finally {
     let cleanupFailed = false;
     try {

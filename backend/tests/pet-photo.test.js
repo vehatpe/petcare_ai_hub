@@ -118,11 +118,14 @@ test('pet photo API: upload, replace, delete, validation, authz, rollback, clean
   assert.equal(rRm.status, 200);
   assert.equal(storage.files.size, 0);
 
-  // 14. AuditLog never contains URL or publicId
+  // 14. AuditLog never contains URL or publicId and detail is string/null
   const logs = await app.testHelpers.queryAuditLogs();
-  const photoLogs = logs.filter((l) => l.action === 'pet_photo_set' || l.action === 'pet_photo_clear');
-  assert.ok(photoLogs.length >= 2);
-  for (const log of photoLogs) {
+  const setLogs = logs.filter((l) => l.action === 'pet_photo_set');
+  const clearLogs = logs.filter((l) => l.action === 'pet_photo_clear');
+  assert.ok(setLogs.length >= 1);
+  assert.ok(clearLogs.length >= 1);
+  for (const log of [...setLogs, ...clearLogs]) {
+    if (log.action === 'pet_photo_set') assert.equal(typeof log.detail, 'string');
     const raw = JSON.stringify(log);
     assert.equal(raw.includes('/uploads/'), false);
     assert.equal(raw.includes('publicId'), false);
