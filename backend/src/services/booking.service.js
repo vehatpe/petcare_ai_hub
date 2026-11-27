@@ -28,6 +28,23 @@ function createBookingService({ models, config, clock = () => new Date() }) {
     : 2;
 
   return {
+    async list(ownerId, query = {}) {
+      const { page, limit, offset } = parsePagination(query);
+      const scope = typeof query.scope === 'string' && query.scope.trim() ? query.scope.trim() : 'all';
+      if (!VALID_SCOPES.has(scope)) {
+        throw validation('Phạm vi lọc lịch hẹn không hợp lệ.', { scope: 'Phạm vi lọc phải là all, upcoming hoặc history.' });
+      }
+      let petId = null;
+      if (query.petId !== undefined && query.petId !== '') {
+        if (!isUuid(query.petId)) {
+          throw validation('Mã thú cưng không hợp lệ.', { petId: 'Mã thú cưng không hợp lệ.' });
+        }
+        petId = String(query.petId).toLowerCase();
+      }
+      const now = nowInTz(clock(), config.timezone);
+      const { rows, total } = await models.bookings.listByOwner(ownerId, {
+        scope, petId, today: now.date, time: now.time, offset, limit
+      });
       return {
         items: rows.map((b) => ({ ...b, cancelWindowHours })),
         meta: buildMeta({ page, limit, total })
