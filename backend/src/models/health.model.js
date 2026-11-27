@@ -67,6 +67,28 @@ module.exports = (db) => ({
       subjective: r.Subjective, objective: r.Objective, assessment: r.Assessment, plan: r.PlanText
     }));
   },
+  async listMedicalRecordsPaginated(petId, { offset = 0, limit = 10 } = {}) {
+    const [countRow] = await db.query(
+      `SELECT COUNT(*) AS total FROM dbo.Medical_Records WHERE PetId = @petId`,
+      { petId: [T.guid, petId] }
+    );
+    const rows = await db.query(
+      `SELECT r.RecordId, CONVERT(CHAR(10), r.VisitDate, 23) AS VisitDate, u.FullName AS VetName,
+              r.Subjective, r.Objective, r.Assessment, r.PlanText
+       FROM dbo.Medical_Records r LEFT JOIN dbo.Users u ON u.UserId = r.VetId
+       WHERE r.PetId = @petId
+       ORDER BY r.VisitDate DESC, r.CreatedAt DESC, r.RecordId DESC
+       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`,
+      { petId: [T.guid, petId], offset: [T.int, offset], limit: [T.int, limit] }
+    );
+    return {
+      rows: rows.map((r) => ({
+        id: lc(r.RecordId), visitDate: r.VisitDate, vetName: r.VetName || null,
+        subjective: r.Subjective, objective: r.Objective, assessment: r.Assessment, plan: r.PlanText
+      })),
+      total: Number(countRow?.total) || 0
+    };
+  },
   async addMedicalRecord(m) {
     await db.query(
       `INSERT INTO dbo.Medical_Records (RecordId, PetId, BookingId, VetId, VisitDate, Subjective, Objective, Assessment, PlanText)

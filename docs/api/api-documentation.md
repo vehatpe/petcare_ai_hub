@@ -124,8 +124,8 @@ Mọi endpoint yêu cầu xác thực (`Authorization: Bearer <jwt>`) và tài k
 ## Danh mục (công khai, không cần token)
 | Method | Path | Ghi chú |
 |---|---|---|
-| GET | `/providers` | `Provider[]` đang hoạt động |
-| GET | `/services?category=&providerId=&q=` | `Service[]` đang hoạt động |
+| GET | `/providers` | `Provider[]` đang hoạt động (trần tối đa `500` dòng, không phân trang, không `meta`) |
+| GET | `/services?category=&providerId=&q=` | `Service[]` đang hoạt động (trần tối đa `500` dòng, không phân trang, không `meta`) |
 | GET | `/services/:id` | `Service` |
 | GET | `/services/:id/slots?date=YYYY-MM-DD` | `[{time, available}]`. Khung giờ cố định: 08:30 09:30 10:30 14:00 15:30 16:30 18:00 19:30. `available=false` khi đủ `SlotCapacity` lịch chưa hủy, hoặc giờ đã qua (ngày hôm nay, múi giờ `APP_TIMEZONE`). Ngày quá khứ → 422. |
 
@@ -150,6 +150,7 @@ Validation: name 1–40; species/sex thuộc tập; birthDate hợp lệ, không
 | DELETE | `/pets/:id/weights/:metricId` | xóa số đo nhập nhầm |
 | POST | `/pets/:id/vaccinations` | `{vaccineName, administeredOn, nextDueOn?, providerName?, batchNo?}` → 201. Bản ghi do chủ nuôi nhập có `source:"owner"` (chưa được cơ sở xác nhận). |
 | DELETE | `/pets/:id/vaccinations/:vaccinationId` | chỉ xóa được bản ghi `source:"owner"` |
+| GET | `/pets/:id/medical-records` | Query: `page`, `limit` → 200 `data: { items: MedicalRecord[] }`, `meta` cấp ngoài; sắp theo `visitDate` giảm dần |
 | POST | `/pets/:id/medical-records` | chỉ role `vet`/`admin`; `{visitDate, subjective, objective, assessment, plan, bookingId?}` |
 
 Tổng hợp `GET /health-records?petId=`:
@@ -160,14 +161,15 @@ Tổng hợp `GET /health-records?petId=`:
   vaccinations:[{id, vaccineName, administeredOn, nextDueOn|null, providerName, batchNo, source:"owner"|"clinic",
                  status:"ok"|"due-soon"|"overdue"|"recorded"}],   // status tính ở server theo ngày hiện tại
   vaccineSummary:{ total, upToDate, dueSoon, overdue, nextDue:{vaccineName, dueOn}|null },
-  medicalRecords:[{id, visitDate, vetName|null, subjective, objective, assessment, plan}] }  // mới → cũ
+  medicalRecords:[{id, visitDate, vetName|null, subjective, objective, assessment, plan}], // tối đa 10 bản ghi mới nhất
+  medicalRecordsMeta:{ limit: 10, total } }
 ```
 Quy tắc trạng thái tiêm: với mỗi `vaccineName` chỉ tính mũi có `administeredOn` mới nhất. `nextDueOn` null → `recorded`; `< hôm nay` → `overdue`; trong 30 ngày tới → `due-soon`; còn lại `ok`. `vaccineSummary` đếm trên các mũi mới nhất đó; `total` = số loại vắc-xin; không có dữ liệu thì mọi số bằng 0 và `nextDue:null`. Server **không** trả cờ kiểu "sổ tiêm hợp lệ" nào ngoài các số tính được.
 
 ## Lịch hẹn (customer)
 | Method | Path | Ghi chú |
 |---|---|---|
-| GET | `/bookings` | `Booking[]` của chủ, sắp theo ngày+giờ |
+| GET | `/bookings` | **Thay đổi hợp đồng (S18):** Query: `page`, `limit`, `scope?` (`all` \| `upcoming` \| `history`), `petId?` (GUID). Trả `data: { items: Booking[] }` + `meta` cấp ngoài. `scope=all` sắp nhóm "sắp tới" (`pending`/`confirmed` và ngày/giờ >= hiện tại theo `APP_TIMEZONE`) tăng dần trước, sau đó nhóm lịch sử giảm dần. |
 | POST | `/bookings` | `{petId, serviceId, date, time, notes?}` → 201 `Booking` status `pending`. Kiểm tra: bé thuộc chủ; dịch vụ còn hoạt động; ngày không ở quá khứ; `time` thuộc khung giờ; còn chỗ (`SlotCapacity`); bé không trùng giờ → 409 `conflict` với `errors.time`. |
 | PATCH | `/bookings/:id/cancel` | → `Booking` status `cancelled`; đã hủy/hoàn tất → 409 |
 
@@ -204,3 +206,9 @@ Các điểm hợp đồng chưa nói rõ; backend chọn cách hiểu đơn gi�
 - **Mã bổ sung**: `413 too_large` khi body > 600 KB; `400 bad_json`; `404 not_found` cho đường dẫn lạ; `429 rate_limited`; `403 disabled` khi token hợp lệ nhưng tài khoản bị khóa.
 - **AI**: tài liệu có `ReviewStatus='rejected'` không bao giờ được dùng; `RAG_REQUIRE_APPROVED=true` chỉ dùng tài liệu đã `approved`. Nguồn hiển thị chỉ là tiêu đề tài liệu.
 - Token: HS256, hết hạn 1 ngày (30 ngày nếu `remember`). Vắc-xin `source:"clinic"` chưa có API tạo (chờ luồng cơ sở xác nhận); hiện chỉ chủ nuôi nhập `owner`.
+
+## Không phân trang và lý do
+- `GET /pets`: tối đa 10 thú cưng/chủ.
+- Cân nặng (`weights` trong `GET /health-records`): biểu đồ cần toàn bộ chuỗi thời gian.
+- Tiêm chủng (`vaccinations` trong `GET /health-records`): trạng thái `ok` / `due-soon` / `overdue` tính trên toàn bộ các mũi cùng loại vắc-xin của một thú cưng nên phải đọc đủ (xem lại nếu đo được > 200 dòng/thú cưng).
+- Danh mục công khai (`GET /providers`, `GET /services`): không phân trang, áp trần `500` dòng để bảo vệ truy vấn.

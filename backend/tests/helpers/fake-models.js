@@ -559,8 +559,12 @@ function createFakeModels() {
       async addVaccination(v) { s.vaccs.push({ createdAt: tick(), ...clone(v) }); return v; },
       async deleteVaccination(petId, id) { const n = s.vaccs.length; s.vaccs = s.vaccs.filter((v) => !(v.id === id && v.petId === petId)); return s.vaccs.length < n; },
       async listMedicalRecords(petId) {
-        return s.records.filter((r) => r.petId === petId).sort((a, b) => b.visitDate.localeCompare(a.visitDate))
+        return s.records.filter((r) => r.petId === petId).sort((a, b) => b.visitDate.localeCompare(a.visitDate) || b.id.localeCompare(a.id))
           .map((r) => { const vet = s.users.find((u) => u.id === r.vetId); return { id: r.id, visitDate: r.visitDate, vetName: vet ? vet.fullName : null, subjective: r.subjective, objective: r.objective, assessment: r.assessment, plan: r.plan }; });
+      },
+      async listMedicalRecordsPaginated(petId, { offset = 0, limit = 10 } = {}) {
+        const all = await this.listMedicalRecords(petId);
+        return { rows: all.slice(offset, offset + limit), total: all.length };
       },
       async addMedicalRecord(m) {
         s.records.push(clone(m));
@@ -569,7 +573,33 @@ function createFakeModels() {
       }
     },
     bookings: {
-      async listByOwner(o) { return s.bookings.filter((b) => b.ownerId === o).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).map(bookingOut); },
+      async listByOwner(o, { scope = 'all', petId = null, today = '0000-00-00', time = '00:00', offset = 0, limit = 20 } = {}) {
+        const isUp = (b) => (b.status === 'pending' || b.status === 'confirmed') && (b.date > today || (b.date === today && b.time >= time));
+        let rows = s.bookings.filter((b) => b.ownerId === o && (!petId || b.petId === petId));
+        if (scope === 'upcoming') rows = rows.filter(isUp);
+        else if (scope === 'history') rows = rows.filter((b) => !isUp(b));
+        rows = rows.slice().sort((a, b) => {
+          const ua = isUp(a) ? 1 : 0;
+          const ub = isUp(b) ? 1 : 0;
+          if (scope === 'all' && ua !== ub) return ub - ua;
+          if (ua === 1 || scope === 'upcoming') {
+            return (a.date + a.time).localeCompare(b.date + b.time) || a.id.localeCompare(b.id);
+          }
+          return (b.date + b.time).localeCompare(a.date + a.time) || b.id.localeCompare(a.id);
+        });
+        return { rows: rows.slice(offset, offset + limit).map(bookingOut), total: rows.length };
+      },
+      async countsByOwner(o, { today, time }) {
+        const isUp = (b) => (b.status === 'pending' || b.status === 'confirmed') && (b.date > today || (b.date === today && b.time >= time));
+        const mine = s.bookings.filter((b) => b.ownerId === o);
+        return { total: mine.length, upcomingCount: mine.filter(isUp).length };
+      },
+      async nextUpcomingByOwner(o, { today, time }) {
+        const isUp = (b) => (b.status === 'pending' || b.status === 'confirmed') && (b.date > today || (b.date === today && b.time >= time));
+        const up = s.bookings.filter((b) => b.ownerId === o && isUp(b))
+          .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time) || a.id.localeCompare(b.id));
+        return up[0] ? bookingOut(up[0]) : null;
+      },
       async getByOwner(id, o) { return bookingOut(s.bookings.find((b) => b.id === id && b.ownerId === o)) || null; },
       async getById(id) { return bookingOut(s.bookings.find((b) => b.id === id)) || null; },
       async countBySlot(serviceId, date) {

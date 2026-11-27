@@ -1,6 +1,8 @@
 'use strict';
 const { T } = require('./db');
 
+const CATALOG_MAX_ROWS = 500;
+
 const SERVICE_SELECT = `
   SELECT s.ServiceId, s.Category, s.CategoryLabel, s.ProviderId, p.Name AS ProviderName, p.Area AS ProviderArea,
          p.Address AS ProviderAddress, p.Phone AS ProviderPhone, p.Description AS ProviderDescription,
@@ -19,7 +21,11 @@ const mapService = (r) => r && ({
 
 module.exports = (db) => ({
   async listProviders() {
-    const rows = await db.query(`SELECT ProviderId, Name, Area, Type, Address, Phone, Description, IsSample FROM dbo.Providers WHERE IsActive = 1 ORDER BY Name`);
+    const rows = await db.query(
+      `SELECT TOP (@max) ProviderId, Name, Area, Type, Address, Phone, Description, IsSample
+       FROM dbo.Providers WHERE IsActive = 1 ORDER BY Name, ProviderId`,
+      { max: [T.int, CATALOG_MAX_ROWS] }
+    );
     return rows.map((r) => ({
       id: r.ProviderId,
       name: r.Name,
@@ -33,12 +39,13 @@ module.exports = (db) => ({
   },
   async listServices({ category, providerId, q }) {
     const rows = await db.query(
-      `${SERVICE_SELECT}
+      `${SERVICE_SELECT.replace('SELECT ', 'SELECT TOP (@max) ')}
          AND (@category IS NULL OR s.Category = @category)
          AND (@providerId IS NULL OR s.ProviderId = @providerId)
          AND (@q IS NULL OR s.Name LIKE @like ESCAPE '\\' OR p.Name LIKE @like ESCAPE '\\')
-       ORDER BY s.Category, s.Name`,
+       ORDER BY s.Category, s.Name, s.ServiceId`,
       {
+        max: [T.int, CATALOG_MAX_ROWS],
         category: [T.vstr(10), category], providerId: [T.vstr(50), providerId], q: [T.str(100), q],
         like: [T.str(110), q ? '%' + q.replace(/[\\%_[]/g, (m) => '\\' + m) + '%' : null]
       }

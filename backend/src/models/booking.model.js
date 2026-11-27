@@ -12,13 +12,71 @@ const map = (r) => r && ({
   time: r.BookingTime, notes: r.Notes, status: r.Status, createdAt: iso(r.CreatedAt)
 });
 
+const UPCOMING_EXPR = `CASE WHEN Status IN ('pending','confirmed') AND (BookingDate > CAST(@today AS DATE) OR (BookingDate = CAST(@today AS DATE) AND BookingTime >= @time)) THEN 1 ELSE 0 END`;
+
 module.exports = (db) => {
   const getByOwner = async (id, ownerId) =>
     map((await db.query(`${SELECT} WHERE BookingId = @id AND UserId = @owner`, { id: [T.guid, id], owner: [T.guid, ownerId] }))[0]);
 
   return {
-    async listByOwner(ownerId) {
-      return (await db.query(`${SELECT} WHERE UserId = @owner ORDER BY BookingDate, BookingTime, CreatedAt`, { owner: [T.guid, ownerId] })).map(map);
+    async listByOwner(ownerId, { scope = 'all', petId = null, today, time, offset = 0, limit = 20 } = {}) {
+      const scopeFilter = scope === 'upcoming' ? 'AND u.IsUpcoming = 1' : scope === 'history' ? 'AND u.IsUpcoming = 0' : '';
+      const orderBy = scope === 'upcoming'
+        ? 'BookingDate ASC, BookingTime ASC, BookingId ASC'
+        : scope === 'history'
+          ? 'BookingDate DESC, BookingTime DESC, BookingId DESC'
+          : `u.IsUpcoming DESC,
+             CASE WHEN u.IsUpcoming = 1 THEN CONVERT(CHAR(10), BookingDate, 23) + ' ' + BookingTime END ASC,
+             CASE WHEN u.IsUpcoming = 0 THEN CONVERT(CHAR(10), BookingDate, 23) + ' ' + BookingTime END DESC,
+             BookingId ASC`;
+      const params = {
+        owner: [T.guid, ownerId],
+        petId: [T.guid, petId],
+        today: [T.ymd, today],
+        time: [T.vstr(5), time],
+        offset: [T.int, offset],
+        limit: [T.int, limit]
+      };
+      const [countRow] = await db.query(
+        `SELECT COUNT(*) AS total
+         FROM dbo.Bookings
+         CROSS APPLY (SELECT ${UPCOMING_EXPR} AS IsUpcoming) u
+         WHERE UserId = @owner AND (@petId IS NULL OR PetId = @petId) ${scopeFilter}`,
+        params
+      );
+      const rows = await db.query(
+        `${SELECT}
+         CROSS APPLY (SELECT ${UPCOMING_EXPR} AS IsUpcoming) u
+         WHERE UserId = @owner AND (@petId IS NULL OR PetId = @petId) ${scopeFilter}
+         ORDER BY ${orderBy}
+         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`,
+        params
+      );
+      return { rows: rows.map(map), total: Number(countRow?.total) || 0 };
+    },
+    async countsByOwner(ownerId, { today, time }) {
+      const [row] = await db.query(
+        `SELECT COUNT(*) AS total,
+                SUM(${UPCOMING_EXPR}) AS upcomingCount
+         FROM dbo.Bookings
+         WHERE UserId = @owner`,
+        { owner: [T.guid, ownerId], today: [T.ymd, today], time: [T.vstr(5), time] }
+      );
+      return {
+        total: Number(row?.total) || 0,
+        upcomingCount: Number(row?.upcomingCount) || 0
+      };
+    },
+    async nextUpcomingByOwner(ownerId, { today, time }) {
+      const rows = await db.query(
+        `${SELECT.replace('SELECT ', 'SELECT TOP (1) ')}
+         WHERE UserId = @owner
+           AND Status IN ('pending','confirmed')
+           AND (BookingDate > CAST(@today AS DATE) OR (BookingDate = CAST(@today AS DATE) AND BookingTime >= @time))
+         ORDER BY BookingDate ASC, BookingTime ASC, BookingId ASC`,
+        { owner: [T.guid, ownerId], today: [T.ymd, today], time: [T.vstr(5), time] }
+      );
+      return map(rows[0]) || null;
     },
     getByOwner,
     async getById(id) {

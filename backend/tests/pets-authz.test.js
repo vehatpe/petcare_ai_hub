@@ -92,8 +92,8 @@ test('pets CRUD', async (t) => {
     assert.equal(st.metrics.filter((m) => m.petId === a.id).length, 0);
     assert.equal(st.vaccs.filter((v) => v.petId === a.id).length, 0);
     const bookings = await call('GET', '/bookings', { token: t2 });
-    assert.equal(bookings.data.length, 1);
-    assert.equal(bookings.data[0].petName, 'A'); assert.equal(bookings.data[0].petId, null);
+    assert.equal(bookings.data.items.length, 1);
+    assert.equal(bookings.data.items[0].petName, 'A'); assert.equal(bookings.data.items[0].petId, null);
     assert.equal((await call('GET', `/pets/${a.id}`, { token: t2 })).status, 404);
     assert.equal((await call('GET', `/pets/${b.id}`, { token: t2 })).status, 200);
   });
@@ -139,10 +139,10 @@ test('authorization: user B cannot touch user A rows (404)', async (t) => {
     assert.equal(r.status, 404, `${m} ${p} -> ${r.status}`);
   }
   assert.deepEqual((await call('GET', '/pets', { token: tk })).data, []);
-  assert.deepEqual((await call('GET', '/bookings', { token: tk })).data, []);
+  assert.deepEqual((await call('GET', '/bookings', { token: tk })).data.items, []);
   // A's data is untouched
   assert.equal((await call('GET', `/pets/${pet.id}`, { token: A.token })).status, 200);
-  assert.equal((await call('GET', '/bookings', { token: A.token })).data[0].status, 'pending');
+  assert.equal((await call('GET', '/bookings', { token: A.token })).data.items[0].status, 'pending');
   assert.equal((await call('GET', `/health-records?petId=${pet.id}`, { token: A.token })).data.weights.length, 2);
   // customers cannot write medical records; unauthenticated cannot either
   const mr = { visitDate: '2026-06-01', subjective: 's', objective: 'o', assessment: 'a', plan: 'p' };

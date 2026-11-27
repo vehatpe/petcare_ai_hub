@@ -54,6 +54,7 @@ function createRouter({ services, mw, config, models }) {
   r.delete('/pets/:id/weights/:metricId', customer, uuidParam('id'), uuidParam('metricId'), c.health.deleteWeight);
   r.post('/pets/:id/vaccinations', customer, uuidParam('id'), c.health.addVaccination);
   r.delete('/pets/:id/vaccinations/:vaccinationId', customer, uuidParam('id'), uuidParam('vaccinationId'), c.health.deleteVaccination);
+  r.get('/pets/:id/medical-records', customer, uuidParam('id'), c.health.listMedicalRecords);
   r.post('/pets/:id/medical-records', authenticate, requireRole('vet', 'admin'), uuidParam('id'), c.health.addMedicalRecord);
 
   r.get('/bookings', customer, c.booking.list);
