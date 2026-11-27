@@ -147,11 +147,7 @@ module.exports = (db) => {
          ORDER BY BookingDate ASC, BookingTime ASC, BookingId ASC`,
         { owner: [T.guid, ownerId], today: [T.ymd, today], time: [T.vstr(5), time] }
       );
-      return map(rows[0]) || null;
-=======
-    async listByOwner(ownerId) {
-      return (await db.query(`${SELECT} WHERE b.UserId = @owner ORDER BY b.BookingDate, b.BookingTime, b.CreatedAt`, { owner: [T.guid, ownerId] })).map(mapCustomer);
->>>>>>> main
+      return mapCustomer(rows[0]) || null;
     },
     getByOwner,
     async getById(id) {

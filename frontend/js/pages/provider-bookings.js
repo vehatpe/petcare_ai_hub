@@ -119,17 +119,12 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>`;
       return;
     }
-  let currentPage = 1;
-  let currentMeta = { page: 1, limit: 20, total: 0, totalPages: 1 };
-
-  function renderList() {
-    if (!bookings.length) {
-      listEl.innerHTML = `<div class="empty-state"><h3>Chưa có lịch hẹn nào</h3><p>Không có lịch hẹn nào phù hợp với bộ lọc hiện tại.</p></div>`;
-      return;
-    }
     listEl.innerHTML = `<ul class="pet-list">${bookings.map(bookingRow).join('')}</ul>${Pager.render(currentMeta)}`;
     Pager.bind(listEl, (nextPage) => loadBookings(nextPage));
   }
+
+  let currentPage = 1;
+  let currentMeta = { page: 1, limit: 20, total: 0, totalPages: 1 };
 
   async function loadBookings(page = currentPage) {
     currentPage = Math.max(1, Number(page) || 1);
