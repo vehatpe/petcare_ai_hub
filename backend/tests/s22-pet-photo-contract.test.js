@@ -96,6 +96,7 @@ function createDom(bodyAuth = 'customer') {
     async dispatch(t, ev = {}) {
       return this.dispatchEvent(makeEvent(t, ev, this));
     }
+    querySelector() { return new El('', 'BUTTON'); }
     querySelectorAll(sel) {
       if (sel === '.field-error') return ['name-error', 'species-error', 'sex-error', 'birthDate-error', 'weightKg-error', 'conditions-error', 'microchip-error'].map((id) => getOrCreate(id, 'P'));
       if (sel === '[aria-invalid]') return [];
@@ -188,7 +189,10 @@ function loadPageIntoVm({ htmlPath, url, sessionJson, fetchImpl }) {
     fetch: fetchImpl,
     location: { protocol: 'http:', hostname: 'localhost', port: '3000', pathname: '/pages/' + path.basename(htmlPath), search: new URL(url).search, href: url, replace(u) { this.href = u; }, reload() {} },
     history: { replaceState() {} },
-    matchMedia: () => ({ matches: false })
+    matchMedia: () => ({ matches: false }),
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {}
   };
   ctx.window = ctx;
   ctx.window.URL = Object.assign(function (u, b) { return new URL(u, b); }, {
@@ -204,23 +208,30 @@ function loadPageIntoVm({ htmlPath, url, sessionJson, fetchImpl }) {
   return { ctx, document, els, getOrCreate, form };
 }
 
-async function seedCustomer(app) {
+const jwt = require('jsonwebtoken');
+
+async function seedCustomer(tApp) {
   const id = 'cust_' + crypto.randomBytes(4).toString('hex');
-  await app.models.user.create({
+  const email = `${id}@example.com`;
+  const user = {
     id,
     name: 'Khách S22',
-    email: `${id}@example.com`,
-    passwordHash: bcrypt.hashSync('Pass123!', 4),
+    email,
+    phone: '0901234567',
+    passwordHash: bcrypt.hashSync('Password123!', 4),
     role: 'customer',
-    status: 'active'
-  });
-  const token = app.jwt.sign({ sub: id, role: 'customer', tv: 0 });
-  return { id, token, user: { id, name: 'Khách S22', email: `${id}@example.com`, role: 'customer', status: 'active' } };
+    status: 'active',
+    tokenVersion: 0,
+    mustChangePassword: false
+  };
+  await tApp.models.users.create(user);
+  const token = jwt.sign({ sub: id, role: 'customer', tv: 0 }, tApp.config.jwtSecret, { expiresIn: '1h' });
+  return { id, token, user: { id, name: user.name, email, role: 'customer', status: 'active' } };
 }
 
-function makeBridgeFetch(app, calls, overrideUpload) {
+function makeBridgeFetch(tApp, calls, overrideUpload) {
   return async (url, init = {}) => {
-    const u = new URL(url, 'http://localhost:3000');
+    const u = new URL(url, tApp.baseUrl);
     const apiPath = u.pathname.replace(/^\/api\/v1/, '') + u.search;
     const method = (init.method || 'GET').toUpperCase();
     const headers = init.headers || {};
@@ -233,25 +244,24 @@ function makeBridgeFetch(app, calls, overrideUpload) {
       }
       const field = init.body.fields.find((f) => f.name === 'photo');
       const buf = field && field.value && field.value._buf ? field.value._buf : Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
-      const res = await app.request
-        .post('/api/v1' + apiPath)
-        .set('Authorization', headers.Authorization || '')
-        .attach('photo', buf, (field && field.filename) || 'pet.png');
-      return { ok: res.status >= 200 && res.status < 300, status: res.status, async json() { return res.body; } };
+      const realForm = new FormData();
+      realForm.append('photo', new Blob([buf], { type: 'image/png' }), (field && field.filename) || 'pet.png');
+      return fetch(tApp.baseUrl + '/api/v1' + apiPath, {
+        method,
+        headers: headers.Authorization ? { Authorization: headers.Authorization } : {},
+        body: realForm
+      });
     }
 
     const parsedBody = init.body ? JSON.parse(init.body) : undefined;
     calls.push({ method, path: apiPath, body: parsedBody });
-    let req = app.request[method.toLowerCase()]('/api/v1' + apiPath);
-    if (headers.Authorization) req = req.set('Authorization', headers.Authorization);
-    if (parsedBody !== undefined) req = req.send(parsedBody);
-    const res = await req;
-    return { ok: res.status >= 200 && res.status < 300, status: res.status, async json() { return res.body; } };
+    return fetch(tApp.baseUrl + '/api/v1' + apiPath, { method, headers, body: init.body });
   };
 }
 
-test('S22 pet-profile contract: create with photo, client validation, 413/422 recovery, delete photo, no Base64', async () => {
+test('S22 pet-profile contract: create with photo, client validation, 413/422 recovery, delete photo, no Base64', async (t) => {
   const app = await startTestApp();
+  t.after(() => app.close());
   const cust = await seedCustomer(app);
   const sessionJson = JSON.stringify({ token: cust.token, user: cust.user });
   const calls = [];
@@ -297,6 +307,9 @@ test('S22 pet-profile contract: create with photo, client validation, 413/422 re
 
   uploadOverride = async () => ({ status: 413, body: { success: false, code: 'file_too_large', message: 'Ảnh vượt quá 5 MB.' } });
   await form.dispatch('submit');
+  assert.ok(calls.some((c) => c.isFormData), 'uploadPhoto not called; calls=' + JSON.stringify(calls));
+  assert.equal(getOrCreate('formAlert').hidden, true, getOrCreate('formAlert').textContent);
+  assert.ok(calls.some((c) => c.method === 'POST' && c.path === '/pets'), 'POST /pets not called; calls=' + JSON.stringify(calls));
   assert.equal(photoError.hidden, false);
   assert.equal(photoError.textContent, 'Ảnh vượt quá 5 MB.');
   assert.match(getOrCreate('pageTitle').textContent, /Sửa hồ sơ Milo/);
@@ -323,17 +336,18 @@ test('S22 pet-profile contract: create with photo, client validation, 413/422 re
   assert.equal(previewAvatar.textContent, 'M');
 });
 
-test('S22 dashboard-customer and booking-flow: render pet.photo URL and fallback to initial on error', async () => {
-  const app = await startTestApp();
-  const cust = await seedCustomer(app);
-  await app.models.pet.create({
-    id: 'pet_s22_1',
+test('S22 dashboard-customer and booking-flow: render pet.photo URL and fallback to initial on error', async (t) => {
+  const tApp = await startTestApp();
+  t.after(() => tApp.close());
+  const cust = await seedCustomer(tApp);
+  const photoUrl = '/uploads/pets/bong.png';
+  await tApp.models.pets.create({
     ownerId: cust.id,
     name: 'Bông',
     species: 'cat',
     sex: 'female',
     birthDate: '2022-05-01',
-    photoUrl: '/uploads/pets/bong.png'
+    photoUrl
   });
   const sessionJson = JSON.stringify({ token: cust.token, user: cust.user });
   const calls = [];
@@ -343,12 +357,12 @@ test('S22 dashboard-customer and booking-flow: render pet.photo URL and fallback
     htmlPath: path.join(PAGES_DIR, 'customer-dashboard.html'),
     url: 'http://localhost:3000/pages/customer-dashboard.html',
     sessionJson,
-    fetchImpl: makeBridgeFetch(app, calls)
+    fetchImpl: makeBridgeFetch(tApp, calls)
   });
   await dash.document.dispatchEvent({ type: 'DOMContentLoaded' });
-  await new Promise((r) => setTimeout(r, 30));
-  const petsList = dash.getOrCreate('petsList');
-  assert.match(petsList.innerHTML, /<img src="\/uploads\/pets\/bong\.png" alt="">/);
+  await new Promise((r) => setTimeout(r, 100));
+  const petsList = dash.getOrCreate('petList');
+  assert.ok(petsList.innerHTML.includes(`<img src="${photoUrl}" alt="">`), 'dashboard-customer should render img with uploaded URL');
   const fakeBox = dash.document.createElement('DIV');
   fakeBox.classList.add('pet-avatar');
   fakeBox.setAttribute('data-pet-initial', 'B');
@@ -362,12 +376,12 @@ test('S22 dashboard-customer and booking-flow: render pet.photo URL and fallback
     htmlPath: path.join(PAGES_DIR, 'booking.html'),
     url: 'http://localhost:3000/pages/booking.html',
     sessionJson,
-    fetchImpl: makeBridgeFetch(app, calls)
+    fetchImpl: makeBridgeFetch(tApp, calls)
   });
   await book.document.dispatchEvent({ type: 'DOMContentLoaded' });
   await new Promise((r) => setTimeout(r, 30));
   const stepContent = book.getOrCreate('stepContent');
-  assert.match(stepContent.innerHTML, /<img src="\/uploads\/pets\/bong\.png" alt="">/);
+  assert.ok(stepContent.innerHTML.includes(`<img src="${photoUrl}" alt="">`), 'booking-flow should render img with uploaded URL');
   const fakeBox2 = book.document.createElement('SPAN');
   fakeBox2.classList.add('pet-avatar');
   fakeBox2.setAttribute('data-pet-initial', 'B');

@@ -130,8 +130,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  if (petsEl) {
-    petsEl.addEventListener('error', (e) => {
+  if (petListEl) {
+    petListEl.addEventListener('error', (e) => {
       const img = e.target;
       if (!img || img.tagName !== 'IMG') return;
       const box = img.closest('.pet-avatar');
