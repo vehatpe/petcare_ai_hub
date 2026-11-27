@@ -13,7 +13,7 @@ module.exports = ({ healthService }) => ({
   deleteVaccination: wrap(async (req, res) => ok(res, await healthService.deleteVaccination(req.user.id, req.params.id, req.params.vaccinationId), 'Đã xóa bản ghi tiêm chủng.')),
   listVetBookings: wrap(async (req, res) => {
     const { items, meta } = await healthService.listVetBookings(req.user, req.query);
-    return ok(res, { items }, '', meta);
+    return ok(res, { items }, 'Thành công.', 200, meta);
   }),
   getVetBookingDetail: wrap(async (req, res) => ok(res, await healthService.getVetBookingDetail(req.user, req.params.id))),
   addMedicalRecordForBooking: wrap(async (req, res) => ok(res, await healthService.addMedicalRecordForBooking(req.user, req.params.id, req.body), 'Đã lưu bệnh án.', 201)),

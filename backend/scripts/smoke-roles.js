@@ -552,8 +552,8 @@ async function main() {
     );
 
     // 19. D1 Pagination check on GET /admin/users
-    const p1 = await req('GET', '/api/v1/admin/users?page=1&limit=2', { token: adminToken });
-    const p2 = await req('GET', '/api/v1/admin/users?page=2&limit=2', { token: adminToken });
+    const p1 = await api('GET', '/admin/users?page=1&limit=2', { token: adminToken });
+    const p2 = await api('GET', '/admin/users?page=2&limit=2', { token: adminToken });
     const ids1 = new Set((p1.body?.data?.users || []).map((u) => u.id));
     const ids2 = (p2.body?.data?.users || []).map((u) => u.id);
     const noDup = ids2.every((id) => !ids1.has(id));

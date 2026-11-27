@@ -406,8 +406,8 @@ async function main() {
     );
 
     // 14b. D1 Pagination check on GET /provider/services
-    const svcP1 = await req('GET', '/api/v1/provider/services?page=1&limit=2', { token: provToken });
-    const svcP2 = await req('GET', '/api/v1/provider/services?page=2&limit=2', { token: provToken });
+    const svcP1 = await api('GET', '/provider/services?page=1&limit=2', { token: provToken });
+    const svcP2 = await api('GET', '/provider/services?page=2&limit=2', { token: provToken });
     const svcMetaOk = svcP1.body?.meta?.page === 1 && svcP1.body?.meta?.limit === 2 && typeof svcP1.body?.meta?.total === 'number' && svcP2.body?.meta?.page === 2;
     record('13b. GET /provider/services pagination (page 1 & 2, meta)', svcP1.status === 200 && svcP2.status === 200 && svcMetaOk);
 

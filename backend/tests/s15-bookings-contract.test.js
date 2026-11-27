@@ -238,11 +238,18 @@ test('S15 Contract: Customer bookings, Provider bookings, and Header nav', async
           no_show: { label: 'Vắng mặt', badge: 'badge-danger' }
         }
       },
+      Pager: { render: () => '', bind: () => {} },
       Api: {
-        get: async (url) => {
+        get: async (url, _query, opts) => {
           if (url === '/provider/profile') return { isActive: true };
           if (url.startsWith('/provider/vets')) return { vets: [{ id: vetId, fullName: 'BS. Minh S15', status: 'active' }] };
-          if (url.startsWith('/provider/bookings')) return provBookingsData;
+          if (url.startsWith('/provider/bookings')) {
+            if (opts && opts.withMeta) {
+              const items = provBookingsData.items || [];
+              return { data: provBookingsData, meta: { page: 1, limit: 20, total: items.length, totalPages: 1 } };
+            }
+            return provBookingsData;
+          }
           return {};
         },
         patch: async () => ({})
