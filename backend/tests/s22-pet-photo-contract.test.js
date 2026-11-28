@@ -427,3 +427,73 @@ test('S22 Toast helper methods forward to Toast.show with expected types', () =>
     { title: 'Warn', message: 'Careful', type: 'warning' }
   ]);
 });
+
+test('S22.1 edit mode: selecting valid file uploads immediately without submit, 413 keeps old photo, CSS .visually-hidden defined', async (t) => {
+  const styleCss = fs.readFileSync(path.join(FRONTEND_DIR, 'css/style.css'), 'utf8');
+  assert.ok(/\.visually-hidden\s*\{/.test(styleCss), 'style.css must define .visually-hidden');
+
+  const tApp = await startTestApp();
+  t.after(() => tApp.close());
+  const cust = await seedCustomer(tApp);
+  const oldPhotoUrl = '/uploads/pets/old.png';
+  const createRes = await fetch(tApp.baseUrl + '/pets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cust.token },
+    body: JSON.stringify({ name: 'Mít', species: 'cat', sex: 'female', birthDate: '2023-01-01' })
+  });
+  const createJson = await createRes.json();
+  assert.equal(createRes.status, 201);
+  const petId = createJson.data.id;
+  await tApp.models.pets.setPhoto(null, petId, cust.id, { url: oldPhotoUrl, publicId: 'pets/old' });
+
+  const sessionJson = JSON.stringify({ token: cust.token, user: cust.user });
+  const calls = [];
+  const vmPage = loadPageIntoVm({
+    htmlPath: path.join(PAGES_DIR, 'pet-profile.html'),
+    url: `http://localhost:3000/pages/pet-profile.html?id=${encodeURIComponent(petId)}`,
+    sessionJson,
+    fetchImpl: makeBridgeFetch(tApp, calls)
+  });
+  await vmPage.document.dispatchEvent({ type: 'DOMContentLoaded' });
+  const previewAvatar = vmPage.getOrCreate('previewAvatar');
+  await waitFor(() => previewAvatar.innerHTML.includes(oldPhotoUrl) || (previewAvatar.children[0] && previewAvatar.children[0].src === oldPhotoUrl));
+
+  const photoInput = vmPage.getOrCreate('photoInput', 'INPUT');
+  const photoError = vmPage.getOrCreate('photo-error', 'P');
+  const photoPick = vmPage.getOrCreate('photoPick', 'BUTTON');
+  assert.equal(photoPick.textContent, 'Đổi ảnh');
+
+  // 1. Valid PNG file -> uploads immediately without form submit
+  const pngBytes = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082', 'hex');
+  const validBlob = new Blob([pngBytes], { type: 'image/png' });
+  validBlob.name = 'new.png';
+  photoInput.files = [validBlob];
+  await photoInput.dispatch('change', {});
+  await waitFor(() => calls.some((c) => c.method === 'POST' && c.path === `/pets/${petId}/photo`));
+  assert.ok(photoError.hidden, 'photoError must stay hidden on valid upload');
+
+  // 2. 413 error -> shows photoError and keeps previous photo
+  const prevSrc = previewAvatar.children[0] && previewAvatar.children[0].src;
+  const vmFail = loadPageIntoVm({
+    htmlPath: path.join(PAGES_DIR, 'pet-profile.html'),
+    url: `http://localhost:3000/pages/pet-profile.html?id=${encodeURIComponent(petId)}`,
+    sessionJson,
+    fetchImpl: async (url, init = {}) => {
+      if (String(url).endsWith(`/pets/${petId}/photo`) && init.method === 'POST') {
+        return new Response(JSON.stringify({ ok: false, error: { code: 'PAYLOAD_TOO_LARGE', message: 'Ảnh vượt quá 5 MB.' } }), { status: 413, headers: { 'Content-Type': 'application/json' } });
+      }
+      return makeBridgeFetch(tApp, [])(url, init);
+    }
+  });
+  await vmFail.document.dispatchEvent({ type: 'DOMContentLoaded' });
+  const failAvatar = vmFail.getOrCreate('previewAvatar');
+  await waitFor(() => failAvatar.children[0] && failAvatar.children[0].src);
+  const failSrcBefore = failAvatar.children[0].src;
+  const failInput = vmFail.getOrCreate('photoInput', 'INPUT');
+  const failError = vmFail.getOrCreate('photo-error', 'P');
+  failInput.files = [validBlob];
+  await failInput.dispatch('change', {});
+  await waitFor(() => !failError.hidden);
+  assert.ok(failError.textContent.length > 0, 'photoError must be shown on 413');
+  assert.equal(failAvatar.children[0].src, failSrcBefore, '413 must keep old photo in preview');
+});

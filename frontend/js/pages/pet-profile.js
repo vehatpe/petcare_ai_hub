@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let pendingFile = null;
   let pendingPreviewUrl = null;
   let editing = null;
+  let isBusy = false;
 
   function revokePendingPreview() {
     if (pendingPreviewUrl && typeof URL.revokeObjectURL === 'function') {
@@ -100,6 +101,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('previewSummary').textContent = parts.length ? parts.join(' · ') : 'Loài · giống · tuổi · cân nặng';
 
     photoRemove.hidden = !src;
+    if (photoPick && !isBusy) {
+      photoPick.textContent = src ? 'Đổi ảnh' : 'Chọn ảnh';
+    }
   }
 
   if (previewAvatar) {
@@ -189,6 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function setBusy(busy, label) {
+    isBusy = busy;
     submitBtn.disabled = busy;
     submitBtn.classList.toggle('is-loading', busy);
     if (photoPick) photoPick.disabled = busy;
@@ -226,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
   photoInput.addEventListener('change', async () => {
     const file = photoInput.files[0];
     photoError.hidden = true;
-    if (!file) return;
+    if (!file || isBusy) return;
     try {
       if (ALLOWED_TYPES.indexOf(file.type) === -1) {
         throw new Error('Chỉ hỗ trợ ảnh PNG, JPEG hoặc WebP.');
@@ -235,6 +240,24 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error('Ảnh lớn hơn 5 MB, vui lòng chọn ảnh nhỏ hơn.');
       }
       const processed = await resizeToBlob(file);
+      if (editing) {
+        setBusy(true, 'Đang tải ảnh…');
+        try {
+          const updated = await PetService.uploadPhoto(editing.id, processed, file.name || 'pet.jpg');
+          editing = updated;
+          photoUrl = updated.photo || null;
+          photoInput.value = '';
+          renderPreview();
+          if (window.Toast) { try { Toast.success('Đã cập nhật ảnh thú cưng'); } catch (_) {} }
+        } catch (uploadErr) {
+          photoInput.value = '';
+          photoError.textContent = uploadErr.message || 'Không tải được ảnh.';
+          photoError.hidden = false;
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
       revokePendingPreview();
       pendingFile = processed;
       if (typeof URL.createObjectURL === 'function') {
@@ -263,6 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (isBusy) return;
     clearErrors();
     const wasEditing = Boolean(editing);
     setBusy(true);
