@@ -28,8 +28,8 @@ Xem `.env.example`. Mặc định: `GEMINI_MODEL=gemini-2.5-flash`, `GEMINI_EMBE
 - `UPLOAD_MAX_BYTES`: giới hạn dung lượng tệp tải lên (mặc định `5242880` = 5 MB).
 - `PUBLIC_BASE_URL`: origin công khai để ghép URL ảnh `/uploads/...` khi dùng `local` (tùy chọn).
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`: bắt buộc khi `STORAGE_DRIVER=cloudinary`.
-- Kiểm thử upload trên SQL Server thật: `node backend/scripts/smoke-uploads.js`.
-- Chuyển ảnh Base64 cũ sang storage: `node backend/scripts/migrate-photos.js --dry-run` rồi `node backend/scripts/migrate-photos.js` (chạy với `STORAGE_DRIVER=cloudinary` khi đưa lên production).
+- Kiểm thử upload trên SQL Server thật: `node backend/scripts/smoke-uploads.js` và `node backend/scripts/smoke-migrate-photos.js`.
+- Chuyển ảnh Base64 cũ sang storage: **SAO LƯU DB trước**, chạy `node backend/scripts/migrate-photos.js --dry-run` trước, rồi chạy `node backend/scripts/migrate-photos.js` (chạy với `STORAGE_DRIVER=cloudinary` khi đưa lên production). Định dạng bị bỏ qua (ví dụ GIF) được giữ nguyên trong `Pets.Photo`.
 
 ## Kiểm thử
 `npm test` (node --test; không cần mạng hay SQL Server; dùng `tests/helpers/fake-models.js`, một test double trong bộ nhớ). `npm run check-sql` kiểm tra cú pháp T-SQL một phần.
