@@ -22,7 +22,7 @@ function createFakeModels() {
   const petOut = (p) => {
     if (!p) return null;
     const { ownerId, photoUrl, photoPublicId, ...rest } = p; // eslint-disable-line no-unused-vars
-    return { ...clone(rest), photo: photoUrl || p.photo || null, weightKg: latestWeight(p.id) };
+    return { ...clone(rest), photo: photoUrl || null, weightKg: latestWeight(p.id) };
   };
   const bookingOut = (b) => {
     if (!b) return null;

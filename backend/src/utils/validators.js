@@ -11,8 +11,6 @@ const NEUTERED = ['yes', 'no', 'unknown'];
 const TIME_SLOTS = ['08:30', '09:30', '10:30', '14:00', '15:30', '16:30', '18:00', '19:30'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LICENSE_RE = /^[A-Za-z0-9\s/.\-]+$/;
-const PHOTO_RE = /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
-const MAX_PHOTO_BYTES = 400 * 1024;
 
 const str = (v) => (v === undefined || v === null ? '' : String(v));
 const isUuid = (v) => typeof v === 'string' && UUID_RE.test(v);
@@ -170,19 +168,15 @@ function validatePet(input, today) {
   const color = str(input.color).trim();
   if (color.length > 50) errors.color = 'Màu lông tối đa 50 ký tự.';
 
-  const hasPhoto = Object.prototype.hasOwnProperty.call(input, 'photo');
-  let photo = null;
-  if (hasPhoto && input.photo) {
-    if (typeof input.photo !== 'string' || !PHOTO_RE.test(input.photo)) errors.photo = 'Ảnh cần là tệp PNG, JPEG, WEBP hoặc GIF.';
-    else if (Buffer.byteLength(input.photo) > MAX_PHOTO_BYTES) errors.photo = 'Ảnh tối đa 400 KB. Hãy chọn ảnh nhỏ hơn.';
-    else photo = input.photo;
+  if (input.photo !== undefined) {
+    errors.photo = 'Hãy tải ảnh bằng chức năng tải tệp.';
   }
   return {
     errors,
-    hasPhoto,
+    hasPhoto: false,
     value: {
       name, species: input.species, breed, sex: input.sex, birthDate, weightKg, color,
-      neutered: NEUTERED.includes(input.neutered) ? input.neutered : 'unknown', microchip, conditions, photo
+      neutered: NEUTERED.includes(input.neutered) ? input.neutered : 'unknown', microchip, conditions
     }
   };
 }

@@ -42,7 +42,7 @@ function createApp({ models, config, ai, storageService, clock = () => new Date(
   if (config.corsOrigin) {
     app.use(cors({ origin: config.corsOrigin.split(',').map((s) => s.trim()), methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] }));
   }
-  app.use(express.json({ limit: '600kb' }));
+  app.use(express.json({ limit: '100kb' }));
 
   const resolvedStorage = storageService || createStorageService({ config });
   const deps = { models, config, clock, storageService: resolvedStorage, logger };
