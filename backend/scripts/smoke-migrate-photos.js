@@ -3,11 +3,12 @@
 require('dotenv').config({ path: require('node:path').resolve(__dirname, '../.env') });
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const sql = require('mssql');
 const { loadConfig } = require('../src/config');
 const { createDb, T } = require('../src/models/db');
-const { createModels } = require('../src/models');
+const { createSqlModels } = require('../src/models');
 const { createStorageService } = require('../src/services/storage.service');
 const { createApp } = require('../src/app');
 const { migratePhotos } = require('./migrate-photos');
@@ -27,21 +28,20 @@ async function getBaseline(db) {
 }
 
 async function main() {
-  const config = loadConfig();
-  config.storage = { ...config.storage, driver: 'local' };
-  const uploadDir = config.storage.uploadDir || path.resolve(__dirname, '../uploads');
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'petcare-smoke-migrate-'));
+  const config = loadConfig({ ...process.env, STORAGE_DRIVER: 'local', UPLOAD_DIR: tmpDir });
+  const uploadDir = tmpDir;
 
-  const pool = await sql.connect(config.db);
+  const { models, pool: appPool } = await createSqlModels(config.db);
+  const pool = await new sql.ConnectionPool(config.db).connect();
   const db = createDb(pool);
-  const models = createModels(db);
   const storage = createStorageService({ config });
-  const app = createApp({ models, config, storageService: storage });
+  const app = createApp({ models, config });
   const server = app.listen(0, '127.0.0.1');
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/v1`;
 
   const baselineBefore = await getBaseline(db);
   const createdPetIds = [];
-  const createdPublicIds = [];
   let userId = null;
   let cleanupFailed = false;
 
@@ -94,7 +94,6 @@ async function main() {
     assert.equal(pngAfter.Photo, null);
     assert.ok(pngAfter.PhotoUrl, 'PNG PhotoUrl must be set');
     assert.ok(pngAfter.PhotoPublicId, 'PNG PhotoPublicId must be set');
-    createdPublicIds.push(pngAfter.PhotoPublicId);
 
     const filePath = path.resolve(uploadDir, pngAfter.PhotoPublicId);
     assert.equal(fs.existsSync(filePath), true, `Uploaded file missing at ${filePath}`);
@@ -115,15 +114,8 @@ async function main() {
 
     console.log('smoke-migrate-photos: PASS');
   } finally {
-    server.close();
+    await new Promise((resolve) => server.close(resolve));
     try {
-      for (const pubId of createdPublicIds) {
-        try {
-          await storage.remove(pubId);
-        } catch (_) {
-          // best-effort
-        }
-      }
       for (const petId of createdPetIds) {
         await db.exec(`DELETE FROM dbo.Pets WHERE PetId = @id`, { id: [T.guid, petId] });
       }
@@ -137,7 +129,9 @@ async function main() {
       cleanupFailed = true;
       console.error('smoke-migrate-photos cleanup/baseline error:', err?.message || err);
     } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
       await pool.close();
+      await appPool.close();
     }
     if (cleanupFailed) process.exitCode = 1;
   }

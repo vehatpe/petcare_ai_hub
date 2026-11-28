@@ -71,8 +71,8 @@ async function migratePhotos({ db, storage, dryRun = false, batchSize = BATCH_SI
            WHERE PetId = @id AND PhotoUrl IS NULL`,
           {
             id: [T.guid, row.PetId],
-            url: [T.str(500), uploaded.url],
-            publicId: [T.str(200), uploaded.publicId]
+            url: [T.vstr(500), uploaded.url],
+            publicId: [T.vstr(200), uploaded.publicId]
           }
         );
 
