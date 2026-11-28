@@ -22,8 +22,10 @@ function decodeBase64Photo(raw) {
 /**
  * Chuyển ảnh Base64 cũ trong cột Pets.Photo sang storage (local hoặc cloudinary).
  * An toàn chạy lại (idempotent): chỉ xử lý các dòng có Photo IS NOT NULL AND PhotoUrl IS NULL.
+ * `ownerId` (tùy chọn) giới hạn trong thú cưng của một chủ nuôi; CLI không dùng, chỉ để smoke test
+ * không đụng vào dữ liệu thật của DB dev.
  */
-async function migratePhotos({ db, storage, dryRun = false, batchSize = BATCH_SIZE, log = console.log } = {}) {
+async function migratePhotos({ db, storage, dryRun = false, batchSize = BATCH_SIZE, ownerId = null, log = console.log } = {}) {
   const stats = {
     scanned: 0,
     migrated: 0,
@@ -39,9 +41,10 @@ async function migratePhotos({ db, storage, dryRun = false, batchSize = BATCH_SI
       `SELECT TOP (${Number(batchSize) || BATCH_SIZE}) PetId, Photo
        FROM dbo.Pets
        WHERE Photo IS NOT NULL AND PhotoUrl IS NULL
+         AND (@ownerId IS NULL OR OwnerId = @ownerId)
          AND (@afterId IS NULL OR PetId > @afterId)
        ORDER BY PetId`,
-      { afterId: [T.guid, afterId] }
+      { afterId: [T.guid, afterId], ownerId: [T.guid, ownerId] }
     );
     if (!rows.length) break;
 

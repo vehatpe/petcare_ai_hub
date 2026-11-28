@@ -3,7 +3,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { migratePhotos } = require('../scripts/migrate-photos');
-const { createFakeStorage } = require('./helpers/fake-storage');
+const { createFakeStorageService: createFakeStorage } = require('./helpers/fake-storage');
 
 // 1x1 PNG hợp lệ
 const PNG_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -106,5 +106,28 @@ describe('migrate-photos script', () => {
     assert.equal(storage.files.size, 0);
     assert.equal(db.rows[0].Photo, PNG_B64);
     assert.equal(db.rows[0].PhotoUrl, null);
+  });
+
+  it('ownerId được truyền xuống truy vấn để giới hạn phạm vi; mặc định null = toàn bảng', async () => {
+    const OWNER = '11111111-1111-1111-1111-111111111111';
+    const inner = createFakePetDb([
+      { PetId: '00000000-0000-0000-0000-000000000001', Photo: PNG_B64, PhotoUrl: null, PhotoPublicId: null }
+    ]);
+    const seen = [];
+    const db = {
+      ...inner,
+      async query(sql, params) {
+        seen.push({ sql, ownerId: params.ownerId ? params.ownerId[1] : undefined });
+        return inner.query(sql, params);
+      }
+    };
+
+    await migratePhotos({ db, storage: createFakeStorage(), dryRun: true, log: () => {} });
+    await migratePhotos({ db, storage: createFakeStorage(), dryRun: true, ownerId: OWNER, log: () => {} });
+
+    assert.ok(seen.length >= 2);
+    assert.ok(seen.every((q) => /OwnerId = @ownerId/.test(q.sql)), 'query must filter by @ownerId');
+    assert.equal(seen[0].ownerId, null, 'default run must not restrict by owner');
+    assert.ok(seen.some((q) => q.ownerId === OWNER), 'scoped run must pass ownerId');
   });
 });

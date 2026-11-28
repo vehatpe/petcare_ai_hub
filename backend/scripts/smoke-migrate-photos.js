@@ -38,6 +38,7 @@ async function main() {
   const storage = createStorageService({ config });
   const app = createApp({ models, config });
   const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}/api/v1`;
 
   const baselineBefore = await getBaseline(db);
@@ -63,7 +64,7 @@ async function main() {
       const pRes = await fetch(`${baseUrl}/pets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name, species: 'dog', sex: 'male' })
+        body: JSON.stringify({ name, species: 'dog', sex: 'male', birthDate: '2024-02-01' })
       });
       const pJson = await pRes.json();
       assert.equal(pRes.status, 201, `create pet ${name} failed: ${JSON.stringify(pJson)}`);
@@ -78,17 +79,22 @@ async function main() {
     const [pngId, gifId] = createdPetIds;
 
     // 2) dry-run -> không đổi cột nào, không tạo tệp
-    const dry = await migratePhotos({ db, storage, dryRun: true, log: () => {} });
-    assert.ok(dry.migrated >= 1, 'dryRun should count PNG');
+    // Mọi lần chạy đều giới hạn theo ownerId của user smoke: KHÔNG được đụng vào ảnh Base64 thật trong DB dev.
+    const scope = { ownerId: userId };
+    const dry = await migratePhotos({ db, storage, dryRun: true, log: () => {}, ...scope });
+    assert.equal(dry.scanned, 2, 'dryRun must scan only the 2 smoke pets');
+    assert.equal(dry.migrated, 1, 'dryRun should count PNG');
+    assert.equal(dry.skipped, 1, 'dryRun should skip GIF');
     const [pngDry] = await db.query(`SELECT Photo, PhotoUrl, PhotoPublicId FROM dbo.Pets WHERE PetId = @id`, { id: [T.guid, pngId] });
     assert.equal(pngDry.Photo, PNG_B64);
     assert.equal(pngDry.PhotoUrl, null);
     assert.equal(pngDry.PhotoPublicId, null);
 
     // 3) Chạy thật -> PNG chuyển sang PhotoUrl + file tồn tại; GIF giữ nguyên Photo
-    const run1 = await migratePhotos({ db, storage, dryRun: false, log: () => {} });
-    assert.ok(run1.migrated >= 1, 'run1 should migrate PNG');
-    assert.ok(run1.skipped >= 1, 'run1 should skip GIF');
+    const run1 = await migratePhotos({ db, storage, dryRun: false, log: () => {}, ...scope });
+    assert.equal(run1.migrated, 1, 'run1 should migrate PNG');
+    assert.equal(run1.skipped, 1, 'run1 should skip GIF');
+    assert.equal(run1.failed, 0);
 
     const [pngAfter] = await db.query(`SELECT Photo, PhotoUrl, PhotoPublicId FROM dbo.Pets WHERE PetId = @id`, { id: [T.guid, pngId] });
     assert.equal(pngAfter.Photo, null);
@@ -109,8 +115,9 @@ async function main() {
     assert.equal(gifAfter.PhotoUrl, null);
 
     // 4) Chạy lần 2 -> migrated = 0
-    const run2 = await migratePhotos({ db, storage, dryRun: false, log: () => {} });
+    const run2 = await migratePhotos({ db, storage, dryRun: false, log: () => {}, ...scope });
     assert.equal(run2.migrated, 0);
+    assert.equal(run2.skipped, 1, 'GIF stays skipped on the second run');
 
     console.log('smoke-migrate-photos: PASS');
   } finally {
