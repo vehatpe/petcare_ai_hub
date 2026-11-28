@@ -773,7 +773,7 @@
   background-color: var(--color-dark-forest);
   opacity: 0.25;
   transform-origin: left center;
-  animation: toastProgress var(--toast-duration, 3500ms) linear forwards;
+  animation: toastProgress var(--toast-duration, 4500ms) linear forwards;
 }
 
 .toast-item.toast-success .toast-progress { background-color: var(--color-success); }
