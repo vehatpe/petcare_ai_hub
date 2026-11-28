@@ -1618,7 +1618,7 @@ body.dialog-open {
   max-width: 480px;
   width: 100%;
   background: var(--color-surface-card);
-  color: var(--color-ink-primary);
+  color: var(--text-primary);
   border-radius: var(--radius-card);
   padding: 24px;
   box-shadow: var(--shadow-lg);
@@ -1643,6 +1643,11 @@ body.dialog-open {
   margin: 0;
 }
 
+.dialog-meta {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+}
+
 .dialog-close {
   flex-shrink: 0;
   width: 32px;
@@ -1662,7 +1667,7 @@ body.dialog-open {
 
 .dialog-close:hover {
   background: var(--color-surface-muted);
-  color: var(--color-ink-primary);
+  color: var(--text-primary);
 }
 
 .dialog-close:focus-visible {

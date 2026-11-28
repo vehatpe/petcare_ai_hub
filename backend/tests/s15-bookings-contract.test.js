@@ -47,8 +47,16 @@ function createDom() {
       this._listeners.get(t).push(fn);
     }
     removeEventListener() {}
+    async dispatch(t, ev = {}) {
+      const e = { type: t, target: this, preventDefault() {}, stopPropagation() {}, ...ev };
+      for (const fn of this._listeners.get(t) || []) await fn(e);
+    }
     querySelectorAll() { return []; }
-    querySelector(sel) { return new El(sel); }
+    querySelector(sel) {
+      if (!this._queried) this._queried = new Map();
+      if (!this._queried.has(sel)) this._queried.set(sel, new El(sel));
+      return this._queried.get(sel);
+    }
     closest() { return null; }
     appendChild(child) {
       if (!this._children) this._children = [];
@@ -361,29 +369,36 @@ test('S15 Contract: Customer bookings, Provider bookings, and Header nav', async
       window: { location: { pathname: '/pages/customer-dashboard.html' } },
       document,
       Fmt: makeFmt(),
-      AuthService: { requireAuth: () => ({ id: 'u1', fullName: 'Khách A' }) },
+      AuthService: { currentUser: () => ({ id: 'u1', role: 'customer', fullName: 'Khách A' }) },
       PetService: { list: async () => [] },
       BookingService: {
-        list: async () => ({ items: [{ id: 'b-1', status: 'pending', service: { name: 'Tắm' }, pet: { name: 'Milo' }, scheduledAt: '2026-12-01T09:00:00Z' }], meta: { total: 1 } }),
+        STATUS: { pending: { label: 'Chờ xác nhận', badge: 'badge-warning' }, confirmed: { label: 'Đã xác nhận', badge: 'badge-success' }, cancelled: { label: 'Đã hủy', badge: 'badge-danger' } },
+        list: async () => ({ items: [{ id: 'b-1', status: 'pending', serviceName: 'Tắm', petName: 'Milo', providerName: 'Spa A', date: '2026-12-01', time: '09:00' }], meta: { total: 1 } }),
         cancel: async (id, reason) => { cancelledCalls.push({ id, reason }); }
       },
-      DashboardService: { customer: async () => ({}) },
-      Panel: { load: async (el, fn, render) => { const d = await fn(); render(el, d); } },
+      DashboardService: { customer: async () => ({ petCount: 1, bookings: { total: 1, upcomingCount: 1, next: null }, vaccines: { overdueCount: 0, dueSoonCount: 0, nextDue: null } }) },
+      Panel: { load: async (el, fn, render) => { const d = await fn(); render(d); } },
       Toast: { show: () => {} },
       console
     });
     vm.runInContext(customerJs, ctx);
-    await new Promise((r) => setTimeout(r, 15));
+    for (const fn of docListeners.get('DOMContentLoaded') || []) await fn();
+    await new Promise((r) => setTimeout(r, 30));
 
     const bookingListEl = getEl('bookingList');
-    const triggerCancel = () => bookingListEl.dispatch('click', {
-      target: { closest: (sel) => (sel === '[data-cancel-booking]' ? { dataset: { cancelBooking: 'b-1' }, disabled: false } : null) }
-    });
+    // The page's click handler awaits the modal, so do not await dispatch itself: it settles only after the modal closes.
+    const triggerCancel = () => {
+      bookingListEl.dispatch('click', {
+        target: { closest: (sel) => (sel === '[data-cancel-booking]' ? { dataset: { cancelBooking: 'b-1' }, disabled: false } : null) }
+      });
+      return new Promise((r) => setTimeout(r, 10));
+    };
 
     // 1. Escape closes modal and returns null (no cancel call)
     await triggerCancel();
     let backdrop = (document.body._children || []).slice(-1)[0];
     assert.ok(backdrop && backdrop.className === 'dialog-backdrop', 'cancel modal must be appended to body');
+    assert.ok(backdrop.innerHTML.includes('Tắm') && backdrop.innerHTML.includes('cho Milo') && backdrop.innerHTML.includes('09:00'), 'cancel modal must summarise the real booking DTO (serviceName, petName, date, time)');
     for (const fn of [...(docListeners.get('keydown') || [])]) fn({ key: 'Escape', preventDefault: () => {} });
     await new Promise((r) => setTimeout(r, 10));
     assert.equal(cancelledCalls.length, 0, 'Escape must resolve null without cancelling');

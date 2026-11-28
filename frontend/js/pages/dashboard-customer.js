@@ -218,9 +218,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return new Promise((resolve) => {
       const prevFocus = document.activeElement;
       const booking = (bookingState.items || []).find((b) => String(b.id) === String(bookingId));
-      const serviceName = booking && booking.service ? booking.service.name : '';
-      const petName = booking && booking.pet ? booking.pet.name : '';
-      const whenText = booking && booking.scheduledAt ? Fmt.dateTime(booking.scheduledAt) : '';
+      const serviceName = booking ? booking.serviceName : '';
+      const petName = booking ? booking.petName : '';
+      const whenText = booking && booking.date
+        ? `${Fmt.dateLong(booking.date)}${booking.time ? ` lúc ${booking.time}` : ''}`
+        : '';
       const summaryParts = [serviceName, petName ? `cho ${petName}` : '', whenText].filter(Boolean);
       const summaryHtml = summaryParts.length
         ? `<p class="dialog-meta">${esc(summaryParts.join(' • '))}</p>`
