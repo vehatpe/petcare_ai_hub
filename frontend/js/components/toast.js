@@ -2,6 +2,9 @@
  * PetCare AI Hub - Reusable Toast Notification System
  */
 
+/** Visible time (ms) when the caller does not pass `duration`. Errors and warnings stay longer. */
+const TOAST_DEFAULT_DURATION = { success: 4500, info: 4500, warning: 6000, danger: 6000 };
+
 const Toast = {
   container: null,
 
@@ -13,8 +16,11 @@ const Toast = {
     }
   },
 
-  show({ title = 'Thông báo', message = '', type = 'info', duration = 3500 }) {
+  show({ title = 'Thông báo', message = '', type = 'info', duration } = {}) {
     this.init();
+    if (!(Number.isFinite(duration) && duration > 0)) {
+      duration = TOAST_DEFAULT_DURATION[type] || TOAST_DEFAULT_DURATION.info;
+    }
 
     const toast = document.createElement('div');
     toast.className = `toast-item toast-${type}`;
@@ -66,11 +72,19 @@ const Toast = {
       closing = true;
       clearTimeout(timer);
       toast.classList.add('is-leaving');
-      toast.addEventListener('animationend', () => toast.remove(), { once: true });
+      // animationend bubbles: only the toast's own leave animation may remove it,
+      // never the countdown bar's (.toast-progress) or any other child's.
+      const onEnd = (e) => {
+        if (e.target !== toast) return;
+        toast.removeEventListener('animationend', onEnd);
+        toast.remove();
+      };
+      toast.addEventListener('animationend', onEnd);
       setTimeout(() => toast.remove(), 400); // fallback when animations are disabled
     };
 
     const run = () => {
+      clearTimeout(timer); // never leave a second timer running
       startedAt = Date.now();
       timer = setTimeout(dismiss, remaining);
     };
@@ -83,7 +97,8 @@ const Toast = {
     };
 
     const resume = () => {
-      if (closing || toast.matches(':hover') || toast.matches(':focus-within')) return;
+      if (closing || !toast.classList.contains('is-paused')) return;
+      if (toast.matches(':hover') || toast.matches(':focus-within')) return;
       toast.classList.remove('is-paused');
       run();
     };
@@ -94,6 +109,22 @@ const Toast = {
     toast.addEventListener('focusout', () => setTimeout(resume, 0));
     toast.querySelector('.toast-close').addEventListener('click', dismiss);
     run();
+  },
+
+  success(title, message = '') {
+    this.show({ title, message, type: 'success' });
+  },
+
+  error(title, message = '') {
+    this.show({ title, message, type: 'danger' });
+  },
+
+  info(title, message = '') {
+    this.show({ title, message, type: 'info' });
+  },
+
+  warning(title, message = '') {
+    this.show({ title, message, type: 'warning' });
   }
 };
 

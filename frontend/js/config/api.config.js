@@ -20,6 +20,19 @@
   }
   const BASE = (window.PETCARE_API_BASE || defaultBase()).replace(/\/$/, '');
 
+  function assetUrl(url) {
+    if (!url) return null;
+    const s = String(url);
+    if (/^(https?:|data:|blob:)/i.test(s)) return s;
+    const loc = window.location || {};
+    const isDevStatic = loc.protocol === 'file:' || STATIC_DEV_PORTS.indexOf(String(loc.port)) !== -1;
+    if (s.startsWith('/uploads/') && isDevStatic) {
+      const apiOrigin = BASE.replace(/\/api\/v1$/, '');
+      if (apiOrigin) return apiOrigin + s;
+    }
+    return s;
+  }
+
   class ApiError extends Error {
     constructor(status, code, message, errors) {
       super(message);
@@ -86,7 +99,7 @@
   });
 
   /* ---------- Requests ---------- */
-  async function request(method, path, { body, query, auth = true, withMeta = false } = {}) {
+  async function request(method, path, { body, formData, query, auth = true, withMeta = false } = {}) {
     let url = BASE + path;
     if (query) {
       const qs = new URLSearchParams();
@@ -100,9 +113,13 @@
     if (auth && current) headers.Authorization = 'Bearer ' + current.token;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
 
+    const fetchBody = formData !== undefined
+      ? formData
+      : (body === undefined ? undefined : JSON.stringify(body));
+
     let res;
     try {
-      res = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+      res = await fetch(url, { method, headers, body: fetchBody });
     } catch (_) {
       throw new ApiError(0, 'network', 'Không kết nối được tới máy chủ. Hãy kiểm tra mạng rồi thử lại.');
     }
@@ -146,11 +163,14 @@
   window.ApiError = ApiError;
   window.Api = {
     BASE,
+    assetUrl,
     session,
     get: (path, query, opts) => request('GET', path, { ...opts, query }),
     post: (path, body, opts) => request('POST', path, { ...opts, body: body === undefined ? {} : body }),
     put: (path, body, opts) => request('PUT', path, { ...opts, body }),
     patch: (path, body, opts) => request('PATCH', path, { ...opts, body: body === undefined ? {} : body }),
-    del: (path, opts) => request('DELETE', path, opts)
+    del: (path, opts) => request('DELETE', path, opts),
+    remove: (path, opts) => request('DELETE', path, opts),
+    upload: (path, formData, opts = {}) => request(opts.method || 'POST', path, { ...opts, formData })
   };
 })();

@@ -20,7 +20,7 @@ test('Vet Bookings API: access control, detail audit, medical record & vaccinati
   });
 
   const { token: custToken } = await app.registerCustomer({ email: 'cust@vettest.vn', phone: '0909111000' });
-  const pet = await app.createPet(custToken, { name: 'Milu', species: 'dog', photo: 'data:image/png;base64,AAAA' });
+  const pet = await app.createPet(custToken, { name: 'Milu', species: 'dog' });
 
   let seq = 1;
   const pwHash = bcrypt.hashSync('matkhau123', 4);

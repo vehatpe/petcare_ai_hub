@@ -2,8 +2,18 @@
 const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { AppError, DuplicateError, validation, conflict } = require('../utils/errors');
+const { AppError, DuplicateError, validation, conflict, notFound } = require('../utils/errors');
 const { validateRegister, validateChangePassword, normalizePhone } = require('../utils/validators');
+const { assertImage } = require('../utils/file-sniff');
+
+async function removeQuietly(storageService, logger, publicId, context) {
+  if (!publicId || !storageService?.remove) return;
+  try {
+    await storageService.remove(publicId);
+  } catch (err) {
+    logger?.warn?.(`storage_remove_failed:${context}`, err?.message || 'unknown_error');
+  }
+}
 
 const DUP_MSG = {
   email: ['Email này đã được đăng ký.', 'Email này đã có tài khoản. Hãy đăng nhập hoặc dùng email khác.'],
@@ -19,7 +29,8 @@ function toPublicUser(u) {
     email: u.email,
     phone: u.phone,
     providerId: u.providerId || null,
-    mustChangePassword: Boolean(u.mustChangePassword)
+    mustChangePassword: Boolean(u.mustChangePassword),
+    avatarUrl: u.avatarUrl || null
   };
   if (u.orgName) out.orgName = u.orgName;
   if (u.orgType) out.orgType = u.orgType;
@@ -28,7 +39,7 @@ function toPublicUser(u) {
   return out;
 }
 
-function createAuthService({ models, config, clock = () => new Date() }) {
+function createAuthService({ models, config, storageService, logger = console, clock = () => new Date() }) {
   // Used to keep timing similar when the account does not exist.
   const dummyHash = bcrypt.hashSync('not-a-real-password-1', config.bcryptCost);
 
@@ -122,6 +133,53 @@ function createAuthService({ models, config, clock = () => new Date() }) {
       const updatedUser = await models.users.findById(userId);
       const newToken = sign(updatedUser, false);
       return { user: toPublicUser(updatedUser), token: newToken };
+    },
+
+    async setAvatar(userId, buffer) {
+      const { ext } = assertImage(buffer);
+      const uploaded = await storageService.upload(buffer, { folder: 'avatars', ext });
+      let res;
+      try {
+        res = await models.transaction(async (tx) => {
+          const updated = await models.users.setAvatar(tx, userId, uploaded);
+          if (!updated) throw notFound('Không tìm thấy tài khoản.');
+          await models.audit.log({
+            actorUserId: userId,
+            action: 'avatar_set',
+            targetType: 'user',
+            targetId: userId,
+            detail: JSON.stringify({ ext })
+          }, tx);
+          return updated;
+        });
+      } catch (err) {
+        await removeQuietly(storageService, logger, uploaded.publicId, 'avatar_set_rollback');
+        throw err;
+      }
+      if (res.previousPublicId && res.previousPublicId !== uploaded.publicId) {
+        await removeQuietly(storageService, logger, res.previousPublicId, 'avatar_set_cleanup');
+      }
+      const updatedUser = await models.users.findById(userId);
+      return { user: toPublicUser(updatedUser) };
+    },
+
+    async clearAvatar(userId) {
+      const res = await models.transaction(async (tx) => {
+        const cleared = await models.users.clearAvatar(tx, userId);
+        if (!cleared) throw notFound('Không tìm thấy tài khoản.');
+        await models.audit.log({
+          actorUserId: userId,
+          action: 'avatar_clear',
+          targetType: 'user',
+          targetId: userId
+        }, tx);
+        return cleared;
+      });
+      if (res.previousPublicId) {
+        await removeQuietly(storageService, logger, res.previousPublicId, 'avatar_clear_cleanup');
+      }
+      const updatedUser = await models.users.findById(userId);
+      return { user: toPublicUser(updatedUser) };
     }
   };
 }

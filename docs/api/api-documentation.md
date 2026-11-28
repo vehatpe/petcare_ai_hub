@@ -292,3 +292,31 @@ Các điểm hợp đồng chưa nói rõ; backend chọn cách hiểu đơn gi�
 ### Không làm trong C2
 - Email/SMS nhắc lịch, thanh toán trực tuyến, dashboard tổng hợp (F-1/F-2), cấu hình giờ làm/ngày nghỉ (F-3), đánh giá (F-3), phân trang `page`/`limit` (D), sửa/xóa bệnh án đã ghi, Admin thao tác lịch hẹn, tự động chuyển trạng thái lịch quá hạn.
 >>>>>>> main
+
+
+---
+
+## Upload ảnh thú cưng & Avatar (S21)
+
+### Quy tắc tệp tải lên
+- Định dạng hỗ trợ (kiểm tra bằng magic bytes, bỏ qua `Content-Type`/đuôi tệp): **PNG, JPEG, WEBP**.
+- Kích thước tối đa: **5 MB** (`UPLOAD_MAX_BYTES`), vượt quá trả `413` với mã lỗi `file_too_large`.
+- Gửi qua `multipart/form-data` (đúng 1 tệp, đúng tên trường).
+- Lưu trữ qua `STORAGE_DRIVER` (`local` cho dev/CI phục vụ tại `/uploads/...`, `cloudinary` cho production).
+- Bù trừ: ghi tệp mới → cập nhật DB (kèm `AuditLog`) → xóa tệp cũ best-effort; nếu DB lỗi, xóa tệp vừa upload. Xóa thú cưng (`DELETE /pets/:id`) cũng xóa tệp ảnh trên storage (best-effort).
+
+### Endpoint mới
+1. **`POST /api/v1/pets/:id/photo`** (Customer)
+   - Trường form: `photo` (file PNG/JPEG/WEBP ≤ 5 MB).
+   - Trả `200`: DTO thú cưng (`photo` là URL công khai).
+2. **`DELETE /api/v1/pets/:id/photo`** (Customer)
+   - Idempotent (`200` kể cả khi chưa có ảnh). Trả `200`: DTO thú cưng (`photo: null`).
+3. **`PUT /api/v1/auth/me/avatar`** (Mọi vai trò đã đăng nhập)
+   - Trường form: `avatar` (file PNG/JPEG/WEBP ≤ 5 MB).
+   - Trả `200`: `{ user }` với `avatarUrl` là URL công khai.
+4. **`DELETE /api/v1/auth/me/avatar`** (Mọi vai trò đã đăng nhập)
+   - Idempotent (`200`). Trả `200`: `{ user }` với `avatarUrl: null`.
+
+### Thay đổi DTO
+- **User DTO** (`GET /auth/me`, `POST /auth/login`, `PUT/DELETE /auth/me/avatar`): bổ sung trường `avatarUrl` (`string | null`).
+- **Pet DTO** (`POST/PUT /pets`): trường `photo` (Base64) được đánh dấu **deprecated** (chỉ giữ chuyển tiếp tới S23); khuyến nghị dùng `POST /pets/:id/photo`.

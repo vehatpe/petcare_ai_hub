@@ -1,6 +1,7 @@
 'use strict';
 const express = require('express');
 const { createRateLimiters } = require('../middlewares/rate-limiters');
+const { uploadSingle } = require('../middlewares/upload');
 const { uuidParam } = require('../utils/http');
 
 const mk = (name, deps) => require(`../controllers/${name}.controller`)(deps);
@@ -18,7 +19,7 @@ function createRouter({ services, mw, config, models }) {
   const provider = [authenticate, requireRole('provider')];
   const providerOrAdmin = [authenticate, requireRole('provider', 'admin')];
 
-  const { authLimiter, meLimiter, aiLimiter, changePasswordLimiter } = createRateLimiters(config);
+  const { authLimiter, meLimiter, aiLimiter, changePasswordLimiter, uploadLimiter } = createRateLimiters(config);
 
   // Health check endpoint (public, reports DB connectivity)
   r.get('/health', async (req, res) => {
@@ -36,6 +37,8 @@ function createRouter({ services, mw, config, models }) {
   r.post('/auth/register', authLimiter, c.auth.register);
   r.post('/auth/login', authLimiter, c.auth.login);
   r.get('/auth/me', meLimiter, authenticate, c.auth.me);
+  r.put('/auth/me/avatar', authenticate, uploadLimiter, uploadSingle('avatar', config), c.auth.setAvatar);
+  r.delete('/auth/me/avatar', authenticate, c.auth.clearAvatar);
   r.post('/auth/change-password', authenticate, changePasswordLimiter, c.auth.changePassword);
 
   r.get('/providers', c.catalog.providers);
@@ -47,6 +50,8 @@ function createRouter({ services, mw, config, models }) {
   r.post('/pets', customer, c.pet.create);
   r.get('/pets/:id', customer, uuidParam('id'), c.pet.get);
   r.put('/pets/:id', customer, uuidParam('id'), c.pet.update);
+  r.post('/pets/:id/photo', customer, uuidParam('id'), uploadLimiter, uploadSingle('photo', config), c.pet.setPhoto);
+  r.delete('/pets/:id/photo', customer, uuidParam('id'), c.pet.clearPhoto);
   r.delete('/pets/:id', customer, uuidParam('id'), c.pet.remove);
 
   r.get('/health-records', customer, c.health.aggregate);

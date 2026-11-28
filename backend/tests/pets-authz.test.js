@@ -50,30 +50,34 @@ test('pets CRUD', async (t) => {
     assert.equal(long.body.errors.name, 'Tên tối đa 40 ký tự.');
   });
 
-  await t.test('photo: accepts small data URL, rejects > 400KB and non-image', async () => {
-    const small = 'data:image/png;base64,' + 'A'.repeat(1000);
-    const ok = await call('POST', '/pets', { token, body: app.validPet({ name: 'Ảnh', photo: small }) });
-    assert.equal(ok.status, 201); assert.equal(ok.data.photo, small);
-    const big = await call('POST', '/pets', { token, body: app.validPet({ photo: 'data:image/png;base64,' + 'A'.repeat(420 * 1024) }) });
-    assert.equal(big.status, 422); assert.match(big.body.errors.photo, /400 KB/);
+  await t.test('photo: rejects Base64/photo field on POST/PUT (422) and rejects JSON > 100KB (413)', async () => {
+    const b64 = await call('POST', '/pets', { token, body: app.validPet({ name: 'Ảnh', photo: 'data:image/png;base64,' + 'A'.repeat(1000) }) });
+    assert.equal(b64.status, 422);
+    assert.equal(b64.body.errors.photo, 'Hãy tải ảnh bằng chức năng tải tệp.');
     const bad = await call('POST', '/pets', { token, body: app.validPet({ photo: 'http://evil/x.png' }) });
     assert.equal(bad.status, 422);
-    const huge = await call('POST', '/pets', { token, body: app.validPet({ photo: 'data:image/png;base64,' + 'A'.repeat(700 * 1024) }) });
+    const nullPhoto = await call('POST', '/pets', { token, body: app.validPet({ photo: null }) });
+    assert.equal(nullPhoto.status, 422);
+    const huge = await call('POST', '/pets', { token, body: app.validPet({ conditions: 'A'.repeat(110 * 1024) }) });
     assert.equal(huge.status, 413);
+    const list = await call('GET', '/pets', { token });
+    assert.equal(list.status, 200);
+    assert.equal(JSON.stringify(list.data).includes('data:image'), false);
   });
 
-  await t.test('PUT: weight change adds a metric, same weight does not; absent photo keeps photo', async () => {
-    const pet = await app.createPet(token, { name: 'Sữa', weightKg: 5, photo: 'data:image/png;base64,QUJD' });
+  await t.test('PUT: weight change adds a metric, same weight does not; photo field rejected with 422', async () => {
+    const pet = await app.createPet(token, { name: 'Sữa', weightKg: 5 });
     const count = () => app.testHelpers.state.metrics.filter((m) => m.petId === pet.id).length;
     assert.equal(count(), 1);
     const same = await call('PUT', `/pets/${pet.id}`, { token, body: app.validPet({ name: 'Sữa 2', weightKg: 5 }) });
-    assert.equal(same.status, 200); assert.equal(same.data.name, 'Sữa 2'); assert.equal(same.data.photo, 'data:image/png;base64,QUJD');
+    assert.equal(same.status, 200); assert.equal(same.data.name, 'Sữa 2'); assert.equal(same.data.photo, null);
     assert.equal(count(), 1);
     const heavier = await call('PUT', `/pets/${pet.id}`, { token, body: app.validPet({ weightKg: 5.6 }) });
     assert.equal(heavier.data.weightKg, 5.6);
     assert.equal(count(), 2);
-    const cleared = await call('PUT', `/pets/${pet.id}`, { token, body: app.validPet({ weightKg: 5.6, photo: null }) });
-    assert.equal(cleared.data.photo, null);
+    const rejected = await call('PUT', `/pets/${pet.id}`, { token, body: app.validPet({ weightKg: 5.6, photo: null }) });
+    assert.equal(rejected.status, 422);
+    assert.equal(rejected.body.errors.photo, 'Hãy tải ảnh bằng chức năng tải tệp.');
   });
 
   await t.test('GET one / list ordered old -> new / DELETE removes pet and children, keeps bookings', async () => {

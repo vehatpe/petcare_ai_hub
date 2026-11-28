@@ -112,3 +112,11 @@ node scripts/create-admin.js --email <email-admin> --name "<Họ và tên>" --ph
 - Tuyệt đối không truyền mật khẩu qua tham số dòng lệnh CLI, không ghi log hay in ra stdout.
 - Script có tính chất idempotent: nếu email đã là admin thì báo đã tồn tại và thoát 0; nếu email đã thuộc role khác thì từ chối (không nâng quyền ngầm). Ghi vết `admin_created` vào `AuditLog`.
 
+## Migration 008: Lưu trữ ảnh trên Cloud / Local (`PhotoUrl`, `PhotoPublicId`, `AvatarUrl`, `AvatarPublicId`)
+
+`migrations/008_Photos_Cloud.sql` (chạy lại được):
+- `Pets`: thêm `PhotoUrl NVARCHAR(500) NULL`, `PhotoPublicId NVARCHAR(200) NULL`.
+- `Users`: thêm `AvatarUrl NVARCHAR(500) NULL`, `AvatarPublicId NVARCHAR(200) NULL`.
+- **Cột `Pets.Photo` (Base64 cũ):** đã lỗi thời, được **giữ lại có chủ đích** trong DB (không xóa cột ở Giai đoạn D) để chạy chuyển đổi an toàn qua `backend/scripts/migrate-photos.js` và tránh mất dữ liệu với các định dạng cũ không hợp lệ (ví dụ GIF). Sau khi chuyển đổi xong, API chỉ dùng `PhotoUrl`.
+
+

@@ -47,8 +47,16 @@ function createDom() {
       this._listeners.get(t).push(fn);
     }
     removeEventListener() {}
+    async dispatch(t, ev = {}) {
+      const e = { type: t, target: this, preventDefault() {}, stopPropagation() {}, ...ev };
+      for (const fn of this._listeners.get(t) || []) await fn(e);
+    }
     querySelectorAll() { return []; }
-    querySelector(sel) { return new El(sel); }
+    querySelector(sel) {
+      if (!this._queried) this._queried = new Map();
+      if (!this._queried.has(sel)) this._queried.set(sel, new El(sel));
+      return this._queried.get(sel);
+    }
     closest() { return null; }
     appendChild(child) {
       if (!this._children) this._children = [];
@@ -329,5 +337,87 @@ test('S15 Contract: Customer bookings, Provider bookings, and Header nav', async
     const navLinks = (navEl.innerHTML.match(/<a /g) || []).length;
     assert.equal(navLinks, 5, 'Provider main-nav must have exactly 5 items');
     assert.ok(navEl.innerHTML.includes('provider-bookings.html'));
+  });
+
+  await t.test('Dialog CSS contract & cancel modal DOM behavior', async () => {
+    const componentsCss = fs.readFileSync(path.resolve(__dirname, '../../frontend/css/components.css'), 'utf8');
+    const backdropMatch = componentsCss.match(/\.dialog-backdrop\s*\{[^}]*\}/);
+    assert.ok(backdropMatch, 'components.css must define .dialog-backdrop');
+    assert.ok(/position:\s*fixed/.test(backdropMatch[0]), '.dialog-backdrop must have position: fixed');
+    assert.ok(/inset:\s*0/.test(backdropMatch[0]), '.dialog-backdrop must have inset: 0');
+    assert.ok(/z-index:\s*\d+/.test(backdropMatch[0]), '.dialog-backdrop must have z-index');
+    assert.ok(/\.dialog-actions\s*\{/.test(componentsCss), 'components.css must define .dialog-actions');
+
+    for (const [name, src] of [['dashboard-customer.js', customerJs], ['provider-bookings.js', providerBookingsJs]]) {
+      assert.ok(src.includes('dialog-backdrop'), `${name} must use .dialog-backdrop`);
+      assert.ok(src.includes('dialog-actions'), `${name} must use .dialog-actions`);
+    }
+
+    const { document, getEl } = createDom();
+    const docListeners = new Map();
+    document.addEventListener = (ev, fn) => {
+      if (!docListeners.has(ev)) docListeners.set(ev, []);
+      docListeners.get(ev).push(fn);
+    };
+    document.removeEventListener = (ev, fn) => {
+      if (!docListeners.has(ev)) return;
+      docListeners.set(ev, docListeners.get(ev).filter((f) => f !== fn));
+    };
+
+    const cancelledCalls = [];
+    const ctx = vm.createContext({
+      window: { location: { pathname: '/pages/customer-dashboard.html' } },
+      document,
+      Fmt: makeFmt(),
+      AuthService: { currentUser: () => ({ id: 'u1', role: 'customer', fullName: 'Khách A' }) },
+      PetService: { list: async () => [] },
+      BookingService: {
+        STATUS: { pending: { label: 'Chờ xác nhận', badge: 'badge-warning' }, confirmed: { label: 'Đã xác nhận', badge: 'badge-success' }, cancelled: { label: 'Đã hủy', badge: 'badge-danger' } },
+        list: async () => ({ items: [{ id: 'b-1', status: 'pending', serviceName: 'Tắm', petName: 'Milo', providerName: 'Spa A', date: '2026-12-01', time: '09:00' }], meta: { total: 1 } }),
+        cancel: async (id, reason) => { cancelledCalls.push({ id, reason }); }
+      },
+      DashboardService: { customer: async () => ({ petCount: 1, bookings: { total: 1, upcomingCount: 1, next: null }, vaccines: { overdueCount: 0, dueSoonCount: 0, nextDue: null } }) },
+      Panel: { load: async (el, fn, render) => { const d = await fn(); render(d); } },
+      Toast: { show: () => {} },
+      console
+    });
+    vm.runInContext(customerJs, ctx);
+    for (const fn of docListeners.get('DOMContentLoaded') || []) await fn();
+    await new Promise((r) => setTimeout(r, 30));
+
+    const bookingListEl = getEl('bookingList');
+    // The page's click handler awaits the modal, so do not await dispatch itself: it settles only after the modal closes.
+    const triggerCancel = () => {
+      bookingListEl.dispatch('click', {
+        target: { closest: (sel) => (sel === '[data-cancel-booking]' ? { dataset: { cancelBooking: 'b-1' }, disabled: false } : null) }
+      });
+      return new Promise((r) => setTimeout(r, 10));
+    };
+
+    // 1. Escape closes modal and returns null (no cancel call)
+    await triggerCancel();
+    let backdrop = (document.body._children || []).slice(-1)[0];
+    assert.ok(backdrop && backdrop.className === 'dialog-backdrop', 'cancel modal must be appended to body');
+    assert.ok(backdrop.innerHTML.includes('Tắm') && backdrop.innerHTML.includes('cho Milo') && backdrop.innerHTML.includes('09:00'), 'cancel modal must summarise the real booking DTO (serviceName, petName, date, time)');
+    for (const fn of [...(docListeners.get('keydown') || [])]) fn({ key: 'Escape', preventDefault: () => {} });
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(cancelledCalls.length, 0, 'Escape must resolve null without cancelling');
+
+    // 2. Backdrop click closes modal and returns null
+    await triggerCancel();
+    backdrop = (document.body._children || []).slice(-1)[0];
+    backdrop.dispatch('click', { target: backdrop });
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(cancelledCalls.length, 0, 'Backdrop click must resolve null without cancelling');
+
+    // 3. Confirm returns trimmed reason
+    await triggerCancel();
+    backdrop = (document.body._children || []).slice(-1)[0];
+    const reasonInput = backdrop.querySelector('#cancelReasonInput');
+    reasonInput.value = '  Bận đột xuất  ';
+    backdrop.querySelector('[data-modal-confirm]').dispatch('click', {});
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(cancelledCalls.length, 1);
+    assert.equal(cancelledCalls[0].reason, 'Bận đột xuất');
   });
 });

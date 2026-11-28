@@ -52,7 +52,17 @@ function createRateLimiters(config) {
     handler
   });
 
-  return { authLimiter, meLimiter, aiLimiter, changePasswordLimiter };
+  // 5. Upload limiter: keyed by authenticated user ID (placed after authenticate)
+  const uploadLimiter = rateLimit({
+    windowMs: config.rateLimit.windowMs,
+    max: config.rateLimit.uploadMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.user?.id || req.ip,
+    handler
+  });
+
+  return { authLimiter, meLimiter, aiLimiter, changePasswordLimiter, uploadLimiter };
 }
 
 module.exports = { createRateLimiters };

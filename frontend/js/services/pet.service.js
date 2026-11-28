@@ -35,6 +35,12 @@
   const SEX_LABEL = { male: 'Đực', female: 'Cái' };
   const NEUTER_LABEL = { yes: 'Đã triệt sản', no: 'Chưa triệt sản', unknown: 'Chưa rõ' };
 
+  function mapPet(pet) {
+    if (!pet) return pet;
+    const normalize = window.Api && typeof Api.assetUrl === 'function' ? Api.assetUrl : (u) => u;
+    return { ...pet, photo: normalize(pet.photo) };
+  }
+
   const PetService = {
     SPECIES,
     BREEDS,
@@ -50,14 +56,15 @@
     /** Pets of the signed-in owner, oldest first. Resolves to [] for guests. */
     async list() {
       if (!AuthService.isLoggedIn()) return [];
-      return Api.get('/pets');
+      const items = await Api.get('/pets');
+      return Array.isArray(items) ? items.map(mapPet) : [];
     },
 
     /** Resolves to the pet, or null when it does not exist / is not yours. */
     async get(id) {
       if (!AuthService.isLoggedIn() || !id) return null;
       try {
-        return await Api.get('/pets/' + encodeURIComponent(id));
+        return mapPet(await Api.get('/pets/' + encodeURIComponent(id)));
       } catch (err) {
         if (err.status === 404) return null;
         throw err;
@@ -110,13 +117,13 @@
         color: String(input.color || '').trim(),
         neutered: NEUTER_LABEL[input.neutered] ? input.neutered : 'unknown',
         microchip: String(input.microchip || '').trim(),
-        conditions: String(input.conditions || '').trim(),
-        photo: input.photo || null
+        conditions: String(input.conditions || '').trim()
       };
       try {
-        return input.id
+        const saved = input.id
           ? await Api.put('/pets/' + encodeURIComponent(input.id), body)
           : await Api.post('/pets', body);
+        return mapPet(saved);
       } catch (err) {
         if (err instanceof ApiError && Object.keys(err.errors).length) {
           const wrapped = new Error(err.message);
@@ -130,6 +137,16 @@
     async remove(id) {
       await Api.del('/pets/' + encodeURIComponent(id));
       return true;
+    },
+
+    async uploadPhoto(id, fileOrBlob, filename) {
+      const form = new FormData();
+      form.append('photo', fileOrBlob, filename || 'pet.jpg');
+      return mapPet(await Api.upload('/pets/' + encodeURIComponent(id) + '/photo', form));
+    },
+
+    async removePhoto(id) {
+      return mapPet(await Api.remove('/pets/' + encodeURIComponent(id) + '/photo'));
     },
 
     /** "2 tuổi 3 tháng", "5 tháng", "dưới 1 tháng" */

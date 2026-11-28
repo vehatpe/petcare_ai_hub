@@ -54,7 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ---------- Pets ---------- */
   function petRow(pet) {
-    const avatar = pet.photo ? `<img src="${esc(pet.photo)}" alt="">` : esc(pet.name.charAt(0).toUpperCase());
+    const initial = esc(pet.name.charAt(0).toUpperCase());
+    const avatar = pet.photo ? `<img src="${esc(pet.photo)}" alt="">` : initial;
     const extras = [
       pet.sex ? `<span class="badge badge-mint">${esc(PetService.SEX_LABEL[pet.sex])}</span>` : '',
       pet.neutered && pet.neutered !== 'unknown' ? `<span class="badge badge-cream">${esc(PetService.NEUTER_LABEL[pet.neutered])}</span>` : '',
@@ -64,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return `
       <li class="pet-row" data-pet-id="${esc(pet.id)}">
-        <div class="pet-avatar" aria-hidden="true">${avatar}</div>
+        <div class="pet-avatar" data-pet-initial="${initial}" aria-hidden="true">${avatar}</div>
         <div class="pet-main">
           <h3 class="pet-name">${esc(pet.name)}</h3>
           <p class="pet-summary">${esc(PetService.summary(pet))}</p>
@@ -128,6 +129,15 @@ document.addEventListener('DOMContentLoaded', () => {
       Toast.show({ title: 'Chưa xóa được hồ sơ', message: err.message, type: 'danger' });
     }
   });
+
+  if (petListEl) {
+    petListEl.addEventListener('error', (e) => {
+      const img = e.target;
+      if (!img || img.tagName !== 'IMG') return;
+      const box = img.closest('.pet-avatar');
+      if (box) box.textContent = box.getAttribute('data-pet-initial') || '?';
+    }, true);
+  }
 
   /* ---------- Bookings ---------- */
   let cancelWindowHours = 2;
@@ -207,11 +217,26 @@ document.addEventListener('DOMContentLoaded', () => {
   function openCancelModal(bookingId) {
     return new Promise((resolve) => {
       const prevFocus = document.activeElement;
+      const booking = (bookingState.items || []).find((b) => String(b.id) === String(bookingId));
+      const serviceName = booking ? booking.serviceName : '';
+      const petName = booking ? booking.petName : '';
+      const whenText = booking && booking.date
+        ? `${Fmt.dateLong(booking.date)}${booking.time ? ` lúc ${booking.time}` : ''}`
+        : '';
+      const summaryParts = [serviceName, petName ? `cho ${petName}` : '', whenText].filter(Boolean);
+      const summaryHtml = summaryParts.length
+        ? `<p class="dialog-meta">${esc(summaryParts.join(' • '))}</p>`
+        : '';
+
       const backdrop = document.createElement('div');
       backdrop.className = 'dialog-backdrop';
       backdrop.innerHTML = `
         <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="cancelBookingTitle">
-          <h3 id="cancelBookingTitle">Hủy lịch hẹn này?</h3>
+          <div class="dialog-header">
+            <h3 id="cancelBookingTitle">Hủy lịch hẹn này?</h3>
+            <button type="button" class="dialog-close" aria-label="Đóng hộp thoại" data-modal-close>&times;</button>
+          </div>
+          ${summaryHtml}
           <p>Lịch hẹn sẽ được đánh dấu là đã hủy. Bạn có thể nhập lý do (không bắt buộc).</p>
           <div class="form-group">
             <label for="cancelReasonInput">Lý do hủy (tùy chọn)</label>
@@ -223,16 +248,19 @@ document.addEventListener('DOMContentLoaded', () => {
             <button type="button" class="btn btn-danger" data-modal-confirm>Xác nhận hủy</button>
           </div>
         </div>`;
+      document.body.classList.add('dialog-open');
       document.body.appendChild(backdrop);
 
       const input = backdrop.querySelector('#cancelReasonInput');
       const countEl = backdrop.querySelector('#cancelReasonCount');
+      const closeBtn = backdrop.querySelector('[data-modal-close]');
       const keepBtn = backdrop.querySelector('[data-modal-cancel]');
       const confirmBtn = backdrop.querySelector('[data-modal-confirm]');
       input.focus();
 
       const close = (result) => {
         document.removeEventListener('keydown', onKey);
+        document.body.classList.remove('dialog-open');
         backdrop.remove();
         if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
         resolve(result);
@@ -249,6 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
       input.addEventListener('input', () => {
         countEl.textContent = `${input.value.length} / 300`;
       });
+      if (closeBtn) closeBtn.addEventListener('click', () => close(null));
       keepBtn.addEventListener('click', () => close(null));
       backdrop.addEventListener('click', (e) => {
         if (e.target === backdrop) close(null);

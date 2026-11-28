@@ -20,6 +20,7 @@ async function createSqlModels(dbConfig) {
     bookings: require('./booking.model')(db),
     knowledge: require('./knowledge.model')(db),
     audit: require('./audit.model')(db),
+    transaction: db.transaction,
     async ping() {
       const r = await pool.request().query('SELECT 1 AS ok;');
       return r.recordset?.[0]?.ok === 1;

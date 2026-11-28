@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const esc = Fmt.esc;
   const params = new URLSearchParams(window.location.search);
   let pets = [];
+  let petPhotoFallbackBound = false;
   let services = [];
   let providerFilter = params.get('provider') || null;
   const serviceById = (id) => services.find((x) => x.id === id) || null;
@@ -71,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <label class="selectable-item-card pet-pick${p.id === state.petId ? ' selected' : ''}">
         <input type="radio" name="pet" value="${esc(p.id)}"${p.id === state.petId ? ' checked' : ''}>
         <span class="pet-pick-head">
-          <span class="pet-avatar pet-avatar-sm" aria-hidden="true">${p.photo ? `<img src="${esc(p.photo)}" alt="">` : esc(p.name.charAt(0).toUpperCase())}</span>
+          <span class="pet-avatar pet-avatar-sm" data-pet-initial="${esc(p.name.charAt(0).toUpperCase())}" aria-hidden="true">${p.photo ? `<img src="${esc(p.photo)}" alt="">` : esc(p.name.charAt(0).toUpperCase())}</span>
           <span>
             <strong class="pick-title">${esc(p.name)}</strong>
             <span class="pick-sub">${esc(PetService.summary(p))}</span>
@@ -81,6 +82,15 @@ document.addEventListener('DOMContentLoaded', () => {
       </label>`).join('')}
       <a class="selectable-item-card pet-pick pet-pick-add" href="pet-profile.html?next=booking.html">+ Thêm thú cưng khác</a>
     </div>`;
+    if (!petPhotoFallbackBound) {
+      petPhotoFallbackBound = true;
+      wrap.addEventListener('error', (e) => {
+        const img = e.target;
+        if (!img || img.tagName !== 'IMG') return;
+        const box = img.closest('.pet-avatar');
+        if (box) box.textContent = box.getAttribute('data-pet-initial') || '?';
+      }, true);
+    }
   }
 
   /* ---------- Step 2: services ---------- */

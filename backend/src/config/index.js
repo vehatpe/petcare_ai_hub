@@ -1,5 +1,6 @@
 'use strict';
 const crypto = require('node:crypto');
+const path = require('node:path');
 
 const WEAK = /change[-_ ]?me|secret|example|password|default/i;
 
@@ -33,6 +34,38 @@ function loadConfig(env = process.env) {
     throw new Error('BOOKING_CANCEL_WINDOW_HOURS phải là số nguyên từ 0 đến 72.');
   }
 
+  const storageDriver = String(env.STORAGE_DRIVER || 'local').trim().toLowerCase();
+  if (storageDriver !== 'local' && storageDriver !== 'cloudinary') {
+    throw new Error('STORAGE_DRIVER chỉ nhận giá trị "local" hoặc "cloudinary".');
+  }
+
+  const uploadMaxRaw = env.UPLOAD_MAX_BYTES;
+  const uploadMaxBytes = int(uploadMaxRaw, 5242880);
+  if (
+    !Number.isInteger(uploadMaxBytes) ||
+    uploadMaxBytes < 1024 ||
+    uploadMaxBytes > 20971520 ||
+    (uploadMaxRaw !== undefined && uploadMaxRaw !== '' && String(uploadMaxBytes) !== String(uploadMaxRaw).trim())
+  ) {
+    throw new Error('UPLOAD_MAX_BYTES phải là số nguyên từ 1024 đến 20971520.');
+  }
+
+  const cloudinaryCloudName = String(env.CLOUDINARY_CLOUD_NAME || '').trim();
+  const cloudinaryApiKey = String(env.CLOUDINARY_API_KEY || '').trim();
+  const cloudinaryApiSecret = String(env.CLOUDINARY_API_SECRET || '').trim();
+  if (storageDriver === 'cloudinary') {
+    const missing = [];
+    if (!cloudinaryCloudName) missing.push('CLOUDINARY_CLOUD_NAME');
+    if (!cloudinaryApiKey) missing.push('CLOUDINARY_API_KEY');
+    if (!cloudinaryApiSecret) missing.push('CLOUDINARY_API_SECRET');
+    if (missing.length > 0) {
+      throw new Error(`Thiếu cấu hình Cloudinary bắt buộc: ${missing.join(', ')}.`);
+    }
+  }
+
+  const uploadDir = env.UPLOAD_DIR ? path.resolve(env.UPLOAD_DIR) : path.resolve(__dirname, '../../uploads');
+  const publicBaseUrl = String(env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+
   return {
     nodeEnv,
     port: int(env.PORT, 3000),
@@ -49,7 +82,19 @@ function loadConfig(env = process.env) {
       windowMs: int(env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
       authMax: int(env.AUTH_RATE_LIMIT_MAX, 15),
       meMax: int(env.ME_RATE_LIMIT_MAX, 300),
-      aiMax: int(env.AI_RATE_LIMIT_MAX, 20)
+      aiMax: int(env.AI_RATE_LIMIT_MAX, 20),
+      uploadMax: int(env.UPLOAD_RATE_LIMIT_MAX, 30)
+    },
+    storage: {
+      driver: storageDriver,
+      uploadDir,
+      uploadMaxBytes,
+      publicBaseUrl,
+      cloudinary: {
+        cloudName: cloudinaryCloudName,
+        apiKey: cloudinaryApiKey,
+        apiSecret: cloudinaryApiSecret
+      }
     },
     db: {
       server: env.DB_SERVER || 'localhost',

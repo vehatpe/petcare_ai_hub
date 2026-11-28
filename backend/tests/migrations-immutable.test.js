@@ -15,7 +15,8 @@ const EXPECTED_HASHES = {
   'database/migrations/004_Roles_Lifecycle.sql': '729207845b099031a1b96897d9f8161900ff954a620ded8539e267b5656e0140',
   'database/migrations/005_Users_TokenVersion.sql': '3641e9ca80e1746efa1e38d18349e31b25c58597f66a64fafcdbea0b524ad2a2',
   'database/migrations/006_Provider_Profile_Legal.sql': 'fa661c5a6bec370f1b973ab6bbf38f009bd680b25f1485fb7476bec88a817c7e',
-  'database/migrations/007_Bookings_Lifecycle.sql': '1723c8093208969ba9f4884a8a7b57c84af837dd2517974791b19acaaedf7bf7'
+  'database/migrations/007_Bookings_Lifecycle.sql': '1723c8093208969ba9f4884a8a7b57c84af837dd2517974791b19acaaedf7bf7',
+  'database/migrations/008_Photos_Cloud.sql': '8af8c70347449af7827b59a26b9481caa2e5f022c514c977e9ae41ac1a94badf'
 };
 
 function computeChecksum(filePath) {

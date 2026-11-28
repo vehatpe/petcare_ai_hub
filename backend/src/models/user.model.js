@@ -2,7 +2,7 @@
 const { T, lc, iso, isUniqueViolation } = require('./db');
 const { DuplicateError } = require('../utils/errors');
 
-const COLS = `UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, CreatedAt, ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason, TokenVersion, OrgLicenseNo, OrgTaxCode`;
+const COLS = `UserId, Role, Status, FullName, Email, Phone, PasswordHash, OrgName, OrgType, CreatedAt, ProviderId, OrgArea, ApprovedBy, ApprovedAt, MustChangePassword, RejectReason, TokenVersion, OrgLicenseNo, OrgTaxCode, AvatarUrl, AvatarPublicId`;
 const map = (r) => r && ({
   id: lc(r.UserId), role: r.Role, status: r.Status, fullName: r.FullName, email: r.Email, phone: r.Phone,
   passwordHash: r.PasswordHash, orgName: r.OrgName, orgType: r.OrgType, createdAt: iso(r.CreatedAt),
@@ -10,7 +10,8 @@ const map = (r) => r && ({
   approvedBy: lc(r.ApprovedBy), approvedAt: iso(r.ApprovedAt),
   mustChangePassword: Boolean(r.MustChangePassword), rejectReason: r.RejectReason || null,
   tokenVersion: r.TokenVersion !== undefined && r.TokenVersion !== null ? Number(r.TokenVersion) : 0,
-  orgLicenseNo: r.OrgLicenseNo || null, orgTaxCode: r.OrgTaxCode || null
+  orgLicenseNo: r.OrgLicenseNo || null, orgTaxCode: r.OrgTaxCode || null,
+  avatarUrl: r.AvatarUrl || null, avatarPublicId: r.AvatarPublicId || null
 });
 
 module.exports = (db) => ({
@@ -55,5 +56,29 @@ module.exports = (db) => ({
         mustChangePassword: [T.bool, mustChangePassword ? 1 : 0]
       }
     );
+  },
+  async setAvatar(tx, userId, { url, publicId }) {
+    const rows = await tx.query(
+      `SELECT AvatarPublicId FROM dbo.Users WITH (UPDLOCK) WHERE UserId = @id`,
+      { id: [T.guid, userId] }
+    );
+    if (!rows.length) return null;
+    await tx.exec(
+      `UPDATE dbo.Users SET AvatarUrl = @url, AvatarPublicId = @publicId WHERE UserId = @id`,
+      { id: [T.guid, userId], url: [T.str(500), url], publicId: [T.str(200), publicId] }
+    );
+    return { previousPublicId: rows[0].AvatarPublicId || null };
+  },
+  async clearAvatar(tx, userId) {
+    const rows = await tx.query(
+      `SELECT AvatarPublicId FROM dbo.Users WITH (UPDLOCK) WHERE UserId = @id`,
+      { id: [T.guid, userId] }
+    );
+    if (!rows.length) return null;
+    await tx.exec(
+      `UPDATE dbo.Users SET AvatarUrl = NULL, AvatarPublicId = NULL WHERE UserId = @id`,
+      { id: [T.guid, userId] }
+    );
+    return { previousPublicId: rows[0].AvatarPublicId || null };
   }
 });
