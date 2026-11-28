@@ -177,7 +177,10 @@ document.addEventListener('DOMContentLoaded', () => {
       backdrop.className = 'dialog-backdrop';
       backdrop.innerHTML = `
         <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="provCancelTitle">
-          <h3 id="provCancelTitle">${esc(title)}</h3>
+          <div class="dialog-header">
+            <h3 id="provCancelTitle">${esc(title)}</h3>
+            <button type="button" class="dialog-close" aria-label="Đóng hộp thoại" data-modal-close>&times;</button>
+          </div>
           <p>Vui lòng nhập lý do hủy (3–300 ký tự) để thông báo cho khách hàng.</p>
           <div class="form-group">
             <label for="provCancelReason">Lý do hủy <span aria-hidden="true">*</span></label>
@@ -189,16 +192,19 @@ document.addEventListener('DOMContentLoaded', () => {
             <button type="button" class="btn btn-danger" data-modal-confirm>${esc(confirmLabel)}</button>
           </div>
         </div>`;
+      document.body.classList.add('dialog-open');
       document.body.appendChild(backdrop);
 
       const input = backdrop.querySelector('#provCancelReason');
       const errEl = backdrop.querySelector('#provCancelErr');
+      const closeBtn = backdrop.querySelector('[data-modal-close]');
       const cancelBtn = backdrop.querySelector('[data-modal-cancel]');
       const confirmBtn = backdrop.querySelector('[data-modal-confirm]');
       input.focus();
 
       const close = (val) => {
         document.removeEventListener('keydown', onKey);
+        document.body.classList.remove('dialog-open');
         backdrop.remove();
         if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
         resolve(val);
@@ -211,6 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       };
       document.addEventListener('keydown', onKey);
+      if (closeBtn) closeBtn.addEventListener('click', () => close(null));
       cancelBtn.addEventListener('click', () => close(null));
       backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(null); });
       confirmBtn.addEventListener('click', () => {
@@ -244,15 +251,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       backdrop.innerHTML = `
         <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="assignVetTitle">
-          <h3 id="assignVetTitle">Gán bác sĩ cho lịch hẹn</h3>
+          <div class="dialog-header">
+            <h3 id="assignVetTitle">Gán bác sĩ cho lịch hẹn</h3>
+            <button type="button" class="dialog-close" aria-label="Đóng hộp thoại" data-modal-close>&times;</button>
+          </div>
           ${bodyHtml}
           <div class="dialog-actions">
             <button type="button" class="btn btn-outline" data-modal-cancel>Đóng</button>
             ${activeVets.length ? '<button type="button" class="btn btn-primary" data-modal-confirm>Lưu</button>' : ''}
           </div>
         </div>`;
+      document.body.classList.add('dialog-open');
       document.body.appendChild(backdrop);
 
+      const closeBtn = backdrop.querySelector('[data-modal-close]');
       const cancelBtn = backdrop.querySelector('[data-modal-cancel]');
       const confirmBtn = backdrop.querySelector('[data-modal-confirm]');
       const selectEl = backdrop.querySelector('#assignVetSelect');
@@ -260,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const close = (val) => {
         document.removeEventListener('keydown', onKey);
+        document.body.classList.remove('dialog-open');
         backdrop.remove();
         if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
         resolve(val);
@@ -272,6 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       };
       document.addEventListener('keydown', onKey);
+      if (closeBtn) closeBtn.addEventListener('click', () => close(null));
       cancelBtn.addEventListener('click', () => close(null));
       backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(null); });
       if (confirmBtn && selectEl) {

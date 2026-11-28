@@ -217,11 +217,24 @@ document.addEventListener('DOMContentLoaded', () => {
   function openCancelModal(bookingId) {
     return new Promise((resolve) => {
       const prevFocus = document.activeElement;
+      const booking = (bookingState.items || []).find((b) => String(b.id) === String(bookingId));
+      const serviceName = booking && booking.service ? booking.service.name : '';
+      const petName = booking && booking.pet ? booking.pet.name : '';
+      const whenText = booking && booking.scheduledAt ? Fmt.dateTime(booking.scheduledAt) : '';
+      const summaryParts = [serviceName, petName ? `cho ${petName}` : '', whenText].filter(Boolean);
+      const summaryHtml = summaryParts.length
+        ? `<p class="dialog-meta">${esc(summaryParts.join(' • '))}</p>`
+        : '';
+
       const backdrop = document.createElement('div');
       backdrop.className = 'dialog-backdrop';
       backdrop.innerHTML = `
         <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="cancelBookingTitle">
-          <h3 id="cancelBookingTitle">Hủy lịch hẹn này?</h3>
+          <div class="dialog-header">
+            <h3 id="cancelBookingTitle">Hủy lịch hẹn này?</h3>
+            <button type="button" class="dialog-close" aria-label="Đóng hộp thoại" data-modal-close>&times;</button>
+          </div>
+          ${summaryHtml}
           <p>Lịch hẹn sẽ được đánh dấu là đã hủy. Bạn có thể nhập lý do (không bắt buộc).</p>
           <div class="form-group">
             <label for="cancelReasonInput">Lý do hủy (tùy chọn)</label>
@@ -233,16 +246,19 @@ document.addEventListener('DOMContentLoaded', () => {
             <button type="button" class="btn btn-danger" data-modal-confirm>Xác nhận hủy</button>
           </div>
         </div>`;
+      document.body.classList.add('dialog-open');
       document.body.appendChild(backdrop);
 
       const input = backdrop.querySelector('#cancelReasonInput');
       const countEl = backdrop.querySelector('#cancelReasonCount');
+      const closeBtn = backdrop.querySelector('[data-modal-close]');
       const keepBtn = backdrop.querySelector('[data-modal-cancel]');
       const confirmBtn = backdrop.querySelector('[data-modal-confirm]');
       input.focus();
 
       const close = (result) => {
         document.removeEventListener('keydown', onKey);
+        document.body.classList.remove('dialog-open');
         backdrop.remove();
         if (prevFocus && typeof prevFocus.focus === 'function') prevFocus.focus();
         resolve(result);
@@ -259,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
       input.addEventListener('input', () => {
         countEl.textContent = `${input.value.length} / 300`;
       });
+      if (closeBtn) closeBtn.addEventListener('click', () => close(null));
       keepBtn.addEventListener('click', () => close(null));
       backdrop.addEventListener('click', (e) => {
         if (e.target === backdrop) close(null);
