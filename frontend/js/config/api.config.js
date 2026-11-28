@@ -20,6 +20,19 @@
   }
   const BASE = (window.PETCARE_API_BASE || defaultBase()).replace(/\/$/, '');
 
+  function assetUrl(url) {
+    if (!url) return null;
+    const s = String(url);
+    if (/^(https?:|data:|blob:)/i.test(s)) return s;
+    const loc = window.location || {};
+    const isDevStatic = loc.protocol === 'file:' || STATIC_DEV_PORTS.indexOf(String(loc.port)) !== -1;
+    if (s.startsWith('/uploads/') && isDevStatic) {
+      const apiOrigin = BASE.replace(/\/api\/v1$/, '');
+      if (apiOrigin) return apiOrigin + s;
+    }
+    return s;
+  }
+
   class ApiError extends Error {
     constructor(status, code, message, errors) {
       super(message);
@@ -150,6 +163,7 @@
   window.ApiError = ApiError;
   window.Api = {
     BASE,
+    assetUrl,
     session,
     get: (path, query, opts) => request('GET', path, { ...opts, query }),
     post: (path, body, opts) => request('POST', path, { ...opts, body: body === undefined ? {} : body }),

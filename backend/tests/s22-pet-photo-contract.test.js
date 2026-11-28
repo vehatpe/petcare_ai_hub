@@ -497,3 +497,61 @@ test('S22.1 edit mode: selecting valid file uploads immediately without submit, 
   assert.ok(failError.textContent.length > 0, 'photoError must be shown on 413');
   assert.equal(failAvatar.children[0].src, failSrcBefore, '413 must keep old photo in preview');
 });
+
+test('S22.1 Api.assetUrl & PetService normalize /uploads/ on Live Server port 5500', async () => {
+  const apiConfigSrc = fs.readFileSync(path.join(FRONTEND_DIR, 'js/config/api.config.js'), 'utf8');
+  const petServiceSrc = fs.readFileSync(path.join(FRONTEND_DIR, 'js/services/pet.service.js'), 'utf8');
+
+  function loadApiCtx({ port = '5500', protocol = 'http:', hostname = 'localhost', apiBase } = {}) {
+    const store = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+    const ctx = {
+      window: {
+        location: { port, protocol, hostname },
+        addEventListener: () => {},
+        dispatchEvent: () => {},
+        PETCARE_API_BASE: apiBase
+      },
+      localStorage: store,
+      sessionStorage: store,
+      CustomEvent: class CustomEvent { constructor(t) { this.type = t; } },
+      URLSearchParams,
+      FormData: class FormData { append() {} },
+      fetch: async () => new Response(JSON.stringify({ ok: true, data: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      console
+    };
+    ctx.window.window = ctx.window;
+    vm.createContext(ctx);
+    vm.runInContext(apiConfigSrc, ctx);
+    return ctx;
+  }
+
+  // 1. Port 5500 -> prefixes http://localhost:3000
+  const ctx5500 = loadApiCtx({ port: '5500' });
+  assert.equal(ctx5500.window.Api.assetUrl('/uploads/pets/a.png'), 'http://localhost:3000/uploads/pets/a.png');
+  assert.equal(ctx5500.window.Api.assetUrl('https://cdn.example.com/a.png'), 'https://cdn.example.com/a.png');
+  assert.equal(ctx5500.window.Api.assetUrl('blob:http://localhost:5500/123'), 'blob:http://localhost:5500/123');
+  assert.equal(ctx5500.window.Api.assetUrl('data:image/png;base64,abc'), 'data:image/png;base64,abc');
+  assert.equal(ctx5500.window.Api.assetUrl(null), null);
+
+  // 2. Port 3000 (same-origin Express) -> keeps relative
+  const ctx3000 = loadApiCtx({ port: '3000' });
+  assert.equal(ctx3000.window.Api.assetUrl('/uploads/pets/a.png'), '/uploads/pets/a.png');
+
+  // 3. Custom PETCARE_API_BASE respected
+  const ctxCustom = loadApiCtx({ port: '5500', apiBase: 'https://api.petcare.vn/api/v1' });
+  assert.equal(ctxCustom.window.Api.assetUrl('/uploads/pets/a.png'), 'https://api.petcare.vn/uploads/pets/a.png');
+
+  // 4. PetService.list & PetService.uploadPhoto normalize photo on port 5500
+  ctx5500.Api = ctx5500.window.Api;
+  ctx5500.ApiError = ctx5500.window.ApiError;
+  ctx5500.AuthService = { isLoggedIn: () => true };
+  ctx5500.Fmt = { parseDate: () => null, todayIso: () => '2026-11-28' };
+  ctx5500.Api.get = async () => [{ id: 'p1', name: 'Milo', photo: '/uploads/pets/milo.png' }];
+  ctx5500.Api.upload = async () => ({ id: 'p1', name: 'Milo', photo: '/uploads/pets/milo2.png' });
+  vm.runInContext(petServiceSrc, ctx5500);
+
+  const list = await ctx5500.window.PetService.list();
+  assert.equal(list[0].photo, 'http://localhost:3000/uploads/pets/milo.png');
+  const uploaded = await ctx5500.window.PetService.uploadPhoto('p1', new Blob(['x']), 'milo.png');
+  assert.equal(uploaded.photo, 'http://localhost:3000/uploads/pets/milo2.png');
+});

@@ -40,6 +40,7 @@ test('Phase B: Helmet CSP header removes unsafe-inline from script-src', async (
   assert.ok(csp.length > 0, 'CSP header must be present');
   assert.match(csp, /script-src[^;]*'self'/);
   assert.doesNotMatch(csp, /script-src[^;]*'unsafe-inline'/, 'script-src must NOT contain unsafe-inline');
+  assert.match(csp, /img-src[^;]*blob:/, 'img-src must allow blob: for local image preview');
   assert.match(csp, /img-src[^;]*https:\/\/res\.cloudinary\.com/);
 });
 

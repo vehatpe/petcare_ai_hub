@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let pendingPreviewUrl = null;
   let editing = null;
   let isBusy = false;
+  let justUploadedPhoto = false;
 
   function revokePendingPreview() {
     if (pendingPreviewUrl && typeof URL.revokeObjectURL === 'function') {
@@ -111,6 +112,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!e.target || e.target.tagName !== 'IMG') return;
       const name = form.elements.name.value.trim();
       previewAvatar.textContent = name ? name.charAt(0).toUpperCase() : '?';
+      if (justUploadedPhoto) {
+        justUploadedPhoto = false;
+        photoError.textContent = 'Ảnh đã lưu nhưng chưa hiển thị được. Kiểm tra PUBLIC_BASE_URL hoặc địa chỉ máy chủ.';
+        photoError.hidden = false;
+      }
     }, true);
   }
 
@@ -246,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const updated = await PetService.uploadPhoto(editing.id, processed, file.name || 'pet.jpg');
           editing = updated;
           photoUrl = updated.photo || null;
+          justUploadedPhoto = true;
           photoInput.value = '';
           renderPreview();
           if (window.Toast) { try { Toast.success('Đã cập nhật ảnh thú cưng'); } catch (_) {} }
