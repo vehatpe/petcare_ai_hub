@@ -102,14 +102,14 @@ test('pet photo API: upload, replace, delete, validation, authz, rollback, clean
   assert.equal(storage.files.size, 0);
   app.models.pets.setPhoto = origSetPhoto;
 
-  // 12. PUT base64 while PhotoUrl exists -> URL file cleaned up
+  // 12. PUT /pets/:id với trường photo -> 422 và không xóa file PhotoUrl hiện có
   await uploadPhoto(app.baseUrl, pet.id, c1.token, PNG_1X1);
   assert.equal(storage.files.size, 1);
   const b64 = `data:image/png;base64,${PNG_1X1.toString('base64')}`;
   const rPut = await app.call('PUT', `/pets/${pet.id}`, { token: c1.token, body: app.validPet({ photo: b64 }) });
-  assert.equal(rPut.status, 200);
-  assert.equal(rPut.data.photo, b64);
-  assert.equal(storage.files.size, 0);
+  assert.equal(rPut.status, 422);
+  assert.equal(rPut.body.errors.photo, 'Hãy tải ảnh bằng chức năng tải tệp.');
+  assert.equal(storage.files.size, 1);
 
   // 13. DELETE /pets/:id when pet has URL photo -> file removed
   await uploadPhoto(app.baseUrl, pet.id, c1.token, PNG_1X1);

@@ -118,6 +118,9 @@ jobs:
           JWT_SECRET: 'ci-testing-jwt-secret-at-least-32-chars-long!!' # chỉ để test
           STORAGE_DRIVER: local
         run: node scripts/smoke-uploads.js
+      - name: Smoke test migrate-photos (SQL Server)
+        working-directory: backend
+        run: node scripts/smoke-migrate-photos.js
 
       - name: Run tests
         working-directory: backend
